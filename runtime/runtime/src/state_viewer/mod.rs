@@ -22,6 +22,7 @@ use near_primitives::{
 use near_store::{get_access_key, get_account, get_code, TrieUpdate};
 use near_vm_logic::{ReturnData, ViewConfig};
 use std::{str, sync::Arc, time::Instant};
+use near_primitives::block::CacheState;
 
 pub mod errors;
 
@@ -181,6 +182,7 @@ impl TrieViewer {
         let originator_id = contract_id;
         let public_key = PublicKey::empty(KeyType::ED25519);
         let empty_hash = CryptoHash::default();
+        state_update.set_trie_node_cache_state(CacheState::CachingChunk);
         let mut runtime_ext = RuntimeExt::new(
             &mut state_update,
             contract_id,
@@ -241,6 +243,7 @@ impl TrieViewer {
             true,
             Some(ViewConfig { max_gas_burnt: self.max_gas_burnt_view }),
         );
+        state_update.set_trie_node_cache_state(CacheState::CachingShard);
         let elapsed = now.elapsed();
         let time_ms =
             (elapsed.as_secs() as f64 / 1_000.0) + f64::from(elapsed.subsec_nanos()) / 1_000_000.0;

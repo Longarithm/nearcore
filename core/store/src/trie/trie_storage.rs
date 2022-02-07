@@ -12,6 +12,7 @@ use near_primitives::shard_layout::ShardUId;
 use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::io::ErrorKind;
+use near_primitives::block::CacheState;
 
 pub trait RetrieveRawBytes {
     fn retrieve_raw_bytes(
@@ -49,12 +50,7 @@ enum CachePosition {
     ChunkCache(Vec<u8>),
 }
 
-enum CacheState {
-    CachingShard,
-    CachingChunk,
-}
-
-pub enum RetrievalCost {
+pub enum TrieNodeRetrievalCost {
     Free,
     Full,
 }
@@ -70,9 +66,9 @@ impl TrieNodeCache {
         }
     }
 
-    pub fn get_with_cost(&mut self, hash: &CryptoHash) -> (Option<Vec<u8>>, RetrievalCost) {
+    pub fn get_with_cost(&mut self, hash: &CryptoHash) -> (Option<Vec<u8>>, TrieNodeRetrievalCost) {
         match self.get_cache_position(hash) {
-            CachePosition::None => (None, RetrievalCost::Full),
+            CachePosition::None => (None, TrieNodeRetrievalCost::Full),
             CachePosition::ShardCache(value) => {
                 if let CacheState::CachingChunk = &self.cache_state {
                     let value = self
@@ -81,9 +77,9 @@ impl TrieNodeCache {
                         .expect("If position is ShardCache then value must be presented");
                     self.chunk_cache.insert(hash.clone(), value);
                 };
-                (Some(value), RetrievalCost::Full)
+                (Some(value), TrieNodeRetrievalCost::Full)
             }
-            CachePosition::ChunkCache(value) => (Some(value), RetrievalCost::Free),
+            CachePosition::ChunkCache(value) => (Some(value), TrieNodeRetrievalCost::Free),
         }
     }
 
@@ -118,6 +114,10 @@ impl TrieNodeCache {
         });
     }
 
+    pub fn set_state(&mut self, state: CacheState) {
+        self.cache_state = state;
+    }
+
     pub fn get_touched_nodes_count(&self) -> u64 {
         self.touched_nodes_count
     }
@@ -140,13 +140,19 @@ impl RetrieveRawBytes for SyncTrieCache {
             },
             #[cfg(not(feature = "protocol_feature_chunk_nodes_cache"))]
             (Some(value), cost) => {
+                tracing::debug!(target: "runtime", "charge not feature");
                 guard.touched_nodes_count += 1;
             }
             #[cfg(feature = "protocol_feature_chunk_nodes_cache")]
             (Some(value), cost) => {
                 match cost {
-                    RetrievalCost::Full => {guard.touched_nodes_count += 1 },
-                    RetrievalCost::Free => {},
+                    TrieNodeRetrievalCost::Full => {
+                        tracing::debug!(target: "runtime", "do charge feature");
+                        guard.touched_nodes_count += 1
+                    },
+                    TrieNodeRetrievalCost::Free => {
+                        tracing::debug!(target: "runtime", "not charge feature");
+                    },
                 };
                 value
             },

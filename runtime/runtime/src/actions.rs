@@ -2,6 +2,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 use near_crypto::PublicKey;
 use near_primitives::account::{AccessKey, AccessKeyPermission, Account};
+use near_primitives::block::CacheState;
 use near_primitives::checked_feature;
 use near_primitives::contract::ContractCode;
 use near_primitives::errors::{ActionError, ActionErrorKind, ContractCallError, RuntimeError};
@@ -133,6 +134,7 @@ pub(crate) fn action_function_call(
         )
         .into());
     }
+    state_update.set_trie_node_cache_state(CacheState::CachingChunk);
     let mut runtime_ext = RuntimeExt::new(
         state_update,
         account_id,
@@ -159,6 +161,7 @@ pub(crate) fn action_function_call(
         is_last_action,
         None,
     );
+    state_update.set_trie_node_cache_state(CacheState::CachingShard);
     let execution_succeeded = match err {
         Some(VMError::FunctionCallError(err)) => match err {
             FunctionCallError::Nondeterministic(msg) => {

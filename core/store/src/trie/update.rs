@@ -14,6 +14,7 @@ use crate::StorageError;
 use super::{Trie, TrieIterator};
 use near_primitives::trie_key::TrieKey;
 use std::rc::Rc;
+use near_primitives::block::CacheState;
 use crate::trie::trie_storage::RetrieveRawBytes;
 
 /// Key-value update. Contains a TrieKey and a value.
@@ -24,7 +25,6 @@ pub struct TrieKeyValueUpdate {
 
 /// key that was updated -> the update.
 pub type TrieUpdates = BTreeMap<Vec<u8>, TrieKeyValueUpdate>;
-
 
 /// Provides a way to access Storage and record changes with future commit.
 pub struct TrieUpdate {
@@ -183,6 +183,12 @@ impl TrieUpdate {
 
     pub fn get_root(&self) -> CryptoHash {
         self.root
+    }
+
+    pub fn set_trie_node_cache_state(&self, state: CacheState) {
+        let mut borrowed_cache = self.trie_node_cache.borrow_mut();
+        let mut guard = borrowed_cache.deref_mut().0.lock().expect(POISONED_LOCK_ERR);
+        guard.set_state(state);
     }
 
     pub fn get_touched_nodes_count(&self) -> u64 {

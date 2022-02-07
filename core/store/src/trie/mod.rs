@@ -18,7 +18,7 @@ use crate::trie::iterator::TrieIterator;
 use crate::trie::nibble_slice::NibbleSlice;
 pub use crate::trie::shard_tries::{KeyForStateChanges, ShardTries, WrappedTrieChanges};
 pub(crate) use crate::trie::trie_storage::{SyncTrieCache, TrieCachingStorage};
-use crate::trie::trie_storage::{RetrievalCost, RetrieveRawBytes, TrieMemoryPartialStorage, TrieRecordingStorage, TrieStorage};
+use crate::trie::trie_storage::{TrieNodeRetrievalCost, RetrieveRawBytes, TrieMemoryPartialStorage, TrieRecordingStorage, TrieStorage};
 use crate::StorageError;
 
 mod insert_delete;
