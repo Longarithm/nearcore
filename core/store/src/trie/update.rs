@@ -14,6 +14,7 @@ use crate::StorageError;
 use super::{Trie, TrieIterator};
 use near_primitives::trie_key::TrieKey;
 use std::rc::Rc;
+use crate::trie::trie_storage::RetrieveRawBytes;
 
 /// Key-value update. Contains a TrieKey and a value.
 pub struct TrieKeyValueUpdate {
@@ -35,7 +36,7 @@ pub struct TrieUpdate {
 }
 
 pub enum TrieUpdateValuePtr<'a> {
-    HashAndSize(&'a Trie, u32, CryptoHash),
+    HashAndSize(&'a TrieUpdate, u32, CryptoHash),
     MemoryRef(&'a Vec<u8>),
 }
 
@@ -50,7 +51,10 @@ impl<'a> TrieUpdateValuePtr<'a> {
     pub fn deref_value(&self) -> Result<Vec<u8>, StorageError> {
         match self {
             TrieUpdateValuePtr::MemoryRef(value) => Ok((*value).clone()),
-            TrieUpdateValuePtr::HashAndSize(trie, _, hash) => trie.retrieve_raw_bytes(hash),
+            TrieUpdateValuePtr::HashAndSize(trie, _, hash) => {
+                let trie_node_cache = trie.trie_node_cache.borrow_mut().deref_mut();
+                trie_node_cache.retrieve_raw_bytes(hash, |hash| trie.trie.storage.retrieve_raw_bytes(hash))
+            },
         }
     }
 }
