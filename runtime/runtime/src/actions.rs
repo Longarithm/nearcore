@@ -51,6 +51,7 @@ pub(crate) fn execute_function_call(
     is_last_action: bool,
     view_config: Option<ViewConfig>,
 ) -> (Option<VMOutcome>, Option<VMError>) {
+    runtime_ext.set_trie_node_cache_state(CacheState::CachingChunk);
     let account_id = runtime_ext.account_id();
     let code = match runtime_ext.get_code(account.code_hash()) {
         Ok(Some(code)) => code,
@@ -100,7 +101,7 @@ pub(crate) fn execute_function_call(
         output_data_receivers,
     };
 
-    near_vm_runner::run(
+    let result = near_vm_runner::run(
         &code,
         &function_call.method_name,
         runtime_ext,
@@ -110,7 +111,9 @@ pub(crate) fn execute_function_call(
         promise_results,
         apply_state.current_protocol_version,
         apply_state.cache.as_deref(),
-    )
+    );
+    runtime_ext.set_trie_node_cache_state(CacheState::CachingShard);
+    result
 }
 
 pub(crate) fn action_function_call(
@@ -134,7 +137,6 @@ pub(crate) fn action_function_call(
         )
         .into());
     }
-    state_update.set_trie_node_cache_state(CacheState::CachingChunk);
     let mut runtime_ext = RuntimeExt::new(
         state_update,
         account_id,
@@ -161,7 +163,6 @@ pub(crate) fn action_function_call(
         is_last_action,
         None,
     );
-    state_update.set_trie_node_cache_state(CacheState::CachingShard);
     let execution_succeeded = match err {
         Some(VMError::FunctionCallError(err)) => match err {
             FunctionCallError::Nondeterministic(msg) => {

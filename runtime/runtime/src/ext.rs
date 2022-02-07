@@ -5,6 +5,7 @@ use log::debug;
 
 use near_crypto::PublicKey;
 use near_primitives::account::{AccessKey, AccessKeyPermission, FunctionCallPermission};
+use near_primitives::block::CacheState;
 use near_primitives::contract::ContractCode;
 use near_primitives::errors::{EpochError, StorageError};
 use near_primitives::hash::CryptoHash;
@@ -147,6 +148,10 @@ impl<'a> RuntimeExt<'a> {
             .1
             .actions
             .push(action);
+    }
+
+    pub fn set_trie_node_cache_state(&self, state: CacheState) {
+        self.trie_update.set_trie_node_cache_state(state);
     }
 
     #[inline]
