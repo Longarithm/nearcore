@@ -193,7 +193,7 @@ impl TrieUpdate {
 
     pub fn get_touched_nodes_count(&self) -> u64 {
         let borrowed_cache = self.trie_node_cache.borrow();
-        let mut guard = borrowed_cache.0.lock().expect(POISONED_LOCK_ERR);
+        let guard = borrowed_cache.0.lock().expect(POISONED_LOCK_ERR);
         guard.get_touched_nodes_count()
     }
 }
@@ -394,7 +394,7 @@ mod tests {
         let trie_changes = trie_update.finalize().unwrap().0;
         let (store_update, new_root) = tries.apply_all(&trie_changes, COMPLEX_SHARD_UID).unwrap();
         store_update.commit().unwrap();
-        let mut trie_update2 = tries.new_trie_update(COMPLEX_SHARD_UID, new_root);
+        let trie_update2 = tries.new_trie_update(COMPLEX_SHARD_UID, new_root);
         assert_eq!(trie_update2.get(&test_key(b"dog".to_vec())), Ok(Some(b"puppy".to_vec())));
         let values = trie_update2
             .iter(&test_key(b"dog".to_vec()).to_vec())

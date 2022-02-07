@@ -22,7 +22,6 @@ use near_primitives::{
 use near_store::{get_access_key, get_account, get_code, TrieUpdate};
 use near_vm_logic::{ReturnData, ViewConfig};
 use std::{str, sync::Arc, time::Instant};
-use near_primitives::block::CacheState;
 
 pub mod errors;
 
