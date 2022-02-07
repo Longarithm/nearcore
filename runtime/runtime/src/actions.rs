@@ -51,7 +51,6 @@ pub(crate) fn execute_function_call(
     is_last_action: bool,
     view_config: Option<ViewConfig>,
 ) -> (Option<VMOutcome>, Option<VMError>) {
-    runtime_ext.set_trie_node_cache_state(CacheState::CachingChunk);
     let account_id = runtime_ext.account_id();
     let code = match runtime_ext.get_code(account.code_hash()) {
         Ok(Some(code)) => code,
@@ -101,6 +100,7 @@ pub(crate) fn execute_function_call(
         output_data_receivers,
     };
 
+    runtime_ext.set_trie_node_cache_state(CacheState::CachingChunk);
     let result = near_vm_runner::run(
         &code,
         &function_call.method_name,
