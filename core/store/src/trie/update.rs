@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::iter::Peekable;
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 
 use near_primitives::hash::CryptoHash;
 use near_primitives::types::{

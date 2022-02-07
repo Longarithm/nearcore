@@ -34,9 +34,9 @@ impl RetrieveRawBytes for () {
 }
 
 #[derive(Clone)]
-pub struct SyncTrieCache(Arc<Mutex<TrieNodeCache>>);
+pub struct SyncTrieCache(pub(crate) Arc<Mutex<TrieNodeCache>>);
 
-pub struct TrieNodeCache {
+pub(crate) struct TrieNodeCache {
     touched_nodes_count: u64,
     cache_state: CacheState,
     shard_cache: LruCache<CryptoHash, Vec<u8>>,
