@@ -83,11 +83,12 @@ impl TrieNodeCache {
         }
     }
 
-    fn put(&mut self, hash: CryptoHash, value: Vec<u8>) {
+    fn put(&mut self, hash: CryptoHash, value: &[u8]) {
         // TODO: put TRIE_LIMIT_CACHED_VALUE_SIZE to runtime config
         if value.len() >= TRIE_LIMIT_CACHED_VALUE_SIZE {
             return;
         }
+        let value = value.to_vec();
 
         if let CacheState::CachingChunk = &self.cache_state {
             self.shard_cache.pop(&hash);
@@ -135,7 +136,7 @@ impl RetrieveRawBytes for SyncTrieCache {
             (None, _) => {
                 let value = thunk(hash)?;
                 guard.touched_nodes_count += 1;
-                guard.put(hash.clone(), value.clone());
+                guard.put(hash.clone(), &value);
                 value
             },
             #[cfg(not(feature = "protocol_feature_chunk_nodes_cache"))]
@@ -175,7 +176,7 @@ impl SyncTrieCache {
         for (hash, opt_value_rc) in ops {
             if let Some(value_rc) = opt_value_rc {
                 if let (Some(value), _rc) = decode_value_with_rc(&value_rc) {
-                    guard.put(hash, value.to_vec());
+                    guard.put(hash, value);
                 } else {
                     guard.pop(&hash);
                 }
