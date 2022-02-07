@@ -139,20 +139,12 @@ impl RetrieveRawBytes for SyncTrieCache {
                 value
             },
             #[cfg(not(feature = "protocol_feature_chunk_nodes_cache"))]
-            (Some(value), cost) => {
-                tracing::debug!(target: "runtime", "charge not feature");
-                guard.touched_nodes_count += 1;
-            }
+            (Some(value), cost) => { guard.touched_nodes_count += 1; }
             #[cfg(feature = "protocol_feature_chunk_nodes_cache")]
             (Some(value), cost) => {
                 match cost {
-                    TrieNodeRetrievalCost::Full => {
-                        tracing::debug!(target: "runtime", "do charge feature");
-                        guard.touched_nodes_count += 1
-                    },
-                    TrieNodeRetrievalCost::Free => {
-                        tracing::debug!(target: "runtime", "not charge feature");
-                    },
+                    TrieNodeRetrievalCost::Full => { guard.touched_nodes_count += 1; },
+                    TrieNodeRetrievalCost::Free => {},
                 };
                 value
             },
