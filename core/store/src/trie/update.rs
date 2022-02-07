@@ -52,8 +52,7 @@ impl<'a> TrieUpdateValuePtr<'a> {
         match self {
             TrieUpdateValuePtr::MemoryRef(value) => Ok((*value).clone()),
             TrieUpdateValuePtr::HashAndSize(trie, _, hash) => {
-                let trie_node_cache = trie.trie_node_cache.borrow_mut().deref_mut();
-                trie_node_cache.retrieve_raw_bytes(hash, |hash| trie.trie.storage.retrieve_raw_bytes(hash))
+                trie.trie_node_cache.borrow_mut().deref_mut().retrieve_raw_bytes(hash, |hash| trie.trie.storage.retrieve_raw_bytes(hash))
             },
         }
     }
