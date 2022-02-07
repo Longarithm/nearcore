@@ -1,5 +1,7 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::iter::Peekable;
+use std::ops::DerefMut;
 
 use near_primitives::hash::CryptoHash;
 use near_primitives::types::{
@@ -26,7 +28,7 @@ pub type TrieUpdates = BTreeMap<Vec<u8>, TrieKeyValueUpdate>;
 /// Provides a way to access Storage and record changes with future commit.
 pub struct TrieUpdate {
     pub trie: Rc<Trie>,
-    trie_node_cache: SyncTrieCache,
+    trie_node_cache: RefCell<SyncTrieCache>,
     root: CryptoHash,
     committed: RawStateChanges,
     prospective: TrieUpdates,
@@ -62,14 +64,14 @@ impl TrieUpdate {
             },
             None => SyncTrieCache::new(),
         };
-        TrieUpdate { trie, trie_node_cache, root, committed: Default::default(), prospective: Default::default() }
+        TrieUpdate { trie, trie_node_cache: RefCell::new(trie_node_cache), root, committed: Default::default(), prospective: Default::default() }
     }
 
     pub fn trie(&self) -> &Trie {
         self.trie.as_ref()
     }
 
-    pub fn get(&mut self, key: &TrieKey) -> Result<Option<Vec<u8>>, StorageError> {
+    pub fn get(&self, key: &TrieKey) -> Result<Option<Vec<u8>>, StorageError> {
         let key = key.to_vec();
         if let Some(key_value) = self.prospective.get(&key) {
             return Ok(key_value.value.as_ref().map(<Vec<u8>>::clone));
@@ -79,10 +81,10 @@ impl TrieUpdate {
             }
         }
 
-        self.trie.get_with(&self.root, &key, &mut self.trie_node_cache)
+        self.trie.get_with(&self.root, &key, self.trie_node_cache.borrow_mut().deref_mut())
     }
 
-    pub fn get_ref(&mut self, key: &TrieKey) -> Result<Option<TrieUpdateValuePtr<'_>>, StorageError> {
+    pub fn get_ref(&self, key: &TrieKey) -> Result<Option<TrieUpdateValuePtr<'_>>, StorageError> {
         let key = key.to_vec();
         if let Some(key_value) = self.prospective.get(&key) {
             return Ok(key_value.value.as_ref().map(TrieUpdateValuePtr::MemoryRef));
@@ -91,7 +93,8 @@ impl TrieUpdate {
                 return Ok(data.as_ref().map(TrieUpdateValuePtr::MemoryRef));
             }
         }
-        self.trie.get_ref(&self.root, &key, &mut self.trie_node_cache).map(|option| {
+        
+        self.trie.get_ref(&self.root, &key, self.trie_node_cache.borrow_mut().deref_mut()).map(|option| {
             option.map(|(length, hash)| TrieUpdateValuePtr::HashAndSize(&self.trie, length, hash))
         })
     }
@@ -180,7 +183,7 @@ impl TrieUpdate {
     }
 
     pub fn get_touched_nodes_count(&self) -> u64 {
-        let mut guard = self.trie_node_cache.0.lock().expect(POISONED_LOCK_ERR);
+        let mut guard = self.trie_node_cache.borrow().0.lock().expect(POISONED_LOCK_ERR);
         guard.get_touched_nodes_count()
     }
 }
