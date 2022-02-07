@@ -99,7 +99,7 @@ impl TrieUpdate {
         }
 
         self.trie.get_ref(&self.root, &key, self.trie_node_cache.borrow_mut().deref_mut()).map(|option| {
-            option.map(|(length, hash)| TrieUpdateValuePtr::HashAndSize(&self.trie, length, hash))
+            option.map(|(length, hash)| TrieUpdateValuePtr::HashAndSize(&self, length, hash))
         })
     }
 
