@@ -183,7 +183,8 @@ impl TrieUpdate {
     }
 
     pub fn get_touched_nodes_count(&self) -> u64 {
-        let mut guard = self.trie_node_cache.borrow().0.lock().expect(POISONED_LOCK_ERR);
+        let borrowed_cache = self.trie_node_cache.borrow();
+        let mut guard = borrowed_cache.0.lock().expect(POISONED_LOCK_ERR);
         guard.get_touched_nodes_count()
     }
 }
