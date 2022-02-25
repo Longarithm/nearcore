@@ -4549,9 +4549,11 @@ fn test_process_blocks() {
     eprintln!("{:?}", client.chain.head());
 
     {
+        let signer =
+            InMemoryValidatorSigner::from_seed("test1".parse().unwrap(), KeyType::ED25519, "test1");
         let header = b.mut_header().get_mut();
         header.inner_rest.random_value = CryptoHash([1; 32]);
-        header.init();
+        b.mut_header().resign(&signer);
     }
 
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
