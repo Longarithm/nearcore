@@ -4538,13 +4538,16 @@ fn test_process_blocks() {
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
     assert!(res.is_ok());
 
-    let chain_store_update = client.chain.store().store_update();
-    let mut store_update = chain_store_update.store().store_update();
-    ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut head).unwrap();
+    {
+        let chain_store_update = client.chain.mut_store().store_update();
+        let mut store_update = chain_store_update.store().store_update();
+        ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut head).unwrap();
+    }
 
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
     eprintln!("{:?}", res);
     assert!(res.is_ok());
     let (_, res) = client.process_block(b.into(), Provenance::PRODUCED);
+    eprintln!("{:?}", res);
     assert!(res.is_ok());
 }
