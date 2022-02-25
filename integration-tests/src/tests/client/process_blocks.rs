@@ -4556,7 +4556,7 @@ fn test_process_blocks() {
         b.mut_header().resign(&signer);
     }
 
-    let mut b = MaybeValidated::from_validated(b);
+    let b = MaybeValidated::from_validated(b);
     let (_, res) = client.process_block(b.clone(), Provenance::PRODUCED);
     eprintln!("{:?}", res);
     assert!(res.is_ok());
