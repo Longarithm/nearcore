@@ -4516,7 +4516,7 @@ mod contract_precompilation_tests {
 #[test]
 fn test_process_blocks() {
     // init_test_logger();
-    let store = create_store(&get_store_path(Path::new("~/.near/data")));
+    let store = create_store(&get_store_path(Path::new("~/.near")));
     // let store = create_test_store();
     let network_adapter = Arc::new(MockPeerManagerAdapter::default());
     let mut chain_genesis = ChainGenesis::test();
