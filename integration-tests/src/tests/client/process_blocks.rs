@@ -4535,4 +4535,5 @@ fn test_process_blocks() {
         let (_, res) = client.process_block(b.into(), Provenance::PRODUCED);
         assert!(res.is_ok());
     }
+    // test
 }
