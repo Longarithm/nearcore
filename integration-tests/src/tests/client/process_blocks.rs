@@ -4535,6 +4535,7 @@ fn test_process_blocks() {
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
     assert!(res.is_ok());
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
+    eprintln!("{:?}", res);
     assert!(res.is_ok());
     let (_, res) = client.process_block(b.into(), Provenance::PRODUCED);
     assert!(res.is_ok());
