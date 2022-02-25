@@ -1603,8 +1603,11 @@ impl From<NodeKeyFile> for KeyFile {
 }
 
 pub fn load_config(dir: &Path, genesis_validation: GenesisValidationMode) -> NearConfig {
+    eprintln!("1");
     let config = Config::from_file(&dir.join(CONFIG_FILENAME)).unwrap();
+    eprintln!("1");
     let genesis_file = dir.join(&config.genesis_file);
+    eprintln!("1");
     let validator_signer = if dir.join(&config.validator_key_file).exists() {
         let signer =
             Arc::new(InMemoryValidatorSigner::from_file(&dir.join(&config.validator_key_file)))
@@ -1613,9 +1616,12 @@ pub fn load_config(dir: &Path, genesis_validation: GenesisValidationMode) -> Nea
     } else {
         None
     };
+    eprintln!("1");
     let network_signer = NodeKeyFile::from_file(&dir.join(&config.node_key_file));
+    eprintln!("1");
 
     let genesis_records_file = config.genesis_records_file.clone();
+    eprintln!("1");
     NearConfig::new(
         config,
         match genesis_records_file {
