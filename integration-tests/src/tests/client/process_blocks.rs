@@ -4511,3 +4511,28 @@ mod contract_precompilation_tests {
         assert!(caches[1].get(&contract_key.0).unwrap().is_none());
     }
 }
+
+#[test]
+fn test_process_blocks() {
+    init_test_logger();
+    let store = create_test_store();
+    let network_adapter = Arc::new(MockPeerManagerAdapter::default());
+    let mut chain_genesis = ChainGenesis::test();
+    chain_genesis.transaction_validity_period = 10;
+    let mut client = setup_client(
+        store,
+        vec![vec!["test1".parse().unwrap()]],
+        1,
+        1,
+        Some("test1".parse().unwrap()),
+        false,
+        network_adapter,
+        chain_genesis,
+        TEST_SEED,
+    );
+    for i in 1..5 {
+        let b = client.produce_block(i).unwrap().unwrap();
+        let (_, res) = client.process_block(b.into(), Provenance::PRODUCED);
+        assert!(res.is_ok());
+    }
+}
