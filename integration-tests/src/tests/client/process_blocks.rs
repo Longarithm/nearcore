@@ -4552,15 +4552,31 @@ fn test_process_blocks() {
         let signer =
             InMemoryValidatorSigner::from_seed("test1".parse().unwrap(), KeyType::ED25519, "test1");
         let header = b.mut_header().get_mut();
-        header.inner_rest.challenges_root = CryptoHash([2; 32]);
+        header.inner_lite.timestamp += 1;
         b.mut_header().resign(&signer);
     }
 
-    let b = MaybeValidated::from_validated(b);
-    let (_, res) = client.process_block(b.clone(), Provenance::PRODUCED);
-    eprintln!("{:?}", res);
+    let mb = MaybeValidated::from_validated(b.clone());
+    let (_, res) = client.process_block(mb, Provenance::PRODUCED);
     assert!(res.is_ok());
-    let (_, res) = client.process_block(b, Provenance::PRODUCED);
-    eprintln!("{:?}", res);
+
+    {
+        let chain_store_update = client.chain.mut_store().store_update();
+        let mut store_update = chain_store_update.store().store_update();
+        ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut head).unwrap();
+        store_update.commit().unwrap();
+    }
+    eprintln!("{:?}", client.chain.head());
+
+    {
+        let signer =
+            InMemoryValidatorSigner::from_seed("test1".parse().unwrap(), KeyType::ED25519, "test1");
+        let header = b.mut_header().get_mut();
+        header.inner_lite.timestamp += 1;
+        b.mut_header().resign(&signer);
+    }
+
+    let mb = MaybeValidated::from_validated(b.clone());
+    let (_, res) = client.process_block(mb, Provenance::PRODUCED);
     assert!(res.is_ok());
 }
