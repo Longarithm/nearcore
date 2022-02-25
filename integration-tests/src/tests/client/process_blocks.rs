@@ -1,5 +1,4 @@
 use std::collections::{HashSet, VecDeque};
-use std::env::home_dir;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -4536,7 +4535,7 @@ fn test_process_blocks() {
 
     let signer =
         InMemoryValidatorSigner::from_seed("test1".parse().unwrap(), KeyType::ED25519, "test1");
-    let mut old_head = client.chain.head().unwrap();
+    let old_head = client.chain.head().unwrap();
     let height = old_head.height.clone();
 
     eprintln!("{:?}", client.chain.head());
@@ -4546,10 +4545,11 @@ fn test_process_blocks() {
     assert!(res.is_ok());
     eprintln!("{:?}", client.chain.head());
 
-    let reprocess_block = |block: &mut Block| {
+    let reprocess_block = |client: &mut Client, block: &mut Block| {
         let chain_store_update = client.chain.mut_store().store_update();
         let mut store_update = chain_store_update.store().store_update();
-        ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut Some(old_head)).unwrap();
+        ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut Some(old_head.clone()))
+            .unwrap();
         store_update.commit().unwrap();
 
         let header = block.mut_header().get_mut();
@@ -4561,9 +4561,9 @@ fn test_process_blocks() {
         assert!(res.is_ok());
     };
 
-    reprocess_block(&mut b);
+    reprocess_block(&mut client, &mut b);
     eprintln!("{:?}", client.chain.head());
 
-    reprocess_block(&mut b);
+    reprocess_block(&mut client, &mut b);
     eprintln!("{:?}", client.chain.head());
 }
