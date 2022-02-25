@@ -17,7 +17,7 @@ use near_chain::{
     Block, ChainGenesis, ChainStore, ChainStoreAccess, ChainStoreUpdate, ErrorKind, Provenance,
     RuntimeAdapter,
 };
-use near_chain_configs::{ClientConfig, Genesis, GenesisValidationMode};
+use near_chain_configs::{ClientConfig, Genesis};
 use near_chunks::{ChunkStatus, ShardsManager};
 use near_client::test_utils::{
     create_chunk_on_height, run_catchup, setup_client, setup_mock, setup_mock_all_validators,
@@ -66,7 +66,7 @@ use near_store::db::DBCol::ColStateParts;
 use near_store::test_utils::create_test_store;
 use near_store::{create_store, get, HEAD_KEY};
 use nearcore::config::{GenesisExt, TESTING_INIT_BALANCE, TESTING_INIT_STAKE};
-use nearcore::{get_store_path, load_config, TrackedConfig, NEAR_BASE};
+use nearcore::{get_store_path, TrackedConfig, NEAR_BASE};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 
