@@ -55,7 +55,7 @@ use near_primitives::transaction::{
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::validator_stake::ValidatorStake;
 use near_primitives::types::{AccountId, BlockHeight, EpochId, NumBlocks, ProtocolVersion};
-use near_primitives::utils::to_timestamp;
+use near_primitives::utils::{to_timestamp, MaybeValidated};
 use near_primitives::validator_signer::{InMemoryValidatorSigner, ValidatorSigner};
 use near_primitives::version::ProtocolFeature;
 use near_primitives::version::PROTOCOL_VERSION;
@@ -4556,10 +4556,11 @@ fn test_process_blocks() {
         b.mut_header().resign(&signer);
     }
 
-    let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
+    let mut b = MaybeValidated::from_validated(b);
+    let (_, res) = client.process_block(b.clone(), Provenance::PRODUCED);
     eprintln!("{:?}", res);
     assert!(res.is_ok());
-    let (_, res) = client.process_block(b.into(), Provenance::PRODUCED);
+    let (_, res) = client.process_block(b, Provenance::PRODUCED);
     eprintln!("{:?}", res);
     assert!(res.is_ok());
 }
