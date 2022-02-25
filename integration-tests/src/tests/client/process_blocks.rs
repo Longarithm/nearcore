@@ -4515,7 +4515,7 @@ mod contract_precompilation_tests {
 
 #[test]
 fn test_process_blocks() {
-    init_test_logger();
+    // init_test_logger();
     let store = create_test_store();
     let network_adapter = Arc::new(MockPeerManagerAdapter::default());
     let mut chain_genesis = ChainGenesis::test();
@@ -4534,15 +4534,18 @@ fn test_process_blocks() {
 
     let mut head = Some(client.chain.head().unwrap());
 
+    eprintln!("{:?}", client.chain.head());
     let b = client.produce_block(1).unwrap().unwrap();
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
     assert!(res.is_ok());
+    eprintln!("{:?}", client.chain.head());
 
     {
         let chain_store_update = client.chain.mut_store().store_update();
         let mut store_update = chain_store_update.store().store_update();
         ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut head).unwrap();
     }
+    eprintln!("{:?}", client.chain.head());
 
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
     eprintln!("{:?}", res);
