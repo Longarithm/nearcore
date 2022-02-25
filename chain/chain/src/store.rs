@@ -2454,7 +2454,7 @@ impl<'a> ChainStoreUpdate<'a> {
         self.store_updates.push(store_update);
     }
 
-    fn write_col_misc<T: BorshSerialize>(
+    pub fn write_col_misc<T: BorshSerialize>(
         store_update: &mut StoreUpdate,
         key: &[u8],
         value: &mut Option<T>,

@@ -14,7 +14,8 @@ use near_chain::chain::{ApplyStatePartsRequest, NUM_EPOCHS_TO_KEEP_STORE_DATA};
 use near_chain::types::LatestKnown;
 use near_chain::validate::validate_chunk_with_chunk_extra;
 use near_chain::{
-    Block, ChainGenesis, ChainStore, ChainStoreAccess, ErrorKind, Provenance, RuntimeAdapter,
+    Block, ChainGenesis, ChainStore, ChainStoreAccess, ChainStoreUpdate, ErrorKind, Provenance,
+    RuntimeAdapter,
 };
 use near_chain_configs::{ClientConfig, Genesis};
 use near_chunks::{ChunkStatus, ShardsManager};
@@ -62,8 +63,8 @@ use near_primitives::views::{
     BlockHeaderView, FinalExecutionStatus, QueryRequest, QueryResponseKind,
 };
 use near_store::db::DBCol::ColStateParts;
-use near_store::get;
 use near_store::test_utils::create_test_store;
+use near_store::{get, HEAD_KEY};
 use nearcore::config::{GenesisExt, TESTING_INIT_BALANCE, TESTING_INIT_STAKE};
 use nearcore::{TrackedConfig, NEAR_BASE};
 use rand::prelude::StdRng;
@@ -4531,9 +4532,16 @@ fn test_process_blocks() {
         TEST_SEED,
     );
 
-    let b = client.produce_block(1).unwrap().unwrap();
+    let mut head = Some(client.chain.head().unwrap());
+
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
     assert!(res.is_ok());
+
+    let b = client.produce_block(1).unwrap().unwrap();
+    let chain_store_update = client.chain.store().store_update();
+    let mut store_update = chain_store_update.store().store_update();
+    ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut head)?;
+
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
     eprintln!("{:?}", res);
     assert!(res.is_ok());
