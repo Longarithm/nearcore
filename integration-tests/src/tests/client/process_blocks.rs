@@ -4535,7 +4535,7 @@ fn test_process_blocks() {
     let mut head = Some(client.chain.head().unwrap());
 
     eprintln!("{:?}", client.chain.head());
-    let b = client.produce_block(1).unwrap().unwrap();
+    let mut b = client.produce_block(1).unwrap().unwrap();
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
     assert!(res.is_ok());
     eprintln!("{:?}", client.chain.head());
@@ -4547,6 +4547,12 @@ fn test_process_blocks() {
         store_update.commit().unwrap();
     }
     eprintln!("{:?}", client.chain.head());
+
+    {
+        let header = b.mut_header().get_mut();
+        header.inner_rest.random_value = CryptoHash([1; 32]);
+        header.init();
+    }
 
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
     eprintln!("{:?}", res);
