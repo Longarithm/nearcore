@@ -4544,6 +4544,7 @@ fn test_process_blocks() {
         let chain_store_update = client.chain.mut_store().store_update();
         let mut store_update = chain_store_update.store().store_update();
         ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut head).unwrap();
+        store_update.commit().unwrap();
     }
     eprintln!("{:?}", client.chain.head());
 
