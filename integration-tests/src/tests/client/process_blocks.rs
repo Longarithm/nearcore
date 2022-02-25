@@ -4537,4 +4537,5 @@ fn test_process_blocks() {
     }
     // test
     // test 2
+    // test 3
 }
