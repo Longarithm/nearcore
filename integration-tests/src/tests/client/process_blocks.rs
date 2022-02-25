@@ -1,4 +1,5 @@
 use std::collections::{HashSet, VecDeque};
+use std::env::home_dir;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -64,9 +65,9 @@ use near_primitives::views::{
 };
 use near_store::db::DBCol::ColStateParts;
 use near_store::test_utils::create_test_store;
-use near_store::{get, HEAD_KEY};
+use near_store::{create_store, get, HEAD_KEY};
 use nearcore::config::{GenesisExt, TESTING_INIT_BALANCE, TESTING_INIT_STAKE};
-use nearcore::{TrackedConfig, NEAR_BASE};
+use nearcore::{get_store_path, TrackedConfig, NEAR_BASE};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 
@@ -4516,7 +4517,8 @@ mod contract_precompilation_tests {
 #[test]
 fn test_process_blocks() {
     // init_test_logger();
-    let store = create_test_store();
+    let store = create_store(&get_store_path(Path::new("~/.near/data")));
+    // let store = create_test_store();
     let network_adapter = Arc::new(MockPeerManagerAdapter::default());
     let mut chain_genesis = ChainGenesis::test();
     chain_genesis.transaction_validity_period = 10;
@@ -4532,51 +4534,36 @@ fn test_process_blocks() {
         TEST_SEED,
     );
 
-    let mut head = Some(client.chain.head().unwrap());
+    let signer =
+        InMemoryValidatorSigner::from_seed("test1".parse().unwrap(), KeyType::ED25519, "test1");
+    let mut old_head = client.chain.head().unwrap();
+    let height = old_head.height.clone();
 
     eprintln!("{:?}", client.chain.head());
-    let mut b = client.produce_block(1).unwrap().unwrap();
+
+    let mut b = client.produce_block(height + 1).unwrap().unwrap();
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
     assert!(res.is_ok());
     eprintln!("{:?}", client.chain.head());
 
-    {
+    let reprocess_block = |block: &mut Block| {
         let chain_store_update = client.chain.mut_store().store_update();
         let mut store_update = chain_store_update.store().store_update();
-        ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut head).unwrap();
+        ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut Some(old_head)).unwrap();
         store_update.commit().unwrap();
-    }
+
+        let header = block.mut_header().get_mut();
+        header.inner_lite.timestamp += 1; // to make hash different
+        block.mut_header().resign(&signer);
+
+        let mb = MaybeValidated::from_validated(block.clone());
+        let (_, res) = client.process_block(mb, Provenance::PRODUCED);
+        assert!(res.is_ok());
+    };
+
+    reprocess_block(&mut b);
     eprintln!("{:?}", client.chain.head());
 
-    {
-        let signer =
-            InMemoryValidatorSigner::from_seed("test1".parse().unwrap(), KeyType::ED25519, "test1");
-        let header = b.mut_header().get_mut();
-        header.inner_lite.timestamp += 1;
-        b.mut_header().resign(&signer);
-    }
-
-    let mb = MaybeValidated::from_validated(b.clone());
-    let (_, res) = client.process_block(mb, Provenance::PRODUCED);
-    assert!(res.is_ok());
-
-    {
-        let chain_store_update = client.chain.mut_store().store_update();
-        let mut store_update = chain_store_update.store().store_update();
-        ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut head).unwrap();
-        store_update.commit().unwrap();
-    }
+    reprocess_block(&mut b);
     eprintln!("{:?}", client.chain.head());
-
-    {
-        let signer =
-            InMemoryValidatorSigner::from_seed("test1".parse().unwrap(), KeyType::ED25519, "test1");
-        let header = b.mut_header().get_mut();
-        header.inner_lite.timestamp += 1;
-        b.mut_header().resign(&signer);
-    }
-
-    let mb = MaybeValidated::from_validated(b.clone());
-    let (_, res) = client.process_block(mb, Provenance::PRODUCED);
-    assert!(res.is_ok());
 }
