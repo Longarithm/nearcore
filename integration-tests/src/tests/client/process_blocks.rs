@@ -4549,7 +4549,9 @@ fn test_process_blocks() {
 
     eprintln!("{:?}", client.chain.head());
 
-    let mut b = client.produce_block(height + 1).unwrap().unwrap();
+    let x = client.produce_block(height + 1);
+    eprintln!("{:?}", x);
+    let mut b = x.unwrap().unwrap();
     let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
     assert!(res.is_ok());
     eprintln!("{:?}", client.chain.head());
