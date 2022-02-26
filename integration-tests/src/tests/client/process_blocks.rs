@@ -4557,10 +4557,15 @@ fn test_process_blocks() {
     // eprintln!("{:?}", client.chain.head());
 
     let reprocess_block = |chain_store: &mut ChainStore, client: &mut Client, mut head: Tip| {
+        eprintln!("2");
         let block_hash = chain_store.get_block_hash_by_height(head.height).unwrap();
+        eprintln!("3");
         let mut block = chain_store.get_block(&block_hash).unwrap().clone();
+        eprintln!("4");
         let prev_hash = block.header().prev_hash().clone();
+        eprintln!("5");
         let prev_header = chain_store.get_block_header(&prev_hash).unwrap().clone();
+        eprintln!("6");
         head.height = prev_header.height().clone();
         head.last_block_hash = prev_hash;
         head.prev_block_hash = prev_header.prev_hash().clone();
@@ -4571,9 +4576,11 @@ fn test_process_blocks() {
             .unwrap();
         store_update.commit().unwrap();
 
+        eprintln!("{:?}", block);
         let header = block.mut_header().get_mut();
         header.inner_lite.timestamp += 1; // to make hash different
         block.mut_header().resign(&signer);
+        eprintln!("7");
 
         let mb = MaybeValidated::from_validated(block.clone());
         let (_, res) = client.process_block(mb, Provenance::PRODUCED);
