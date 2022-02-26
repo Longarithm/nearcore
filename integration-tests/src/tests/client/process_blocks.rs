@@ -4589,6 +4589,7 @@ fn test_process_blocks() {
 
         let mb = MaybeValidated::from_validated(block.clone());
         let (_, res) = client.process_block(mb, Provenance::PRODUCED);
+        eprintln!("{:?}", res);
         assert!(res.is_ok());
     };
 
