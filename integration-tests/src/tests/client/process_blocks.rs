@@ -4556,7 +4556,7 @@ fn test_process_blocks() {
     // assert!(res.is_ok());
     // eprintln!("{:?}", client.chain.head());
 
-    let reprocess_block = |client: &mut Client, mut head: Tip| {
+    let reprocess_block = |chain_store: &mut ChainStore, client: &mut Client, mut head: Tip| {
         let block_hash = chain_store.get_block_hash_by_height(head.height).unwrap();
         let mut block = chain_store.get_block(&block_hash).unwrap().clone();
         let prev_hash = block.header().prev_hash().clone();
@@ -4580,9 +4580,9 @@ fn test_process_blocks() {
         assert!(res.is_ok());
     };
 
-    reprocess_block(&mut client, head.clone());
+    reprocess_block(&mut chain_store, &mut client, head.clone());
     eprintln!("{:?}", client.chain.head());
 
-    reprocess_block(&mut client, head.clone());
+    reprocess_block(&mut chain_store, &mut client, head.clone());
     eprintln!("{:?}", client.chain.head());
 }
