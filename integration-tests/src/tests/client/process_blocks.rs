@@ -4557,7 +4557,7 @@ fn test_process_blocks() {
     // eprintln!("{:?}", client.chain.head());
 
     let reprocess_block = |client: &mut Client, mut head: Tip| {
-        let block_hash = chain_store.get_block_hash_by_height(head.height)?;
+        let block_hash = chain_store.get_block_hash_by_height(head.height).unwrap();
         let mut block = chain_store.get_block(&block_hash).unwrap().clone();
         let prev_hash = block.header().prev_hash().clone();
         let prev_header = chain_store.get_block_header(&prev_hash).unwrap().clone();
