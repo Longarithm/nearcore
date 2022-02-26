@@ -872,7 +872,7 @@ impl RuntimeAdapter for NightshadeRuntime {
         }
     }
 
-    fn verify_header_signature(&self, header: &BlockHeader) -> Result<bool, Error> {
+    fn verify_header_signature(&self, _header: &BlockHeader) -> Result<bool, Error> {
         Ok(true)
         // let mut epoch_manager = self.epoch_manager.as_ref().write().expect(POISONED_LOCK_ERR);
         // let block_producer =
