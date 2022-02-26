@@ -504,15 +504,15 @@ impl Chain {
                 head = h;
 
                 // Check that genesis in the store is the same as genesis given in the config.
-                let genesis_hash = store_update.get_block_hash_by_height(chain_genesis.height)?;
-                if &genesis_hash != genesis.hash() {
-                    return Err(ErrorKind::Other(format!(
-                        "Genesis mismatch between storage and config: {:?} vs {:?}",
-                        genesis_hash,
-                        genesis.hash()
-                    ))
-                    .into());
-                }
+                // let genesis_hash = store_update.get_block_hash_by_height(chain_genesis.height)?;
+                // if &genesis_hash != genesis.hash() {
+                //     return Err(ErrorKind::Other(format!(
+                //         "Genesis mismatch between storage and config: {:?} vs {:?}",
+                //         genesis_hash,
+                //         genesis.hash()
+                //     ))
+                //     .into());
+                // }
 
                 // Check we have the header corresponding to the header_head.
                 let header_head = store_update.header_head()?;
