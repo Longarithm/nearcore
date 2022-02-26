@@ -4527,9 +4527,9 @@ fn test_process_blocks() {
 
     // let store = create_test_store();
     let network_adapter = Arc::new(MockPeerManagerAdapter::default());
-    let mut chain_genesis = ChainGenesis::test();
-    chain_genesis.transaction_validity_period = 10;
-    chain_genesis.height = height;
+    let mut chain_genesis = ChainGenesis::from(&near_config.genesis.config);
+    // chain_genesis.transaction_validity_period = 10;
+    // chain_genesis.height = height;
     let mut client = setup_client(
         store,
         vec![vec!["test1".parse().unwrap()]],
