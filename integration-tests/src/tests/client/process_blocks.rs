@@ -4577,8 +4577,13 @@ fn test_process_blocks() {
         store_update.commit().unwrap();
 
         eprintln!("{:?}", block);
-        let header = block.mut_header().get_mut();
-        header.inner_lite.timestamp += 1; // to make hash different
+        let header = block.mut_header();
+        match header {
+            BlockHeader::BlockHeaderV1(header) => header.inner_lite.timestamp += 1,
+            BlockHeader::BlockHeaderV2(header) => header.inner_lite.timestamp += 1,
+            BlockHeader::BlockHeaderV3(header) => header.inner_lite.timestamp += 1,
+        }
+        // to make hash different
         block.mut_header().resign(&signer);
         eprintln!("7");
 
