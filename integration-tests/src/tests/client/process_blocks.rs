@@ -4518,13 +4518,17 @@ fn test_process_blocks() {
     // init_test_logger();
     let home_dir = Path::new("~/.near");
     let store = create_store(&get_store_path(&home_dir));
-    // let near_config = load_config(&home_dir, GenesisValidationMode::UnsafeFast);
+    let height = 55144899; //55145899; //9820210; //near_config.genesis.config.genesis_height;
+
+    let mut chain_store = ChainStore::new(store.clone(), height);
+    let block_hash = chain_store.get_block_hash_by_height(height);
+    eprintln!("{:?}", block_hash);
 
     // let store = create_test_store();
     let network_adapter = Arc::new(MockPeerManagerAdapter::default());
     let mut chain_genesis = ChainGenesis::test();
     chain_genesis.transaction_validity_period = 10;
-    chain_genesis.height = 55144899; //55145899; //9820210; //near_config.genesis.config.genesis_height;
+    chain_genesis.height = height;
     let mut client = setup_client(
         store,
         vec![vec!["test1".parse().unwrap()]],
