@@ -20,8 +20,8 @@ use near_chain::{
 use near_chain_configs::{ClientConfig, Genesis, GenesisValidationMode};
 use near_chunks::{ChunkStatus, ShardsManager};
 use near_client::test_utils::{
-    create_chunk_on_height, run_catchup, setup_client, setup_mock, setup_mock_all_validators,
-    TestEnv,
+    create_chunk_on_height, run_catchup, setup_client, setup_client_with_runtime, setup_mock,
+    setup_mock_all_validators, TestEnv,
 };
 use near_client::{Client, GetBlock, GetBlockWithMerkleTree};
 use near_crypto::{InMemorySigner, KeyType, PublicKey, Signature, Signer};
@@ -54,7 +54,9 @@ use near_primitives::transaction::{
 };
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::validator_stake::ValidatorStake;
-use near_primitives::types::{AccountId, BlockHeight, EpochId, NumBlocks, ProtocolVersion};
+use near_primitives::types::{
+    AccountId, BlockHeight, EpochId, NumBlocks, NumSeats, ProtocolVersion,
+};
 use near_primitives::utils::{to_timestamp, MaybeValidated};
 use near_primitives::validator_signer::{InMemoryValidatorSigner, ValidatorSigner};
 use near_primitives::version::ProtocolFeature;
@@ -66,7 +68,7 @@ use near_store::db::DBCol::ColStateParts;
 use near_store::test_utils::create_test_store;
 use near_store::{create_store, get, HEAD_KEY};
 use nearcore::config::{GenesisExt, TESTING_INIT_BALANCE, TESTING_INIT_STAKE};
-use nearcore::{get_store_path, load_config, TrackedConfig, NEAR_BASE};
+use nearcore::{get_store_path, load_config, NightshadeRuntime, TrackedConfig, NEAR_BASE};
 use rand::prelude::StdRng;
 use rand::{Rng, SeedableRng};
 
@@ -4530,15 +4532,24 @@ fn test_process_blocks() {
     let chain_genesis = ChainGenesis::from(&near_config.genesis);
     // chain_genesis.transaction_validity_period = 10;
     // chain_genesis.height = height;
-    let mut client = setup_client(
-        store,
-        vec![vec!["test1".parse().unwrap()]],
-        1,
-        1,
+
+    let validators = vec![vec!["test1".parse().unwrap()]];
+    let num_validator_seats = validators.iter().map(|x| x.len()).sum::<usize>() as NumSeats;
+    let runtime = NightshadeRuntime::with_config(
+        home_dir,
+        store.clone(),
+        &near_config,
+        None,
+        near_config.client_config.max_gas_burnt_view,
+    );
+    let runtime_adapter: Arc<dyn RuntimeAdapter> = Arc::new(runtime);
+    let mut client = setup_client_with_runtime(
+        num_validator_seats,
         Some("test1".parse().unwrap()),
         false,
         network_adapter,
         chain_genesis,
+        runtime_adapter,
         TEST_SEED,
     );
 
