@@ -32,7 +32,7 @@ use near_network::types::{
 };
 use near_network::types::{NetworkInfo, PeerManagerMessageRequest, PeerManagerMessageResponse};
 use near_network_primitives::types::{PeerChainInfoV2, PeerInfo, ReasonForBan};
-use near_primitives::block::{Approval, ApprovalInner};
+use near_primitives::block::{Approval, ApprovalInner, Tip};
 use near_primitives::block_header::BlockHeader;
 use near_primitives::epoch_manager::RngSeed;
 use near_primitives::errors::InvalidTxError;
@@ -4544,22 +4544,30 @@ fn test_process_blocks() {
 
     let signer =
         InMemoryValidatorSigner::from_seed("test1".parse().unwrap(), KeyType::ED25519, "test1");
-    let old_head = client.chain.head().unwrap();
-    let height = old_head.height.clone();
+    let head = client.chain.head().unwrap();
+    // let height = head.height.clone();
 
     eprintln!("{:?}", client.chain.head());
 
-    let x = client.produce_block(height + 1);
-    eprintln!("{:?}", x);
-    let mut b = x.unwrap().unwrap();
-    let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
-    assert!(res.is_ok());
-    eprintln!("{:?}", client.chain.head());
+    // let x = client.produce_block(height + 1);
+    // eprintln!("{:?}", x);
+    // let mut b = x.unwrap().unwrap();
+    // let (_, res) = client.process_block(b.clone().into(), Provenance::PRODUCED);
+    // assert!(res.is_ok());
+    // eprintln!("{:?}", client.chain.head());
 
-    let reprocess_block = |client: &mut Client, block: &mut Block| {
+    let reprocess_block = |client: &mut Client, mut head: Tip| {
+        let block_hash = chain_store.get_block_hash_by_height(head.height)?;
+        let mut block = chain_store.get_block(&block_hash)?.clone();
+        let prev_hash = block.header().prev_hash().clone();
+        let prev_header = chain_store.get_block_header(&prev_hash).unwrap().clone();
+        head.height = prev_header.height().clone();
+        head.last_block_hash = prev_hash;
+        head.prev_block_hash = prev_header.prev_hash().clone();
+
         let chain_store_update = client.chain.mut_store().store_update();
         let mut store_update = chain_store_update.store().store_update();
-        ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut Some(old_head.clone()))
+        ChainStoreUpdate::write_col_misc(&mut store_update, HEAD_KEY, &mut Some(head.clone()))
             .unwrap();
         store_update.commit().unwrap();
 
@@ -4572,9 +4580,9 @@ fn test_process_blocks() {
         assert!(res.is_ok());
     };
 
-    reprocess_block(&mut client, &mut b);
+    reprocess_block(&mut client, head.clone());
     eprintln!("{:?}", client.chain.head());
 
-    reprocess_block(&mut client, &mut b);
+    reprocess_block(&mut client, head.clone());
     eprintln!("{:?}", client.chain.head());
 }
