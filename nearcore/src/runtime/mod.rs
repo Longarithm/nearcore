@@ -873,17 +873,18 @@ impl RuntimeAdapter for NightshadeRuntime {
     }
 
     fn verify_header_signature(&self, header: &BlockHeader) -> Result<bool, Error> {
-        let mut epoch_manager = self.epoch_manager.as_ref().write().expect(POISONED_LOCK_ERR);
-        let block_producer =
-            epoch_manager.get_block_producer_info(header.epoch_id(), header.height())?;
-        let slashed = match epoch_manager.get_slashed_validators(header.prev_hash()) {
-            Ok(slashed) => slashed,
-            Err(_) => return Err(EpochError::MissingBlock(*header.prev_hash()).into()),
-        };
-        if slashed.contains_key(block_producer.account_id()) {
-            return Ok(false);
-        }
-        Ok(header.signature().verify(header.hash().as_ref(), block_producer.public_key()))
+        Ok(true)
+        // let mut epoch_manager = self.epoch_manager.as_ref().write().expect(POISONED_LOCK_ERR);
+        // let block_producer =
+        //     epoch_manager.get_block_producer_info(header.epoch_id(), header.height())?;
+        // let slashed = match epoch_manager.get_slashed_validators(header.prev_hash()) {
+        //     Ok(slashed) => slashed,
+        //     Err(_) => return Err(EpochError::MissingBlock(*header.prev_hash()).into()),
+        // };
+        // if slashed.contains_key(block_producer.account_id()) {
+        //     return Ok(false);
+        // }
+        // Ok(header.signature().verify(header.hash().as_ref(), block_producer.public_key()))
     }
 
     fn verify_chunk_signature_with_header_parts(
