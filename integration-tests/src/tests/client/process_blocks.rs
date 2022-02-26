@@ -4533,7 +4533,7 @@ fn test_process_blocks() {
     // chain_genesis.transaction_validity_period = 10;
     // chain_genesis.height = height;
 
-    let validators = vec![vec!["test1".parse().unwrap()]];
+    let validators: Vec<Vec<AccountId>> = vec![vec!["test1".parse().unwrap()]];
     let num_validator_seats = validators.iter().map(|x| x.len()).sum::<usize>() as NumSeats;
     let runtime = NightshadeRuntime::with_config(
         home_dir,
