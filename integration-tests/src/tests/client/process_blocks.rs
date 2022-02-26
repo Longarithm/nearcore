@@ -4516,7 +4516,7 @@ mod contract_precompilation_tests {
 #[test]
 fn test_process_blocks() {
     // init_test_logger();
-    let home_dir = Path::new("~/.near");
+    let home_dir = Path::new("/home/ubuntu/.near");
     let store = create_store(&get_store_path(&home_dir));
     let height = 55144899; //55145899; //9820210; //near_config.genesis.config.genesis_height;
 
