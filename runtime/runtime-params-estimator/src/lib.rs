@@ -1284,12 +1284,12 @@ fn touching_trie_node_write_from_chunk_cache(ctx: &mut EstimatorContext) -> GasC
 
     let in_memory_signer =
         InMemorySigner::from_seed(signer.clone(), KeyType::ED25519, signer.as_ref());
-    let make_receipts = |key, value| -> Vec<Receipt> {
+    let make_receipts = |key, value: u8| -> Vec<Receipt> {
         (0..10)
             .map(|i: u8| {
                 let mut receipt_key = key.clone();
                 receipt_key.push((('a' as u8) + i) as char);
-                let receipt_value = vec![value + i].as_bytes();
+                let receipt_value = vec![value + i];
                 let args = (receipt_key.len() as u64)
                     .to_le_bytes()
                     .into_iter()
@@ -1323,11 +1323,11 @@ fn touching_trie_node_write_from_chunk_cache(ctx: &mut EstimatorContext) -> GasC
 
     // Warmup
     (0..2).for_each(|i| {
-        let receipts = make_receipts(key.clone(), (i + 1) * 100);
+        let receipts = make_receipts(key.clone(), (i + 1) * 15);
         testbed.measure_receipts(&receipts);
     });
     // Measurement
-    let receipts = make_receipts(key.clone(), 2 * 100);
+    let receipts = make_receipts(key.clone(), 2 * 15);
     let results = testbed.measure_receipts(&receipts);
 
     let (cost, ext_cost) = aggregate_per_block_measurements(&ctx.config, 1, results);
