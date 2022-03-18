@@ -184,6 +184,7 @@ static ALL_COSTS: &[(Cost, fn(&mut EstimatorContext) -> GasCost)] = &[
     (Cost::TouchingTrieNodeFromChunkCache, touching_trie_node_read_from_chunk_cache),
     (Cost::TouchingTrieNodeRead, touching_trie_node_read),
     (Cost::TouchingTrieNodeWrite, touching_trie_node_write),
+    (Cost::TouchingTrieNodeWriteWithChunkCache, touching_trie_node_write_from_chunk_cache),
     (Cost::ApplyBlock, apply_block_cost),
     (Cost::ContractCompileBase, contract_compile_base),
     (Cost::ContractCompileBytes, contract_compile_bytes),
