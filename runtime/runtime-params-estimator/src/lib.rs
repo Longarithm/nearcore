@@ -1153,7 +1153,7 @@ fn touching_trie_node_read_from_chunk_cache(ctx: &mut EstimatorContext) -> GasCo
                 .chain(receipt_key.bytes())
                 .collect();
             let receipt_enum = ReceiptEnum::Action(ActionReceipt {
-                signer_id: signer,
+                signer_id: signer.clone(),
                 signer_public_key: in_memory_signer.public_key(),
                 gas_price: 0,
                 output_data_receivers: vec![],
@@ -1167,8 +1167,8 @@ fn touching_trie_node_read_from_chunk_cache(ctx: &mut EstimatorContext) -> GasCo
                 .into()],
             });
             Receipt {
-                predecessor_id: alice_account(),
-                receiver_id: bob_account(),
+                predecessor_id: signer.clone(),
+                receiver_id: signer.clone(),
                 receipt_id: hash(&receipt_enum.try_to_vec().unwrap()),
                 receipt: receipt_enum,
             }
