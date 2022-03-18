@@ -1279,9 +1279,6 @@ fn touching_trie_node_write_from_chunk_cache(ctx: &mut EstimatorContext) -> GasC
     let mut blocks = vec![setup_block];
     testbed.measure_blocks(blocks);
 
-    let mut blocks = vec![setup_block];
-    testbed.measure_blocks(blocks);
-
     let in_memory_signer =
         InMemorySigner::from_seed(signer.clone(), KeyType::ED25519, signer.as_ref());
     let make_receipts = |key: String, value: u8| -> Vec<Receipt> {
