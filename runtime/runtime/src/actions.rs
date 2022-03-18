@@ -18,7 +18,7 @@ use near_primitives::types::{AccountId, BlockHeight, EpochInfoProvider, TrieCach
 use near_primitives::utils::create_random_seed;
 use near_primitives::version::{
     is_implicit_account_creation_enabled, ProtocolFeature, ProtocolVersion,
-    DELETE_KEY_STORAGE_USAGE_PROTOCOL_VERSION,
+    DELETE_KEY_STORAGE_USAGE_PROTOCOL_VERSION, PROTOCOL_VERSION,
 };
 use near_store::{
     get_access_key, get_code, remove_access_key, remove_account, set_access_key, set_code,
@@ -115,7 +115,7 @@ pub(crate) fn execute_function_call(
         )
     };
 
-    if checked_feature!("protocol_feature_chunk_nodes_cache", ChunkNodesCache, protocol_version) {
+    if checked_feature!("protocol_feature_chunk_nodes_cache", ChunkNodesCache, PROTOCOL_VERSION) {
         runtime_ext.set_trie_cache_mode(TrieCacheMode::CachingChunk);
         let result = runner(runtime_ext);
         runtime_ext.set_trie_cache_mode(TrieCacheMode::CachingShard);
