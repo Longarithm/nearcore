@@ -1286,9 +1286,9 @@ fn touching_trie_node_write_from_chunk_cache(ctx: &mut EstimatorContext) -> GasC
         InMemorySigner::from_seed(signer.clone(), KeyType::ED25519, signer.as_ref());
     let make_receipts = |key, value| -> Vec<Receipt> {
         (0..10)
-            .map(|i| {
+            .map(|i: u8| {
                 let mut receipt_key = key.clone();
-                receipt_key.push('a' + i);
+                receipt_key.push((('a' as u8) + i) as char);
                 let receipt_value = vec![value + i].as_bytes();
                 let args = (receipt_key.len() as u64)
                     .to_le_bytes()
