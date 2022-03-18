@@ -31,6 +31,8 @@ mod state_parts;
 mod trie_storage;
 pub mod update;
 
+use deepsize::DeepSizeOf;
+
 #[cfg(test)]
 mod trie_tests;
 
