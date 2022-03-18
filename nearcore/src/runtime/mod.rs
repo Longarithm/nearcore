@@ -1386,10 +1386,7 @@ impl RuntimeAdapter for NightshadeRuntime {
             is_first_block_with_chunk_of_version,
             states_to_patch,
         ) {
-            Ok(result) => {
-                trie.DEBUG_chunk_cache_size();
-                Ok(result)
-            }
+            Ok(result) => Ok(result),
             Err(e) => match e.kind() {
                 ErrorKind::StorageError(_) => {
                     panic!("{}", e);

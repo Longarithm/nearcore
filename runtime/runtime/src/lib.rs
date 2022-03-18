@@ -1385,6 +1385,7 @@ impl Runtime {
 
         let state_root = trie_changes.new_root;
         let proof = trie.recorded_storage();
+        trie.DEBUG_chunk_cache_size();
         Ok(ApplyResult {
             state_root,
             trie_changes,
