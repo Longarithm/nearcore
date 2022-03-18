@@ -1185,7 +1185,7 @@ fn touching_trie_node_read_from_chunk_cache(ctx: &mut EstimatorContext) -> GasCo
     let (cost, ext_cost) = aggregate_per_block_measurements(&ctx.config, 1, results);
 
     let nodes_touched = ext_cost[&ExtCosts::touching_trie_node];
-    eprintln!("cost = {:?}", cost);
+    eprintln!("cost = {:?}", cost.to_gas());
     eprintln!("nodes_touched = {}", nodes_touched);
 
     ctx.cached.touching_trie_node_read = Some(cost.clone());
