@@ -1185,7 +1185,7 @@ fn touching_trie_node_read_from_chunk_cache(ctx: &mut EstimatorContext) -> GasCo
     let (cost, ext_cost) = aggregate_per_block_measurements(&ctx.config, 1, results);
 
     let nodes_touched = ext_cost[&ExtCosts::touching_trie_node];
-    eprintln!("cost = {:?}", cost.to_gas());
+    eprintln!("cost = {:?}", cost);
     eprintln!("nodes_touched = {}", nodes_touched);
 
     ctx.cached.touching_trie_node_read = Some(cost.clone());
@@ -1247,6 +1247,93 @@ fn touching_trie_node_write(ctx: &mut EstimatorContext) -> GasCost {
     let cost_delta =
         cost_long_key.saturating_sub(&cost_short_key, &NonNegativeTolerance::PER_MILLE);
     let cost = cost_delta / nodes_touched_delta;
+
+    ctx.cached.touching_trie_node_write = Some(cost.clone());
+    cost
+}
+
+fn touching_trie_node_write_from_chunk_cache(ctx: &mut EstimatorContext) -> GasCost {
+    if let Some(cost) = ctx.cached.touching_trie_node_write.clone() {
+        return cost;
+    }
+    let warmup_iters = ctx.config.warmup_iters_per_block;
+    let measured_iters = ctx.config.iter_per_block;
+    let mut testbed = ctx.testbed();
+    let tb = testbed.transaction_builder();
+
+    // Number of bytes in the final key. Will create 2x that many nodes.
+    // Picked somewhat arbitrarily, balancing estimation time vs accuracy.
+    let final_key_len = 100;
+
+    // Prepare a long chain in the trie
+    let signer = tb.random_account();
+    let key = std::iter::repeat('j').take(final_key_len).collect::<String>();
+    let mut setup_block = Vec::new();
+    for key_len in 0..final_key_len {
+        let key = &key.as_str()[..key_len];
+        let value = "0";
+        setup_block.push(tb.account_insert_key(signer.clone(), key, value));
+    }
+
+    let mut blocks = vec![setup_block];
+    testbed.measure_blocks(blocks);
+
+    let mut blocks = vec![setup_block];
+    testbed.measure_blocks(blocks);
+
+    let in_memory_signer =
+        InMemorySigner::from_seed(signer.clone(), KeyType::ED25519, signer.as_ref());
+    let make_receipts = |key, value| -> Vec<Receipt> {
+        (0..10)
+            .map(|i| {
+                let mut receipt_key = key.clone();
+                receipt_key.push('a' + i);
+                let receipt_value = vec![value + i].as_bytes();
+                let args = (receipt_key.len() as u64)
+                    .to_le_bytes()
+                    .into_iter()
+                    .chain(receipt_key.bytes())
+                    .chain((receipt_value.len() as u64).to_le_bytes().into_iter())
+                    .chain(receipt_value)
+                    .collect();
+                let receipt_enum = ReceiptEnum::Action(ActionReceipt {
+                    signer_id: signer.clone(),
+                    signer_public_key: in_memory_signer.public_key(),
+                    gas_price: 0,
+                    output_data_receivers: vec![],
+                    input_data_ids: vec![],
+                    actions: vec![FunctionCallAction {
+                        method_name: "account_storage_insert_key".to_string(),
+                        args,
+                        gas: 10u64.pow(18),
+                        deposit: 0,
+                    }
+                    .into()],
+                });
+                Receipt {
+                    predecessor_id: signer.clone(),
+                    receiver_id: signer.clone(),
+                    receipt_id: hash(&receipt_enum.try_to_vec().unwrap()),
+                    receipt: receipt_enum,
+                }
+            })
+            .collect()
+    };
+
+    // Warmup
+    (0..2).for_each(|i| {
+        let receipts = make_receipts(key.clone(), (i + 1) * 100);
+        testbed.measure_receipts(&receipts);
+    });
+    // Measurement
+    let receipts = make_receipts(key.clone(), 2 * 100);
+    let results = testbed.measure_receipts(&receipts);
+
+    let (cost, ext_cost) = aggregate_per_block_measurements(&ctx.config, 1, results);
+
+    let nodes_touched = ext_cost[&ExtCosts::touching_trie_node];
+    eprintln!("cost = {:?}", cost);
+    eprintln!("nodes_touched = {}", nodes_touched);
 
     ctx.cached.touching_trie_node_write = Some(cost.clone());
     cost
