@@ -71,6 +71,7 @@ pub mod config;
 mod function_call;
 mod gas_metering;
 
+use borsh::BorshSerialize;
 use std::convert::{TryFrom, TryInto};
 use std::iter;
 use std::time::Instant;
@@ -78,13 +79,15 @@ use std::time::Instant;
 use estimator_params::sha256_cost;
 use gas_cost::{LeastSquaresTolerance, NonNegativeTolerance};
 use gas_metering::gas_metering_cost;
-use near_crypto::{KeyType, SecretKey};
+use near_crypto::{InMemorySigner, KeyType, SecretKey, Signer};
 use near_primitives::account::{AccessKey, AccessKeyPermission, FunctionCallPermission};
 use near_primitives::contract::ContractCode;
+use near_primitives::hash::hash;
+use near_primitives::receipt::{ActionReceipt, Receipt, ReceiptEnum};
 use near_primitives::runtime::fees::RuntimeFeesConfig;
 use near_primitives::transaction::{
     Action, AddKeyAction, CreateAccountAction, DeleteAccountAction, DeleteKeyAction,
-    DeployContractAction, SignedTransaction, StakeAction, TransferAction,
+    DeployContractAction, FunctionCallAction, SignedTransaction, StakeAction, TransferAction,
 };
 use near_primitives::types::AccountId;
 use near_primitives::version::PROTOCOL_VERSION;
@@ -178,6 +181,7 @@ static ALL_COSTS: &[(Cost, fn(&mut EstimatorContext) -> GasCost)] = &[
     (Cost::StorageRemoveKeyByte, storage_remove_key_byte),
     (Cost::StorageRemoveRetValueByte, storage_remove_ret_value_byte),
     (Cost::TouchingTrieNode, touching_trie_node),
+    (Cost::TouchingTrieNodeFromChunkCache, touching_trie_node_read_from_chunk_cache),
     (Cost::TouchingTrieNodeRead, touching_trie_node_read),
     (Cost::TouchingTrieNodeWrite, touching_trie_node_write),
     (Cost::ApplyBlock, apply_block_cost),
@@ -1108,6 +1112,81 @@ fn touching_trie_node_read(ctx: &mut EstimatorContext) -> GasCost {
     let cost_delta =
         cost_long_key.saturating_sub(&cost_short_key, &NonNegativeTolerance::PER_MILLE);
     let cost = cost_delta / nodes_touched_delta;
+
+    ctx.cached.touching_trie_node_read = Some(cost.clone());
+    cost
+}
+
+fn touching_trie_node_read_from_chunk_cache(ctx: &mut EstimatorContext) -> GasCost {
+    if let Some(cost) = ctx.cached.touching_trie_node_read.clone() {
+        return cost;
+    }
+    let mut testbed = ctx.testbed();
+    let tb = testbed.transaction_builder();
+
+    // Number of bytes in the final key. Will create 2x that many nodes.
+    // Picked somewhat arbitrarily, balancing estimation time vs accuracy.
+    let final_key_len = 100;
+
+    // Prepare a long chain in the trie
+    let signer = tb.random_account();
+    let key = "j".repeat(final_key_len);
+    let mut setup_block = Vec::new();
+    for key_len in 0..final_key_len - 1 {
+        let key = &key.as_str()[..key_len];
+        let value = "0";
+        setup_block.push(tb.account_insert_key(signer.clone(), key, value));
+    }
+
+    let mut blocks = vec![setup_block];
+    testbed.measure_blocks(blocks);
+
+    let in_memory_signer =
+        InMemorySigner::from_seed(signer.clone(), KeyType::ED25519, signer.as_ref());
+    let receipts: Vec<Receipt> = ('a'..'e')
+        .map(|symbol| {
+            let mut receipt_key = key.clone();
+            receipt_key.push(symbol);
+            let args = (receipt_key.len() as u64)
+                .to_le_bytes()
+                .into_iter()
+                .chain(receipt_key.bytes())
+                .collect();
+            let receipt_enum = ReceiptEnum::Action(ActionReceipt {
+                signer_id: signer,
+                signer_public_key: in_memory_signer.public_key(),
+                gas_price: 0,
+                output_data_receivers: vec![],
+                input_data_ids: vec![],
+                actions: vec![FunctionCallAction {
+                    method_name: "account_storage_has_key".to_string(),
+                    args,
+                    gas: 10u64.pow(18),
+                    deposit: 0,
+                }
+                .into()],
+            });
+            Receipt {
+                predecessor_id: alice_account(),
+                receiver_id: bob_account(),
+                receipt_id: hash(&receipt_enum.try_to_vec().unwrap()),
+                receipt: receipt_enum,
+            }
+        })
+        .collect();
+
+    // Warmup
+    (0..2).for_each(|_| {
+        testbed.measure_receipts(&receipts);
+    });
+    // Measurement
+    let results = testbed.measure_receipts(&receipts);
+
+    let (cost, ext_cost) = aggregate_per_block_measurements(&ctx.config, 1, results);
+
+    let nodes_touched = ext_cost[&ExtCosts::touching_trie_node];
+    eprintln!("cost = {:?}", cost);
+    eprintln!("nodes_touched = {}", nodes_touched);
 
     ctx.cached.touching_trie_node_read = Some(cost.clone());
     cost

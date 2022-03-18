@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use near_primitives::receipt::Receipt;
 
 use near_primitives::transaction::SignedTransaction;
 use near_vm_logic::ExtCosts;
@@ -82,6 +83,35 @@ impl<'c> Testbed<'c> {
                 self.inner.process_blocks_until_no_receipts(allow_failures);
                 start.elapsed()
             };
+
+            let mut ext_costs: HashMap<ExtCosts, u64> = HashMap::new();
+            node_runtime::with_ext_cost_counter(|cc| {
+                for (c, v) in cc.drain() {
+                    ext_costs.insert(c, v);
+                }
+            });
+            res.push((gas_cost, ext_costs));
+        }
+
+        res
+    }
+
+    pub(crate) fn measure_receipts<'a>(
+        &'a mut self,
+        receipts: &[Receipt],
+    ) -> Vec<(GasCost, HashMap<ExtCosts, u64>)> {
+        let allow_failures = false;
+
+        let mut res = Vec::with_capacity(blocks.len());
+
+        node_runtime::with_ext_cost_counter(|cc| cc.clear());
+        let gas_cost = {
+            self.clear_caches();
+            let start = GasCost::measure(self.config.metric);
+            self.inner.process_receipts(&receipts, allow_failures);
+            // self.inner.process_blocks_until_no_receipts(allow_failures);
+            start.elapsed()
+        };
 
             let mut ext_costs: HashMap<ExtCosts, u64> = HashMap::new();
             node_runtime::with_ext_cost_counter(|cc| {

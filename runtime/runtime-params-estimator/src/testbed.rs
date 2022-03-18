@@ -131,6 +131,42 @@ impl RuntimeTestbed {
         total_burnt_gas
     }
 
+    pub fn process_receipts(&mut self, receipts: &[Receipt], allow_failures: bool) -> Gas {
+        let apply_result = self
+            .runtime
+            .apply(
+                self.tries.get_trie_for_shard(ShardUId::single_shard()),
+                self.root,
+                &None,
+                &self.apply_state,
+                &receipts,
+                &[],
+                &self.epoch_info_provider,
+                None,
+            )
+            .unwrap();
+
+        let (store_update, root) =
+            self.tries.apply_all(&apply_result.trie_changes, ShardUId::single_shard()).unwrap();
+        self.root = root;
+        store_update.commit().unwrap();
+        self.apply_state.block_index += 1;
+
+        let mut total_burnt_gas = 0;
+        if !allow_failures {
+            for outcome in &apply_result.outcomes {
+                total_burnt_gas += outcome.outcome.gas_burnt;
+                match &outcome.outcome.status {
+                    ExecutionStatus::Failure(e) => panic!("Execution failed {:#?}", e),
+                    _ => (),
+                }
+            }
+        }
+        self.prev_receipts = apply_result.outgoing_receipts;
+        eprintln!("outgoing receipts number: {}", self.prev_receipts.len());
+        total_burnt_gas
+    }
+
     pub fn process_blocks_until_no_receipts(&mut self, allow_failures: bool) {
         while !self.prev_receipts.is_empty() {
             self.process_block(&[], allow_failures);
