@@ -31,6 +31,7 @@ mod state_parts;
 mod trie_storage;
 pub mod update;
 
+#[cfg(feature = "deepsize_feature")]
 use deepsize::DeepSizeOf;
 
 #[cfg(test)]
