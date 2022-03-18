@@ -282,10 +282,10 @@ fn apply_block_from_range(
         apply_result.total_balance_burnt,
     );
 
-    let state_update =
+    let _state_update =
         runtime_adapter.get_tries().new_trie_update(shard_uid, *chunk_extra.state_root());
-    let _delayed_indices =
-        get::<DelayedReceiptIndices>(&state_update, &TrieKey::DelayedReceiptIndices).unwrap();
+    // let delayed_indices =
+    //     get::<DelayedReceiptIndices>(&state_update, &TrieKey::DelayedReceiptIndices).unwrap();
 
     // match existing_chunk_extra {
     //     Some(existing_chunk_extra) => {
