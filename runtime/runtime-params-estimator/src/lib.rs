@@ -1143,7 +1143,7 @@ fn touching_trie_node_read_from_chunk_cache(ctx: &mut EstimatorContext) -> GasCo
 
     let in_memory_signer =
         InMemorySigner::from_seed(signer.clone(), KeyType::ED25519, signer.as_ref());
-    let receipts: Vec<Receipt> = ('a'..'e')
+    let receipts: Vec<Receipt> = ('a'..'k')
         .map(|symbol| {
             let mut receipt_key = key.clone();
             receipt_key.push(symbol);
