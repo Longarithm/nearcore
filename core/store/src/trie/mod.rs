@@ -1,8 +1,9 @@
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::fmt;
 use std::io::{Cursor, Read, Write};
+use std::ops::Deref;
+use std::{fmt, mem};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -753,6 +754,15 @@ impl Trie {
 
     pub fn get_touched_nodes_count(&self) -> u64 {
         self.storage.get_touched_nodes_count()
+    }
+
+    pub fn DEBUG_chunk_cache_size(&self) {
+        if let Some(storage) = self.storage.as_caching_storage() {
+            let cache = storage.chunk_cache.borrow();
+            let size = cache.iter().map(|it| it.0.len() + it.1.len()).sum();
+            let size_of_val = mem::size_of_val(&cache);
+            tracing::debug!(target: "runtime", len = cache.len(), size = size, size_of_val = size_of_val);
+        }
     }
 }
 
