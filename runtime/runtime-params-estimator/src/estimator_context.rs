@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use near_primitives::receipt::Receipt;
+use std::collections::HashMap;
 
 use near_primitives::transaction::SignedTransaction;
 use near_vm_logic::ExtCosts;
@@ -113,14 +113,13 @@ impl<'c> Testbed<'c> {
             start.elapsed()
         };
 
-            let mut ext_costs: HashMap<ExtCosts, u64> = HashMap::new();
-            node_runtime::with_ext_cost_counter(|cc| {
-                for (c, v) in cc.drain() {
-                    ext_costs.insert(c, v);
-                }
-            });
-            res.push((gas_cost, ext_costs));
-        }
+        let mut ext_costs: HashMap<ExtCosts, u64> = HashMap::new();
+        node_runtime::with_ext_cost_counter(|cc| {
+            for (c, v) in cc.drain() {
+                ext_costs.insert(c, v);
+            }
+        });
+        res.push((gas_cost, ext_costs));
 
         res
     }
