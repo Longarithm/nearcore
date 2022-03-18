@@ -102,7 +102,7 @@ impl<'c> Testbed<'c> {
     ) -> Vec<(GasCost, HashMap<ExtCosts, u64>)> {
         let allow_failures = false;
 
-        let mut res = Vec::with_capacity(blocks.len());
+        let mut res = Vec::with_capacity(1);
 
         node_runtime::with_ext_cost_counter(|cc| cc.clear());
         let gas_cost = {
