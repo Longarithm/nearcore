@@ -287,7 +287,7 @@ pub mod wasmer2_cache {
             .serialize()
             .map_err(|_e| CacheError::SerializationError { hash: key.0 })?;
         let serialized = CacheRecord::Code(code).try_to_vec().unwrap();
-        cache.put(key.as_ref(), &serialized).map_err(|_io_err| CacheError::WriteError)?;
+        // cache.put(key.as_ref(), &serialized).map_err(|_io_err| CacheError::WriteError)?;
         Ok(Ok(module))
     }
 
