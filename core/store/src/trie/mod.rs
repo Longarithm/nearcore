@@ -760,8 +760,7 @@ impl Trie {
         if let Some(storage) = self.storage.as_caching_storage() {
             let cache = storage.chunk_cache.borrow();
             let sum_lens: usize = cache.iter().map(|it| (*it.0).0.len() + it.1.len()).sum();
-            let size_of_val = mem::size_of_val(&cache);
-            tracing::debug!(target: "runtime", len = cache.len(), sum_lens = sum_lens, size_of_val = size_of_val);
+            tracing::debug!(target: "runtime", len = cache.len(), sum_lens = sum_lens, deep_size = cache.deep_size_of());
         }
     }
 }
