@@ -287,23 +287,23 @@ fn apply_block_from_range(
     // let delayed_indices =
     //     get::<DelayedReceiptIndices>(&state_update, &TrieKey::DelayedReceiptIndices).unwrap();
 
-    // match existing_chunk_extra {
-    //     Some(existing_chunk_extra) => {
-    //         if verbose_output {
-    //             println!("block_height: {}, block_hash: {}\nchunk_extra: {:#?}\nexisting_chunk_extra: {:#?}\noutcomes: {:#?}", height, block_hash, chunk_extra, existing_chunk_extra, apply_result.outcomes);
-    //         }
-    //         if !smart_equals(&existing_chunk_extra, &chunk_extra) {
-    //             assert!(false, "Got a different ChunkExtra:\nblock_height: {}, block_hash: {}\nchunk_extra: {:#?}\nexisting_chunk_extra: {:#?}\nnew outcomes: {:#?}\n\nold outcomes: {:#?}\n", height, block_hash, chunk_extra, existing_chunk_extra, apply_result.outcomes, old_outcomes(store, &apply_result.outcomes));
-    //         }
-    //     }
-    //     None => {
-    //         assert!(prev_chunk_extra.is_some());
-    //         assert!(apply_result.outcomes.is_empty());
-    //         if verbose_output {
-    //             println!("block_height: {}, block_hash: {}\nchunk_extra: {:#?}\nprev_chunk_extra: {:#?}\noutcomes: {:#?}", height, block_hash, chunk_extra, prev_chunk_extra, apply_result.outcomes);
-    //         }
-    //     }
-    // };
+    match existing_chunk_extra {
+        Some(existing_chunk_extra) => {
+            if verbose_output {
+                println!("block_height: {}, block_hash: {}\nchunk_extra: {:#?}\nexisting_chunk_extra: {:#?}\noutcomes: {:#?}", height, block_hash, chunk_extra, existing_chunk_extra, apply_result.outcomes);
+            }
+            // if !smart_equals(&existing_chunk_extra, &chunk_extra) {
+            //     assert!(false, "Got a different ChunkExtra:\nblock_height: {}, block_hash: {}\nchunk_extra: {:#?}\nexisting_chunk_extra: {:#?}\nnew outcomes: {:#?}\n\nold outcomes: {:#?}\n", height, block_hash, chunk_extra, existing_chunk_extra, apply_result.outcomes, old_outcomes(store, &apply_result.outcomes));
+            // }
+        }
+        None => {
+            // assert!(prev_chunk_extra.is_some());
+            // assert!(apply_result.outcomes.is_empty());
+            if verbose_output {
+                println!("block_height: {}, block_hash: {}\nchunk_extra: {:#?}\nprev_chunk_extra: {:#?}\noutcomes: {:#?}", height, block_hash, chunk_extra, prev_chunk_extra, apply_result.outcomes);
+            }
+        }
+    };
     // maybe_add_to_csv(
     //     csv_file_mutex,
     //     &format!(
