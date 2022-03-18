@@ -1264,7 +1264,7 @@ fn touching_trie_node_write_from_chunk_cache(ctx: &mut EstimatorContext) -> GasC
 
     // Number of bytes in the final key. Will create 2x that many nodes.
     // Picked somewhat arbitrarily, balancing estimation time vs accuracy.
-    let final_key_len = 100;
+    let final_key_len = 1000;
 
     // Prepare a long chain in the trie
     let signer = tb.random_account();
