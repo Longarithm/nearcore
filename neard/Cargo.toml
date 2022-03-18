@@ -63,6 +63,7 @@ protocol_feature_fix_staking_threshold = ["nearcore/protocol_feature_fix_staking
 protocol_feature_chunk_nodes_cache = ["nearcore/protocol_feature_chunk_nodes_cache"]
 nightly_protocol_features = ["nearcore/nightly_protocol_features"]
 nightly_protocol = ["nearcore/nightly_protocol"]
+deepsize_feature = ["near-store/deepsize_feature", "near-primitives/deepsize_feature"]
 
 sandbox = ["nearcore/sandbox"]
 

@@ -54,3 +54,4 @@ nightly_protocol_features = [
   "nightly_protocol",
   "protocol_feature_chunk_only_producers",
 ]
+deepsize_feature = ["deepsize"]
