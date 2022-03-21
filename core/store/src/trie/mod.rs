@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};
 use std::ops::Deref;
+use std::rc::Rc;
 use std::{fmt, mem};
 
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -638,15 +639,22 @@ impl Trie {
             if hash == Trie::empty_root() {
                 return Ok(None);
             }
-            let bytes = self.storage.retrieve_raw_bytes(&hash)?;
-            let node = RawTrieNodeWithSize::decode(&bytes).map_err(|_| {
-                StorageError::StorageInconsistentState("RawTrieNode decode failed".to_string())
-            })?;
+            let node = match self.storage.as_caching_storage() {
+                Some(caching_storage) => caching_storage.retrieve_trie_cache_node(&hash)?,
+                None => {
+                    self.storage.retrieve_raw_bytes(&hash)?;
+                    Rc::new(RawTrieNodeWithSize::decode(&bytes).map_err(|_| {
+                        StorageError::StorageInconsistentState(
+                            "RawTrieNode decode failed".to_string(),
+                        )
+                    })?)
+                }
+            };
 
-            match node.node {
+            match &node.node {
                 RawTrieNode::Leaf(existing_key, value_length, value_hash) => {
                     if NibbleSlice::from_encoded(&existing_key).0 == key {
-                        return Ok(Some((value_length, value_hash)));
+                        return Ok(Some((value_length.clone(), value_hash.clone())));
                     } else {
                         return Ok(None);
                     }
@@ -654,7 +662,7 @@ impl Trie {
                 RawTrieNode::Extension(existing_key, child) => {
                     let existing_key = NibbleSlice::from_encoded(&existing_key).0;
                     if key.starts_with(&existing_key) {
-                        hash = child;
+                        hash = child.clone();
                         key = key.mid(existing_key.len());
                     } else {
                         return Ok(None);
@@ -664,7 +672,7 @@ impl Trie {
                     if key.is_empty() {
                         match value {
                             Some((value_length, value_hash)) => {
-                                return Ok(Some((value_length, value_hash)));
+                                return Ok(Some((value_length.clone(), value_hash.clone())));
                             }
                             None => return Ok(None),
                         }
@@ -694,7 +702,11 @@ impl Trie {
     pub fn get(&self, root: &CryptoHash, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
         match self.get_ref(root, key)? {
             Some((_length, hash)) => {
-                self.storage.retrieve_raw_bytes(&hash).map(|bytes| Some(bytes.to_vec()))
+                let value = match self.storage.as_caching_storage() {
+                    Some(caching_storage) => caching_storage.retrieve_trie_cache_value(&hash)?,
+                    None => self.storage.retrieve_raw_bytes(&hash)?,
+                };
+                Ok(Some(value.to_vec()))
             }
             None => Ok(None),
         }
