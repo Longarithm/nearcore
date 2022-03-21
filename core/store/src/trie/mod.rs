@@ -256,7 +256,7 @@ impl TrieNode {
 
 #[derive(Debug, Eq, PartialEq)]
 #[allow(clippy::large_enum_variant)]
-pub(crate) enum RawTrieNode {
+pub enum RawTrieNode {
     Leaf(Vec<u8>, u32, CryptoHash),
     Branch([Option<CryptoHash>; 16], Option<(u32, CryptoHash)>),
     Extension(Vec<u8>, CryptoHash),
@@ -265,7 +265,7 @@ pub(crate) enum RawTrieNode {
 /// Trie node + memory cost of its subtree
 /// memory_usage is serialized, stored, and contributes to hash
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) struct RawTrieNodeWithSize {
+pub struct RawTrieNodeWithSize {
     node: RawTrieNode,
     memory_usage: u64,
 }
