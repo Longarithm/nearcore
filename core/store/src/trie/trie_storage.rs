@@ -304,7 +304,7 @@ impl TrieCachingStorage {
         let result = self.retrieve_trie_cache_item(hash, true)?;
         match result {
             TrieCacheValue::DecodedNode(node) => Ok(Rc::clone(&node)),
-            _ => StorageError::StorageInconsistentState("Incorrect type".to_string()),
+            _ => Err(StorageError::StorageInconsistentState("Incorrect type".to_string())),
         }
     }
 
@@ -312,7 +312,7 @@ impl TrieCachingStorage {
         let result = self.retrieve_trie_cache_item(hash, false)?;
         match result {
             TrieCacheValue::Bytes(bytes) => Ok(bytes.clone()),
-            _ => StorageError::StorageInconsistentState("Incorrect type".to_string()),
+            _ => Err(StorageError::StorageInconsistentState("Incorrect type".to_string())),
         }
     }
 }

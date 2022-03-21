@@ -642,7 +642,7 @@ impl Trie {
             let node = match self.storage.as_caching_storage() {
                 Some(caching_storage) => caching_storage.retrieve_trie_cache_node(&hash)?,
                 None => {
-                    self.storage.retrieve_raw_bytes(&hash)?;
+                    let bytes = self.storage.retrieve_raw_bytes(&hash)?;
                     Rc::new(RawTrieNodeWithSize::decode(&bytes).map_err(|_| {
                         StorageError::StorageInconsistentState(
                             "RawTrieNode decode failed".to_string(),
