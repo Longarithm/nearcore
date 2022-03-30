@@ -4669,7 +4669,8 @@ mod lower_storage_key_limit_test {
             assert_eq!(receipt_ids.len(), 1);
             let receipt_execution_outcome =
                 env.clients[0].chain.get_execution_outcome(&receipt_ids[0]).unwrap();
-            match receipt_execution_outcome.outcome_with_id.outcome.status {
+            let status = receipt_execution_outcome.outcome_with_id.outcome.status;
+            match status {
                 ExecutionStatus::Failure(TxExecutionError::ActionError(err)) => {
                     assert_eq!(
                         err.kind,
@@ -4682,7 +4683,7 @@ mod lower_storage_key_limit_test {
                     );
                 }
                 _ => {
-                    assert!(false, "Result is not an ActionError: {:?}", final_result);
+                    assert!(false, "Result is not an ActionError: {:?}", status);
                 }
             };
         }
