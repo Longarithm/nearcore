@@ -4618,7 +4618,7 @@ mod lower_storage_key_limit_test {
             let tx_hash = signed_tx.get_hash().clone();
             env.clients[0].process_tx(signed_tx, false, false);
             for i in 0..epoch_length {
-                let mut block = env.clients[0].produce_block(tip.height + i + 1).unwrap().unwrap();
+                let block = env.clients[0].produce_block(tip.height + i + 1).unwrap().unwrap();
                 env.process_block(0, block.clone(), Provenance::PRODUCED);
             }
             let final_result = env.clients[0].chain.get_final_transaction_result(&tx_hash).unwrap();
@@ -4642,7 +4642,7 @@ mod lower_storage_key_limit_test {
             assert!(res.is_ok());
 
             for i in 1..epoch_length {
-                let mut block = env.clients[0].produce_block(tip.height + i + 1).unwrap().unwrap();
+                let block = env.clients[0].produce_block(tip.height + i + 1).unwrap().unwrap();
                 env.process_block(0, block.clone(), Provenance::PRODUCED);
             }
         }
@@ -4659,7 +4659,7 @@ mod lower_storage_key_limit_test {
             let tx_hash = signed_tx.get_hash().clone();
             env.clients[0].process_tx(signed_tx, false, false);
             for i in 0..epoch_length {
-                let mut block = env.clients[0].produce_block(tip.height + i + 1).unwrap().unwrap();
+                let block = env.clients[0].produce_block(tip.height + i + 1).unwrap().unwrap();
                 env.process_block(0, block.clone(), Provenance::PRODUCED);
             }
             let final_result = env.clients[0].chain.get_final_transaction_result(&tx_hash).unwrap();
@@ -4699,7 +4699,7 @@ mod lower_storage_key_limit_test {
             let tx_hash = signed_tx.get_hash().clone();
             env.clients[0].process_tx(signed_tx, false, false);
             for i in 0..epoch_length {
-                let mut block = env.clients[0].produce_block(tip.height + i + 1).unwrap().unwrap();
+                let block = env.clients[0].produce_block(tip.height + i + 1).unwrap().unwrap();
                 env.process_block(0, block.clone(), Provenance::PRODUCED);
             }
             let final_result = env.clients[0].chain.get_final_transaction_result(&tx_hash).unwrap();
