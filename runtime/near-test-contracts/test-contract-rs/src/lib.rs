@@ -298,7 +298,7 @@ pub unsafe fn write_key_value() {
         value.as_ptr() as u64,
         1,
     );
-    value_return(value_len as u64, &result as *const u64 as u64);
+    value_return(result.len() as u64, &result as *const u64 as u64);
 }
 
 #[no_mangle]
