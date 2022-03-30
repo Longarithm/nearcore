@@ -4665,7 +4665,7 @@ mod lower_storage_key_limit_test {
                 env.process_block(0, block.clone(), Provenance::PRODUCED);
             }
             let final_result = env.clients[0].chain.get_final_transaction_result(&tx_hash).unwrap();
-            match final_result {
+            match final_result.status {
                 FinalExecutionStatus::Failure(TxExecutionError::ActionError(err)) => {
                     assert_eq!(
                         err.kind,
