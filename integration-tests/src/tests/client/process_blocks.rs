@@ -4678,7 +4678,7 @@ mod lower_storage_key_limit_test {
                     );
                 }
                 _ => {
-                    assert!(false, "Result is not an ActionError: {}", final_result);
+                    assert!(false, "Result is not an ActionError: {:?}", final_result);
                 }
             };
         }
