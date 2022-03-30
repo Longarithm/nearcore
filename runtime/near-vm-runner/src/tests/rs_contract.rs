@@ -7,6 +7,7 @@ use near_vm_logic::mocks::mock_external::MockedExternal;
 use near_vm_logic::types::ReturnData;
 use near_vm_logic::{VMConfig, VMOutcome};
 use std::mem::size_of;
+use testlib::runtime_utils;
 
 use crate::tests::{
     create_context, with_vm_variants, CURRENT_ACCOUNT_ID, LATEST_PROTOCOL_VERSION,
@@ -42,21 +43,13 @@ fn assert_run_result((outcome, err): (Option<VMOutcome>, Option<VMError>), expec
     }
 }
 
-fn arr_u64_to_u8(value: &[u64]) -> Vec<u8> {
-    let mut res = vec![];
-    for el in value {
-        res.extend_from_slice(&el.to_le_bytes());
-    }
-    res
-}
-
 #[test]
 pub fn test_read_write() {
     with_vm_variants(|vm_kind: VMKind| {
         let code = test_contract();
         let mut fake_external = MockedExternal::new();
 
-        let context = create_context(arr_u64_to_u8(&[10u64, 20u64]));
+        let context = create_context(runtime_utils::arr_u64_to_u8(&[10u64, 20u64]));
         let config = VMConfig::test();
         let fees = RuntimeFeesConfig::test();
 
@@ -74,7 +67,7 @@ pub fn test_read_write() {
         );
         assert_run_result(result, 0);
 
-        let context = create_context(arr_u64_to_u8(&[10u64]));
+        let context = create_context(runtime_utils::arr_u64_to_u8(&[10u64]));
         let result = runtime.run(
             &code,
             "read_value",

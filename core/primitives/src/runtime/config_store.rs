@@ -22,6 +22,7 @@ static CONFIGS: &[(ProtocolVersion, &[u8])] = &[
     (50, include_config!("50.json")),
     // max_gas_burnt increased to 300 TGas
     (52, include_config!("52.json")),
+    (53, include_config!("53.json")),
 ];
 
 pub static INITIAL_TESTNET_CONFIG: &[u8] = include_config!("29_testnet.json");
@@ -89,8 +90,10 @@ impl RuntimeConfigStore {
 mod tests {
     use super::*;
     use crate::serialize::to_base;
-    use crate::version::ProtocolFeature::LowerDataReceiptAndEcrecoverBaseCost;
     use crate::version::ProtocolFeature::LowerStorageCost;
+    use crate::version::ProtocolFeature::{
+        LowerDataReceiptAndEcrecoverBaseCost, LowerStorageKeyLimit,
+    };
     use near_primitives_core::hash::hash;
 
     const GENESIS_PROTOCOL_VERSION: ProtocolVersion = 29;
@@ -122,6 +125,7 @@ mod tests {
             "2cuq2HvuHT7Z27LUbgEtMxP2ejqrHK34J2V1GL1joiMn",
             "HFetcNKaC5s8Mj7bQz7jGMF7Rsvtuc3kjZRevWQ334n4",
             "EP9bv2znwbuBuimUgrSQm48ymHqwbHyUArZcWavSbPce",
+            "Csivvj3JAyzn8E8HFnR45CFpr8aqW6yT5HFnXHEwLLGW",
         ];
         let actual_hashes = CONFIGS
             .iter()
@@ -222,6 +226,17 @@ If you add new config version, add a missing hash to the end of `expected_hashes
         assert!(
             base_cfg.wasm_config.ext_costs.ecrecover_base
                 > new_cfg.wasm_config.ext_costs.ecrecover_base
+        );
+    }
+
+    #[test]
+    fn test_lower_max_length_storage_key() {
+        let store = RuntimeConfigStore::new(None);
+        let base_cfg = store.get_config(LowerStorageKeyLimit.protocol_version() - 1);
+        let new_cfg = store.get_config(LowerStorageKeyLimit.protocol_version());
+        assert!(
+            base_cfg.wasm_config.limit_config.max_length_storage_key
+                > new_cfg.wasm_config.limit_config.max_length_storage_key
         );
     }
 }
