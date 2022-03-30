@@ -4550,6 +4550,7 @@ mod lower_storage_key_limit_test {
     use super::*;
     use testlib::runtime_utils::arr_u64_to_u8;
 
+    /// Check correctness of the protocol upgrade and ability to write 2 KB keys.
     #[test]
     fn protocol_upgrade() {
         let old_protocol_version =
