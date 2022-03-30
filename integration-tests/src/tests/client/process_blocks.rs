@@ -4664,9 +4664,13 @@ mod lower_storage_key_limit_test {
                 let block = env.clients[0].produce_block(tip.height + i + 1).unwrap().unwrap();
                 env.process_block(0, block.clone(), Provenance::PRODUCED);
             }
-            let final_result = env.clients[0].chain.get_final_transaction_result(&tx_hash).unwrap();
-            match final_result.status {
-                FinalExecutionStatus::Failure(TxExecutionError::ActionError(err)) => {
+            let transaction_outcome = env.clients[0].chain.get_execution_outcome(&tx_hash).unwrap();
+            let receipt_ids = transaction_outcome.outcome_with_id.outcome.receipt_ids;
+            assert_eq!(receipt_ids.len(), 1);
+            let receipt_execution_outcome =
+                env.clients[0].chain.get_execution_outcome(&receipt_ids[0]).unwrap();
+            match receipt_execution_outcome.outcome_with_id.outcome.status {
+                ExecutionStatus::Failure(TxExecutionError::ActionError(err)) => {
                     assert_eq!(
                         err.kind,
                         ActionErrorKind::FunctionCallError(FunctionCallErrorSer::HostError(
