@@ -4548,6 +4548,8 @@ mod contract_precompilation_tests {
 #[cfg(test)]
 mod lower_storage_key_limit_test {
     use super::*;
+    use near_primitives::errors::ActionErrorKind;
+    use near_vm_errors::{FunctionCallErrorSer, HostError};
     use testlib::runtime_utils::arr_u64_to_u8;
 
     /// Check correctness of the protocol upgrade and ability to write 2 KB keys.
@@ -4663,10 +4665,22 @@ mod lower_storage_key_limit_test {
                 env.process_block(0, block.clone(), Provenance::PRODUCED);
             }
             let final_result = env.clients[0].chain.get_final_transaction_result(&tx_hash).unwrap();
-            assert!(matches!(
-                final_result.status,
-                FinalExecutionStatus::Failure(TxExecutionError::ActionError(_))
-            ));
+            match final_result {
+                FinalExecutionStatus::Failure(TxExecutionError::ActionError(err)) => {
+                    assert_eq!(
+                        err.kind,
+                        ActionErrorKind::FunctionCallError(FunctionCallErrorSer::HostError(
+                            HostError::KeyLengthExceeded {
+                                length: new_storage_key_limit as u64 + 1,
+                                limit: new_storage_key_limit as u64
+                            }
+                        ))
+                    );
+                }
+                _ => {
+                    assert!(false, "Result is not an ActionError: {}", final_result);
+                }
+            };
         }
 
         // Run transaction where storage key exactly fits the new limit, check that execution succeeds.

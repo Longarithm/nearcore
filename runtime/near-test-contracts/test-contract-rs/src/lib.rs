@@ -278,7 +278,7 @@ pub unsafe fn ext_validator_stake() {
     value_return(result.len() as u64, result.as_ptr() as *const u64 as u64);
 }
 
-/// Write key-value pair into storage, return the previously stored value.
+/// Write key-value pair into storage.
 /// Input is the byte array where the value is `u64` represented by last 8 bytes and key is represented by the first
 /// `register_len(0) - 8` bytes.
 #[no_mangle]
