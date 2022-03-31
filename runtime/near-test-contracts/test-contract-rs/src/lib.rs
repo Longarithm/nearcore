@@ -286,7 +286,7 @@ pub unsafe fn write_key_value() {
     input(0);
     let data_len = register_len(0) as usize;
     let value_len = size_of::<u64>();
-    let data = vec![0; data_len];
+    let data = vec![0u8; data_len];
     read_register(0, data.as_ptr() as u64);
 
     let key = &data[0..data_len - value_len];
