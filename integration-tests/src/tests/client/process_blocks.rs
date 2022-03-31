@@ -4548,7 +4548,6 @@ mod contract_precompilation_tests {
 #[cfg(test)]
 mod lower_storage_key_limit_test {
     use super::*;
-    use testlib::runtime_utils::arr_u64_to_u8;
 
     /// Check correctness of the protocol upgrade and ability to write 2 KB keys.
     #[test]
@@ -4559,7 +4558,7 @@ mod lower_storage_key_limit_test {
         let new_storage_key_limit = 2usize.pow(11); // 2 KB
         let args: Vec<u8> = vec![1u8; new_storage_key_limit + 1]
             .into_iter()
-            .chain(arr_u64_to_u8(&[10u64]).into_iter())
+            .chain(near_primitives::test_utils::encode(&[10u64]).into_iter())
             .collect();
         let epoch_length: BlockHeight = 5;
 
@@ -4673,7 +4672,7 @@ mod lower_storage_key_limit_test {
         {
             let args: Vec<u8> = vec![1u8; new_storage_key_limit]
                 .into_iter()
-                .chain(arr_u64_to_u8(&[20u64]).into_iter())
+                .chain(near_primitives::test_utils::encode(&[20u64]).into_iter())
                 .collect();
             let tx = Transaction {
                 signer_id: "test0".parse().unwrap(),

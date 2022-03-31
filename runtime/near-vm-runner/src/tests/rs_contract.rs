@@ -1,5 +1,6 @@
 use near_primitives::contract::ContractCode;
 use near_primitives::runtime::fees::RuntimeFeesConfig;
+use near_primitives::test_utils;
 use near_primitives::types::Balance;
 use near_primitives::version::ProtocolFeature;
 use near_vm_errors::{FunctionCallError, VMError, WasmTrap};
@@ -7,7 +8,6 @@ use near_vm_logic::mocks::mock_external::MockedExternal;
 use near_vm_logic::types::ReturnData;
 use near_vm_logic::{VMConfig, VMOutcome};
 use std::mem::size_of;
-use testlib::runtime_utils;
 
 use crate::tests::{
     create_context, with_vm_variants, CURRENT_ACCOUNT_ID, LATEST_PROTOCOL_VERSION,
@@ -49,7 +49,7 @@ pub fn test_read_write() {
         let code = test_contract();
         let mut fake_external = MockedExternal::new();
 
-        let context = create_context(runtime_utils::arr_u64_to_u8(&[10u64, 20u64]));
+        let context = create_context(test_utils::encode(&[10u64, 20u64]));
         let config = VMConfig::test();
         let fees = RuntimeFeesConfig::test();
 
@@ -67,7 +67,7 @@ pub fn test_read_write() {
         );
         assert_run_result(result, 0);
 
-        let context = create_context(runtime_utils::arr_u64_to_u8(&[10u64]));
+        let context = create_context(test_utils::encode(&[10u64]));
         let result = runtime.run(
             &code,
             "read_value",
