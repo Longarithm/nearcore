@@ -26,8 +26,9 @@ use crate::node::Node;
 use crate::user::User;
 use near_primitives::receipt::{ActionReceipt, Receipt, ReceiptEnum};
 use near_primitives::runtime::config::RuntimeConfig;
-use near_primitives::transaction::FunctionCallAction;
+use near_primitives::transaction::{Action, FunctionCallAction};
 use testlib::fees_utils::FeeHelper;
+use testlib::runtime_utils;
 use testlib::runtime_utils::{
     alice_account, bob_account, eve_dot_alice_account, x_dot_y_dot_alice_account,
 };
@@ -37,14 +38,6 @@ const FUNCTION_CALL_AMOUNT: Balance = TESTING_INIT_BALANCE / 10;
 
 fn fee_helper(node: &impl Node) -> FeeHelper {
     FeeHelper::new(RuntimeConfig::test().transaction_costs, node.genesis().config.min_gas_price)
-}
-
-fn arr_u64_to_u8(value: &[u64]) -> Vec<u8> {
-    let mut res = vec![];
-    for el in value {
-        res.extend_from_slice(&el.to_le_bytes());
-    }
-    res
 }
 
 /// Adds given access key to the given account_id using signer2.
@@ -1354,7 +1347,7 @@ pub fn test_contract_write_key_value_cost(node: impl Node) {
                 alice_account(),
                 bob_account(),
                 "write_key_value",
-                arr_u64_to_u8(&[10u64, 20u64]),
+                runtime_utils::arr_u64_to_u8(&[10u64, 20u64]),
                 10u64.pow(14),
                 0,
             )
@@ -1370,30 +1363,32 @@ pub fn test_contract_write_key_value_cost(node: impl Node) {
     }
 }
 
+fn make_receipt(node: &impl Node, actions: Vec<Action>) -> Receipt {
+    let receipt_enum = ReceiptEnum::Action(ActionReceipt {
+        signer_id: alice_account(),
+        signer_public_key: node.signer().as_ref().public_key(),
+        gas_price: 0,
+        output_data_receivers: vec![],
+        input_data_ids: vec![],
+        actions,
+    });
+    Receipt {
+        predecessor_id: alice_account(),
+        receiver_id: bob_account(),
+        receipt_id: hash(&receipt_enum.try_to_vec().unwrap()),
+        receipt: receipt_enum,
+    }
+}
+
 fn make_write_key_value_receipts(node: &impl Node) -> Vec<Receipt> {
     (0..3)
-        .map(|i| {
-            let receipt_enum = ReceiptEnum::Action(ActionReceipt {
-                signer_id: alice_account(),
-                signer_public_key: node.signer().as_ref().public_key(),
-                gas_price: 0,
-                output_data_receivers: vec![],
-                input_data_ids: vec![],
-                actions: vec![FunctionCallAction {
-                    method_name: "write_key_value".to_string(),
-                    args: arr_u64_to_u8(&[i, 10u64 + i]),
-                    gas: 10u64.pow(14),
-                    deposit: 0,
-                }
-                .into()],
-            });
-            Receipt {
-                predecessor_id: alice_account(),
-                receiver_id: bob_account(),
-                receipt_id: hash(&receipt_enum.try_to_vec().unwrap()),
-                receipt: receipt_enum,
-            }
-        })
+        .map(|i| make_receipt(node,
+                              vec![FunctionCallAction {
+                                                  method_name: "write_key_value".to_string(),
+                                                  args: runtime_utils::arr_u64_to_u8(&[i, 10u64 + i]),
+                                                  gas: 10u64.pow(14),
+                                                  deposit: 0,
+                                              }.into()]))
         .collect()
 }
 
@@ -1415,6 +1410,45 @@ pub fn test_chunk_nodes_cache_across_receipts(node: impl Node, runtime_config: R
     let results: Vec<u64> = vec![6, 2, 2];
     #[cfg(not(feature = "protocol_feature_chunk_nodes_cache"))]
     let results: Vec<u64> = vec![6, 6, 6];
+    for i in 0..2 {
+        let receipts = make_write_key_value_receipts(&node);
+        let receipt_hashes: Vec<CryptoHash> =
+            receipts.iter().map(|receipt| receipt.receipt_id.clone()).collect();
+
+        node_user.add_receipts(receipts).unwrap();
+
+        if i == 1 {
+            node_touches = receipt_hashes
+                .iter()
+                .map(|receipt_hash| {
+                    let result = node_user.get_transaction_result(receipt_hash);
+                    let touching_trie_node_cost = get_touching_trie_node_cost(&result.metadata);
+                    touching_trie_node_cost
+                        / runtime_config.wasm_config.ext_costs.touching_trie_node
+                })
+                .collect();
+        }
+    }
+
+    assert_eq!(node_touches, results);
+}
+
+pub fn test_chunk_nodes_cache_mode(node: impl Node, runtime_config: RuntimeConfig) {
+    let node_user = node.user();
+    let mut node_touches: Vec<u64> = vec![];
+    #[cfg(feature = "protocol_feature_chunk_nodes_cache")]
+    let results: Vec<u64> = vec![6, 2, 2];
+    #[cfg(not(feature = "protocol_feature_chunk_nodes_cache"))]
+    let results: Vec<u64> = vec![6, 6, 6];
+
+    let mut receipt =
+        vec![make_receipt(&node, FunctionCallAction {
+            method_name: "write_key_value".to_string(),
+            args: runtime_utils::arr_u64_to_u8(&[1, 10u64 + i]),
+            gas: 10u64.pow(14),
+            deposit: 0,
+        }.into())];
+    receipt.push()
     for i in 0..2 {
         let receipts = make_write_key_value_receipts(&node);
         let receipt_hashes: Vec<CryptoHash> =
