@@ -341,6 +341,7 @@ impl Cost {
             Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_sum_base } => 68,
             #[cfg(feature = "protocol_feature_alt_bn128")]
             Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_sum_byte } => 69,
+            Cost::ExtCost { ext_cost_kind: ExtCosts::read_memory_trie_node } => 70,
         }
     }
 }
