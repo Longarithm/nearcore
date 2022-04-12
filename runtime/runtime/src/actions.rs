@@ -18,7 +18,7 @@ use near_primitives::types::{AccountId, BlockHeight, EpochInfoProvider, TrieCach
 use near_primitives::utils::create_random_seed;
 use near_primitives::version::{
     is_implicit_account_creation_enabled, ProtocolFeature, ProtocolVersion,
-    DELETE_KEY_STORAGE_USAGE_PROTOCOL_VERSION,
+    DELETE_KEY_STORAGE_USAGE_PROTOCOL_VERSION, PROTOCOL_VERSION,
 };
 use near_store::{
     get_access_key, get_code, remove_access_key, remove_account, set_access_key, set_code,
@@ -102,7 +102,7 @@ pub(crate) fn execute_function_call(
     // the first access time. Although nodes are accessed for other actions as well, we do it only here because we
     // charge only for trie nodes touched during function calls.
     // TODO (#5920): Consider using RAII for switching the state back
-    let protocol_version = runtime_ext.protocol_version();
+    let protocol_version = PROTOCOL_VERSION; // runtime_ext.protocol_version();
     if checked_feature!("protocol_feature_chunk_nodes_cache", ChunkNodesCache, protocol_version) {
         runtime_ext.set_trie_cache_mode(TrieCacheMode::CachingChunk);
     }
