@@ -7,7 +7,6 @@ use crate::utils::split_method_names;
 use crate::{ReceiptMetadata, ValuePtr};
 use byteorder::ByteOrder;
 use near_crypto::Secp256K1Signature;
-use near_primitives::types::TrieNodesCount;
 use near_primitives::version::is_implicit_account_creation_enabled;
 use near_primitives_core::config::ExtCosts::*;
 use near_primitives_core::config::{ActionCosts, ExtCosts, VMConfig, ViewConfig};

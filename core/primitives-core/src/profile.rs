@@ -327,21 +327,21 @@ impl Cost {
             Cost::ExtCost { ext_cost_kind: ExtCosts::validator_stake_base } => 60,
             Cost::ExtCost { ext_cost_kind: ExtCosts::validator_total_stake_base } => 61,
             Cost::WasmInstruction => 62,
+            Cost::ExtCost { ext_cost_kind: ExtCosts::read_memory_trie_node } => 63,
             #[cfg(feature = "protocol_feature_alt_bn128")]
-            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_multiexp_base } => 63,
+            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_multiexp_base } => 64,
             #[cfg(feature = "protocol_feature_alt_bn128")]
-            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_multiexp_byte } => 64,
+            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_multiexp_byte } => 65,
             #[cfg(feature = "protocol_feature_alt_bn128")]
-            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_multiexp_sublinear } => 65,
+            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_multiexp_sublinear } => 66,
             #[cfg(feature = "protocol_feature_alt_bn128")]
-            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_pairing_check_base } => 66,
+            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_pairing_check_base } => 67,
             #[cfg(feature = "protocol_feature_alt_bn128")]
-            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_pairing_check_byte } => 67,
+            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_pairing_check_byte } => 68,
             #[cfg(feature = "protocol_feature_alt_bn128")]
-            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_sum_base } => 68,
+            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_sum_base } => 69,
             #[cfg(feature = "protocol_feature_alt_bn128")]
-            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_sum_byte } => 69,
-            Cost::ExtCost { ext_cost_kind: ExtCosts::read_memory_trie_node } => 70,
+            Cost::ExtCost { ext_cost_kind: ExtCosts::alt_bn128_g1_sum_byte } => 70,
         }
     }
 }
