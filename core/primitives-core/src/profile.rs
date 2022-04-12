@@ -239,6 +239,7 @@ impl Cost {
         Cost::ExtCost { ext_cost_kind: ExtCosts::storage_iter_next_key_byte },
         Cost::ExtCost { ext_cost_kind: ExtCosts::storage_iter_next_value_byte },
         Cost::ExtCost { ext_cost_kind: ExtCosts::touching_trie_node },
+        Cost::ExtCost { ext_cost_kind: ExtCosts::read_memory_trie_node },
         Cost::ExtCost { ext_cost_kind: ExtCosts::promise_and_base },
         Cost::ExtCost { ext_cost_kind: ExtCosts::promise_and_per_promise },
         Cost::ExtCost { ext_cost_kind: ExtCosts::promise_return },
