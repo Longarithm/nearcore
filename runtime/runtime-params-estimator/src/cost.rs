@@ -451,6 +451,7 @@ pub enum Cost {
     /// Estimation: Take the maximum of estimations for `TouchingTrieNodeRead`
     /// and `TouchingTrieNodeWrite`
     TouchingTrieNode,
+    ReadMemoryTrieNode,
     /// Helper estimation for `TouchingTrieNode`
     ///
     /// Estimation: Prepare an account that has many keys stored that are

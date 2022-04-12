@@ -7,6 +7,7 @@ use crate::utils::split_method_names;
 use crate::{ReceiptMetadata, ValuePtr};
 use byteorder::ByteOrder;
 use near_crypto::Secp256K1Signature;
+use near_primitives::types::TrieNodesCount;
 use near_primitives::version::is_implicit_account_creation_enabled;
 use near_primitives_core::config::ExtCosts::*;
 use near_primitives_core::config::{ActionCosts, ExtCosts, VMConfig, ViewConfig};
@@ -2340,7 +2341,7 @@ impl<'a> VMLogic<'a> {
         let evicted =
             Self::deref_value(&mut self.gas_counter, storage_write_evicted_byte, evicted_ptr)?;
         let nodes_delta = self.ext.get_trie_nodes_count() - nodes_before;
-        self.gas_counter.pay_per(touching_trie_node, nodes_delta.db_reads)?;
+        self.add_trie_fees(nodes_delta)?;
         self.ext.storage_set(&key, &value)?;
         let storage_config = &self.fees_config.storage_usage_config;
         match evicted {
@@ -2419,7 +2420,7 @@ impl<'a> VMLogic<'a> {
         let nodes_before = self.ext.get_trie_nodes_count();
         let read = self.ext.storage_get(&key);
         let nodes_delta = self.ext.get_trie_nodes_count() - nodes_before;
-        self.gas_counter.pay_per(touching_trie_node, nodes_delta.db_reads)?;
+        self.add_trie_fees(nodes_delta)?;
         let read = Self::deref_value(&mut self.gas_counter, storage_read_value_byte, read?)?;
         match read {
             Some(value) => {
@@ -2473,7 +2474,7 @@ impl<'a> VMLogic<'a> {
 
         self.ext.storage_remove(&key)?;
         let nodes_delta = self.ext.get_trie_nodes_count() - nodes_before;
-        self.gas_counter.pay_per(touching_trie_node, nodes_delta.db_reads)?;
+        self.add_trie_fees(nodes_delta)?;
         let storage_config = &self.fees_config.storage_usage_config;
         match removed {
             Some(value) => {
@@ -2520,7 +2521,7 @@ impl<'a> VMLogic<'a> {
         let nodes_before = self.ext.get_trie_nodes_count();
         let res = self.ext.storage_has_key(&key);
         let nodes_delta = self.ext.get_trie_nodes_count() - nodes_before;
-        self.gas_counter.pay_per(touching_trie_node, nodes_delta.db_reads)?;
+        self.add_trie_fees(nodes_delta)?;
         Ok(res? as u64)
     }
 
@@ -2685,6 +2686,11 @@ impl<'a> VMLogic<'a> {
         let new_burn_gas = self.gas_counter.burnt_gas();
         let new_used_gas = self.gas_counter.used_gas();
         self.gas_counter.process_gas_limit(new_burn_gas, new_used_gas)
+    }
+
+    pub fn add_trie_fees(&mut self, count: TrieNodesCount) -> Result<()> {
+        self.gas_counter.pay_per(touching_trie_node, count.db_reads)?;
+        self.gas_counter.pay_per(read_memory_trie_node, count.mem_reads)
     }
 }
 
