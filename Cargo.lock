@@ -3267,6 +3267,7 @@ dependencies = [
  "pwasm-utils 0.12.0",
  "pwasm-utils 0.18.2",
  "serde",
+ "testlib",
  "threadpool",
  "tracing",
  "wasmer-compiler-near",
