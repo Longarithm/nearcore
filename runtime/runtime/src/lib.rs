@@ -1383,6 +1383,8 @@ impl Runtime {
             }
         }
 
+        tracing::debug!(target: "runtime", chunk_cache_size = trie.estimate_chunk_cache_size());
+
         let state_root = trie_changes.new_root;
         let proof = trie.recorded_storage();
         Ok(ApplyResult {
