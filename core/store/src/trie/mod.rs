@@ -759,6 +759,7 @@ impl Trie {
     pub fn estimate_chunk_cache_size(&self) -> u64 {
         if let Some(storage) = self.storage.as_caching_storage() {
             let cache = storage.chunk_cache.borrow();
+            // Count 32 bytes for key size and 16 bytes for Arc
             cache.iter().map(|it| (32 + 16 + it.1.len()) as u64).sum()
         } else {
             0
