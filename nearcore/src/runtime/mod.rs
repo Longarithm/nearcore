@@ -1379,6 +1379,7 @@ impl RuntimeAdapter for NightshadeRuntime {
     ) -> Result<ApplyTransactionResult, Error> {
         let trie = self.get_trie_for_shard(shard_id, prev_block_hash)?;
         let trie = if generate_storage_proof { trie.recording_reads() } else { trie };
+        tracing::debug!(target: "runtime", chunk_cache_size = trie.estimate_chunk_cache_size());
         match self.process_state_update(
             trie,
             *state_root,

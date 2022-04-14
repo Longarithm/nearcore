@@ -755,6 +755,15 @@ impl Trie {
     pub fn get_trie_nodes_count(&self) -> TrieNodesCount {
         self.storage.get_trie_nodes_count()
     }
+
+    pub fn estimate_chunk_cache_size(&self) -> u64 {
+        if let Some(storage) = self.storage.as_caching_storage() {
+            let cache = storage.chunk_cache.borrow();
+            cache.iter().map(|it| 36 + it.1.len()).sum()
+        } else {
+            0
+        }
+    }
 }
 
 #[cfg(test)]
