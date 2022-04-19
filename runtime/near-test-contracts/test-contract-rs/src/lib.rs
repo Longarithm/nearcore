@@ -85,7 +85,6 @@ extern "C" {
         amount_ptr: u64,
         gas: u64,
     );
-    #[cfg(feature = "latest_protocol")]
     fn promise_batch_action_function_call_weight(
         promise_index: u64,
         method_name_len: u64,
