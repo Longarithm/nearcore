@@ -35,7 +35,7 @@ impl NeardCmd {
         } else {
             env_filter
         };
-        let _subscriber = default_subscriber(env_filter);
+        let _subscriber = default_subscriber(env_filter).global();
 
         info!(
             target: "neard",
@@ -87,7 +87,7 @@ impl NeardCmd {
             }
 
             NeardSubCommand::StateViewer(cmd) => {
-                cmd.run(&home_dir, genesis_validation);
+                cmd.subcmd.run(&home_dir, genesis_validation, cmd.readwrite);
             }
 
             NeardSubCommand::RecompressStorage(cmd) => {
@@ -95,6 +95,17 @@ impl NeardCmd {
             }
         }
     }
+}
+
+#[derive(Parser)]
+pub(super) struct StateViewerCommand {
+    /// By default state viewer opens rocks DB in the read only mode, which allows it to run
+    /// multiple instances in parallel and be sure that no unintended changes get written to the DB.
+    /// In case an operation needs to write to caches, a read-write mode may be needed.
+    #[clap(long, short = 'w')]
+    readwrite: bool,
+    #[clap(subcommand)]
+    subcmd: StateViewerSubCommand,
 }
 
 fn unsafe_reset(command: &str, path: &std::path::Path, what: &str, default: &str) {
@@ -124,32 +135,31 @@ struct NeardOpts {
 #[derive(Parser)]
 pub(super) enum NeardSubCommand {
     /// Initializes NEAR configuration
-    #[clap(name = "init")]
     Init(InitCmd),
     /// Runs NEAR node
-    #[clap(name = "run")]
     Run(RunCmd),
     /// Sets up local configuration with all necessary files (validator key, node key, genesis and
     /// config)
-    #[clap(name = "localnet")]
     Localnet(LocalnetCmd),
     /// DEPRECATED: this command has been renamed to 'localnet' and will be removed in a future
     /// release.
-    // TODO(#4372): Deprecated since 1.24.  Delete it in a couple of releases in 2022.
-    #[clap(name = "testnet", hide = true)]
+    // We’re not using clap(alias = "testnet") on Localnet because we want this
+    // to be a separate subcommand with a deprecation warning.  TODO(#4372):
+    // Deprecated since 1.24.  Delete it in a couple of releases in 2022.
+    #[clap(hide = true)]
     Testnet(LocalnetCmd),
     /// (unsafe) Remove the entire NEAR home directory (which includes the
     /// configuration, genesis files, private keys and data).  This effectively
     /// removes all information about the network.
-    #[clap(name = "unsafe_reset_all", hide = true)]
+    #[clap(alias = "unsafe_reset_all", hide = true)]
     UnsafeResetAll,
     /// (unsafe) Remove all the data, effectively resetting node to the genesis state (keeps genesis and
     /// config).
-    #[clap(name = "unsafe_reset_data", hide = true)]
+    #[clap(alias = "unsafe_reset_data", hide = true)]
     UnsafeResetData,
     /// View DB state.
-    #[clap(subcommand, name = "view_state")]
-    StateViewer(StateViewerSubCommand),
+    #[clap(name = "view-state", alias = "view_state")]
+    StateViewer(StateViewerCommand),
     /// Recompresses the entire storage.  This is a slow operation which reads
     /// all the data from the database and writes them down to a new copy of the
     /// database.
@@ -176,7 +186,7 @@ pub(super) enum NeardSubCommand {
     ///
     /// Finally, because this command is meant only as a temporary migration
     /// tool, it is planned to be removed by the end of 2022.
-    #[clap(name = "recompress_storage")]
+    #[clap(alias = "recompress_storage")]
     RecompressStorage(RecompressStorageSubCommand),
 }
 
@@ -334,7 +344,8 @@ pub(super) struct RunCmd {
 impl RunCmd {
     pub(super) fn run(self, home_dir: &Path, genesis_validation: GenesisValidationMode) {
         // Load configs from home.
-        let mut near_config = nearcore::config::load_config(home_dir, genesis_validation);
+        let mut near_config = nearcore::config::load_config(&home_dir, genesis_validation)
+            .unwrap_or_else(|e| panic!("Error loading config: {:#}", e));
 
         check_release_build(&near_config.client_config.chain_id);
 
@@ -409,7 +420,7 @@ impl RunCmd {
                 futures::select! {
                     _ = sigint .recv().fuse() => "SIGINT",
                     _ = sigterm.recv().fuse() => "SIGTERM",
-                    _ = rx.fuse() => "ClentActor died",
+                    _ = rx.fuse() => "ClientActor died",
                 }
             } else {
                 // TODO(#6372): Support graceful shutdown on windows.
@@ -465,12 +476,37 @@ pub(super) struct RecompressStorageSubCommand {
     /// Directory where to save new storage.
     #[clap(long)]
     output_dir: PathBuf,
+
+    /// Keep data in ColPartialChunks column.  Data in that column can be
+    /// reconstructed from ColChunks is not needed by archival nodes.  This is
+    /// always true if node is not an archival node.
+    #[clap(long)]
+    keep_partial_chunks: bool,
+
+    /// Keep data in ColInvalidChunks column.  Data in that column is only used
+    /// when receiving chunks and is not needed to serve archival requests.
+    /// This is always true if node is not an archival node.
+    #[clap(long)]
+    keep_invalid_chunks: bool,
+
+    /// Keep data in ColTrieChanges column.  Data in that column is never used
+    /// by archival nodes.  This is always true if node is not an archival node.
+    #[clap(long)]
+    keep_trie_changes: bool,
 }
 
 impl RecompressStorageSubCommand {
     pub(super) fn run(self, home_dir: &Path) {
-        if let Err(err) = nearcore::recompress_storage(&home_dir, &self.output_dir) {
+        warn!(target: "neard", "Recompressing storage; note that this operation may take up to a day to finish.");
+        let opts = nearcore::RecompressOpts {
+            dest_dir: self.output_dir,
+            keep_partial_chunks: self.keep_partial_chunks,
+            keep_invalid_chunks: self.keep_invalid_chunks,
+            keep_trie_changes: self.keep_trie_changes,
+        };
+        if let Err(err) = nearcore::recompress_storage(&home_dir, opts) {
             error!("{}", err);
+            std::process::exit(1);
         }
     }
 }
