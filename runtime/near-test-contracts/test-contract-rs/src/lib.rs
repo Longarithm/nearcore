@@ -85,16 +85,6 @@ extern "C" {
         amount_ptr: u64,
         gas: u64,
     );
-    fn promise_batch_action_function_call_weight(
-        promise_index: u64,
-        method_name_len: u64,
-        method_name_ptr: u64,
-        arguments_len: u64,
-        arguments_ptr: u64,
-        amount_ptr: u64,
-        gas: u64,
-        gas_weight: u64,
-    );
     fn promise_batch_action_transfer(promise_index: u64, amount_ptr: u64);
     fn promise_batch_action_stake(
         promise_index: u64,
@@ -779,84 +769,5 @@ fn call_promise() {
                 }
             }
         }
-    }
-}
-
-#[cfg(feature = "latest_protocol")]
-#[no_mangle]
-fn attach_unspent_gas_but_burn_all_gas() {
-    unsafe {
-        let account_id = "alice.near";
-        let promise_idx = promise_batch_create(account_id.len() as u64, account_id.as_ptr() as u64);
-
-        let method_name = "f";
-        let arguments_ptr = 0;
-        let arguments_len = 0;
-        let amount = 1u128;
-        let gas_fixed = 0;
-        let gas_weight = 1;
-        promise_batch_action_function_call_weight(
-            promise_idx,
-            method_name.len() as u64,
-            method_name.as_ptr() as u64,
-            arguments_ptr,
-            arguments_len,
-            &amount as *const u128 as u64,
-            gas_fixed,
-            gas_weight,
-        );
-        loop {
-            gas(10_000);
-        }
-    }
-}
-
-#[cfg(feature = "latest_protocol")]
-#[no_mangle]
-fn attach_unspent_gas_but_use_all_gas() {
-    unsafe {
-        let account_id = "alice.near";
-        let promise_idx = promise_batch_create(account_id.len() as u64, account_id.as_ptr() as u64);
-
-        let method_name = "f";
-        let arguments_ptr = 0;
-        let arguments_len = 0;
-        let amount = 1u128;
-        let gas_fixed = 0;
-        let gas_weight = 1;
-        promise_batch_action_function_call_weight(
-            promise_idx,
-            method_name.len() as u64,
-            method_name.as_ptr() as u64,
-            arguments_ptr,
-            arguments_len,
-            &amount as *const u128 as u64,
-            gas_fixed,
-            gas_weight,
-        );
-
-        let promise_idx = promise_batch_create(account_id.len() as u64, account_id.as_ptr() as u64);
-
-        let gas_fixed = 10u64.pow(14);
-        let gas_weight = 0;
-        promise_batch_action_function_call_weight(
-            promise_idx,
-            method_name.len() as u64,
-            method_name.as_ptr() as u64,
-            arguments_ptr,
-            arguments_len,
-            &amount as *const u128 as u64,
-            gas_fixed,
-            gas_weight,
-        );
-    }
-}
-
-#[cfg(feature = "latest_protocol")]
-#[no_mangle]
-fn do_ripemd() {
-    let data = b"tesdsst";
-    unsafe {
-        ripemd160(data.len() as _, data.as_ptr() as _, 0);
     }
 }
