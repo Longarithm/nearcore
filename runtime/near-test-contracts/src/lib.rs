@@ -61,6 +61,7 @@ pub fn fuzzing_contract() -> &'static [u8] {
 fn read_contract(file_name: &str) -> Vec<u8> {
     let base = Path::new(env!("CARGO_MANIFEST_DIR"));
     let path = base.join("res").join(file_name);
+    eprintln!("{:?}", path);
     match std::fs::read(&path) {
         Ok(data) => data,
         Err(err) => panic!("{}: {}", path.display(), err),
