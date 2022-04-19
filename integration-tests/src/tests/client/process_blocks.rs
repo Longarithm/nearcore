@@ -4820,7 +4820,7 @@ mod lower_storage_key_limit_test {
     #[test]
     fn protocol_upgrade() {
         let old_protocol_version =
-            near_primitives::version::ProtocolFeature::LowerStorageKeyLimit.protocol_version() - 1;
+            near_primitives::version::ProtocolFeature::LowerStorageKeyLimit.protocol_version();
         let new_protocol_version = old_protocol_version + 1;
         let new_storage_key_limit = 2usize.pow(11); // 2 KB
         let args: Vec<u8> = vec![1u8; new_storage_key_limit + 1]
@@ -4849,7 +4849,7 @@ mod lower_storage_key_limit_test {
             deploy_test_contract(
                 &mut env,
                 "test0".parse().unwrap(),
-                near_test_contracts::rs_contract(),
+                near_test_contracts::nightly_rs_contract(),
                 epoch_length.clone(),
                 1,
             );
