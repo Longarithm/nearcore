@@ -688,10 +688,10 @@ impl Trie {
         if use_flat {
             if let Some(storage) = self.storage.as_caching_storage() {
                 let mut flat_storage = storage.store.flat_storage.write().expect(POISONED_LOCK_ERR);
-                match flat_storage.get(key).cloned() {
+                return match flat_storage.get(key).cloned() {
                     Some(value_ref) => {
                         tracing::debug!(target: "runtime", "flat hit {:?}", value_ref);
-                        return Ok(Some(value_ref.clone()));
+                        Ok(Some(value_ref.clone()))
                     }
                     None => {
                         // hack
@@ -721,7 +721,7 @@ impl Trie {
                             chunk_cache.insert(k, v);
                         }
 
-                        return Ok(value_ref);
+                        Ok(value_ref)
                     }
                 };
             }

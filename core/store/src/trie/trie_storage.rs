@@ -251,7 +251,10 @@ impl TrieStorage for TrieCachingStorage {
                     .get(ColState, key.as_ref())
                     .map_err(|_| StorageError::StorageInternalError)?
                     .ok_or_else(|| {
-                        StorageError::StorageInconsistentState("Trie node missing".to_string())
+                        StorageError::StorageInconsistentState(format!(
+                            "Trie node missing: {}",
+                            hash
+                        ))
                     })?;
                 let val: Arc<[u8]> = val.into();
 
