@@ -49,12 +49,12 @@ mod trie;
 #[derive(Clone)]
 pub struct Store {
     storage: Arc<dyn Database>,
-    pub flat_storage: RefCell<HashMap<Vec<u8>, (u32, CryptoHash)>>,
+    pub flat_storage: Arc<RefCell<HashMap<Vec<u8>, (u32, CryptoHash)>>>,
 }
 
 impl Store {
     pub(crate) fn new(storage: Arc<dyn Database>) -> Store {
-        Store { storage, flat_storage: RefCell::new(HashMap::new()) }
+        Store { storage, flat_storage: Arc::new(RefCell::new(HashMap::new())) }
     }
 
     pub fn get(&self, column: DBCol, key: &[u8]) -> io::Result<Option<Vec<u8>>> {

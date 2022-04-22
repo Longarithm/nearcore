@@ -691,9 +691,9 @@ impl Trie {
                 let flat_storage = storage.store.flat_storage.borrow_mut();
                 return match flat_storage.get(key) {
                     Some(value_ref) => Ok(Some(value_ref.clone())),
-                    None => StorageError::StorageInconsistentState(
+                    None => Err(StorageError::StorageInconsistentState(
                         "Value ref missing in flat storage".to_string(),
-                    ),
+                    )),
                 };
             }
         }
