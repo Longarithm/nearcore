@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
@@ -49,12 +49,12 @@ mod trie;
 #[derive(Clone)]
 pub struct Store {
     storage: Arc<dyn Database>,
-    pub flat_storage: Arc<RefCell<HashMap<Vec<u8>, (u32, CryptoHash)>>>,
+    pub flat_storage: HashMap<Vec<u8>, (u32, CryptoHash)>,
 }
 
 impl Store {
     pub(crate) fn new(storage: Arc<dyn Database>) -> Store {
-        Store { storage, flat_storage: Arc::new(RefCell::new(HashMap::new())) }
+        Store { storage, flat_storage: HashMap::new() }
     }
 
     pub fn get(&self, column: DBCol, key: &[u8]) -> io::Result<Option<Vec<u8>>> {

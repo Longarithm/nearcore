@@ -9,7 +9,6 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use near_primitives::challenge::PartialState;
 use near_primitives::contract::ContractCode;
-use near_primitives::errors::RuntimeError::StorageError;
 use near_primitives::hash::{hash, CryptoHash};
 pub use near_primitives::shard_layout::ShardUId;
 use near_primitives::types::{StateRoot, StateRootNode};
@@ -688,8 +687,7 @@ impl Trie {
     ) -> Result<Option<(u32, CryptoHash)>, StorageError> {
         if use_flat {
             if let Some(storage) = self.storage.as_caching_storage() {
-                let flat_storage = storage.store.flat_storage.borrow_mut();
-                return match flat_storage.get(key) {
+                return match storage.store.flat_storage.get(key) {
                     Some(value_ref) => Ok(Some(value_ref.clone())),
                     None => Err(StorageError::StorageInconsistentState(
                         "Value ref missing in flat storage".to_string(),
