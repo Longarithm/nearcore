@@ -732,7 +732,7 @@ impl Trie {
     }
 
     pub fn get(&self, root: &CryptoHash, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
-        match self.get_ref(root, key, true)? {
+        match self.get_ref(root, key, false)? {
             Some((_length, hash)) => {
                 self.storage.retrieve_raw_bytes(&hash).map(|bytes| Some(bytes.to_vec()))
             }
