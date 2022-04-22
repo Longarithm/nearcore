@@ -128,10 +128,10 @@ impl<'a> External for RuntimeExt<'a> {
             .map(|option| option.map(|ptr| Box::new(RuntimeExtValuePtr(ptr)) as Box<_>))
     }
 
-    fn storage_get_optimized<'a>(
-        &'a self,
+    fn storage_get_optimized<'b>(
+        &'b self,
         key: &[u8],
-    ) -> ExtResult<Option<Box<dyn ValuePtr + 'a>>> {
+    ) -> ExtResult<Option<Box<dyn ValuePtr + 'b>>> {
         let storage_key = self.create_storage_key(key);
         self.trie_update
             .get_ref(&storage_key, true)
