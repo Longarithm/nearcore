@@ -75,7 +75,11 @@ impl TrieUpdate {
         self.trie.get(&self.root, &key)
     }
 
-    pub fn get_ref(&self, key: &TrieKey) -> Result<Option<TrieUpdateValuePtr<'_>>, StorageError> {
+    pub fn get_ref(
+        &self,
+        key: &TrieKey,
+        use_flat: bool,
+    ) -> Result<Option<TrieUpdateValuePtr<'_>>, StorageError> {
         let key = key.to_vec();
         if let Some(key_value) = self.prospective.get(&key) {
             return Ok(key_value.value.as_ref().map(TrieUpdateValuePtr::MemoryRef));
@@ -84,7 +88,7 @@ impl TrieUpdate {
                 return Ok(data.as_ref().map(TrieUpdateValuePtr::MemoryRef));
             }
         }
-        self.trie.get_ref(&self.root, &key).map(|option| {
+        self.trie.get_ref(&self.root, &key, use_flat).map(|option| {
             option.map(|(length, hash)| TrieUpdateValuePtr::HashAndSize(&self.trie, length, hash))
         })
     }

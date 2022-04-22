@@ -9,6 +9,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use near_primitives::challenge::PartialState;
 use near_primitives::contract::ContractCode;
+use near_primitives::errors::RuntimeError::StorageError;
 use near_primitives::hash::{hash, CryptoHash};
 pub use near_primitives::shard_layout::ShardUId;
 use near_primitives::types::{StateRoot, StateRootNode};
@@ -683,13 +684,25 @@ impl Trie {
         &self,
         root: &CryptoHash,
         key: &[u8],
+        use_flat: bool,
     ) -> Result<Option<(u32, CryptoHash)>, StorageError> {
+        if use_flat {
+            if let Some(storage) = self.storage.as_caching_storage() {
+                let flat_storage = storage.store.flat_storage.borrow_mut();
+                return match flat_storage.get(key) {
+                    Some(value_ref) => Ok(Some(value_ref.clone())),
+                    None => StorageError::StorageInconsistentState(
+                        "Value ref missing in flat storage".to_string(),
+                    ),
+                };
+            }
+        }
         let key = NibbleSlice::new(key);
         self.lookup(root, key)
     }
 
     pub fn get(&self, root: &CryptoHash, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
-        match self.get_ref(root, key)? {
+        match self.get_ref(root, key, true)? {
             Some((_length, hash)) => {
                 self.storage.retrieve_raw_bytes(&hash).map(|bytes| Some(bytes.to_vec()))
             }

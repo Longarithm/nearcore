@@ -88,6 +88,8 @@ pub trait External {
     /// ```
     fn storage_get<'a>(&'a self, key: &[u8]) -> Result<Option<Box<dyn ValuePtr + 'a>>>;
 
+    fn storage_get_optimized<'a>(&'a self, key: &[u8]) -> Result<Option<Box<dyn ValuePtr + 'a>>>;
+
     /// Removes the `key` from the storage trie associated with the current account.
     ///
     /// The operation will succeed even if the `key` does not exist.

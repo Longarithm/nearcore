@@ -58,6 +58,10 @@ impl External for MockedExternal {
             .map(|value| Box::new(MockedValuePtr { value: value.clone() }) as Box<_>))
     }
 
+    fn storage_get_optimized<'a>(&'a self, key: &[u8]) -> Result<Option<Box<dyn ValuePtr + 'a>>> {
+        self.storage_get(key)
+    }
+
     fn storage_remove(&mut self, key: &[u8]) -> Result<()> {
         self.fake_trie.remove(key);
         Ok(())

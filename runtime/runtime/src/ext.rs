@@ -123,7 +123,18 @@ impl<'a> External for RuntimeExt<'a> {
     fn storage_get<'b>(&'b self, key: &[u8]) -> ExtResult<Option<Box<dyn ValuePtr + 'b>>> {
         let storage_key = self.create_storage_key(key);
         self.trie_update
-            .get_ref(&storage_key)
+            .get_ref(&storage_key, false)
+            .map_err(wrap_storage_error)
+            .map(|option| option.map(|ptr| Box::new(RuntimeExtValuePtr(ptr)) as Box<_>))
+    }
+
+    fn storage_get_optimized<'a>(
+        &'a self,
+        key: &[u8],
+    ) -> ExtResult<Option<Box<dyn ValuePtr + 'a>>> {
+        let storage_key = self.create_storage_key(key);
+        self.trie_update
+            .get_ref(&storage_key, true)
             .map_err(wrap_storage_error)
             .map(|option| option.map(|ptr| Box::new(RuntimeExtValuePtr(ptr)) as Box<_>))
     }
@@ -136,7 +147,10 @@ impl<'a> External for RuntimeExt<'a> {
 
     fn storage_has_key(&mut self, key: &[u8]) -> ExtResult<bool> {
         let storage_key = self.create_storage_key(key);
-        self.trie_update.get_ref(&storage_key).map(|x| x.is_some()).map_err(wrap_storage_error)
+        self.trie_update
+            .get_ref(&storage_key, true)
+            .map(|x| x.is_some())
+            .map_err(wrap_storage_error)
     }
 
     fn storage_remove_subtree(&mut self, prefix: &[u8]) -> ExtResult<()> {
