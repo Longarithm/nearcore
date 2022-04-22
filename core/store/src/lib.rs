@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::{fmt, io};
 
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -49,12 +49,12 @@ mod trie;
 #[derive(Clone)]
 pub struct Store {
     storage: Arc<dyn Database>,
-    pub flat_storage: HashMap<Vec<u8>, (u32, CryptoHash)>,
+    pub flat_storage: RwLock<HashMap<Vec<u8>, (u32, CryptoHash)>>,
 }
 
 impl Store {
     pub(crate) fn new(storage: Arc<dyn Database>) -> Store {
-        Store { storage, flat_storage: HashMap::new() }
+        Store { storage, flat_storage: RwLock::new(HashMap::new()) }
     }
 
     pub fn get(&self, column: DBCol, key: &[u8]) -> io::Result<Option<Vec<u8>>> {

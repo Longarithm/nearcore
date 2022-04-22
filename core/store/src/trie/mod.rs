@@ -687,14 +687,46 @@ impl Trie {
     ) -> Result<Option<(u32, CryptoHash)>, StorageError> {
         if use_flat {
             if let Some(storage) = self.storage.as_caching_storage() {
-                return match storage.store.flat_storage.get(key) {
-                    Some(value_ref) => Ok(Some(value_ref.clone())),
-                    None => Err(StorageError::StorageInconsistentState(
-                        "Value ref missing in flat storage".to_string(),
-                    )),
+                let mut flat_storage = storage.store.flat_storage.write().expect(POISONED_LOCK_ERR);
+                match flat_storage.get(key).cloned() {
+                    Some(value_ref) => {
+                        tracing::debug!(target: "runtime", "flat hit {:?}", value_ref);
+                        Ok(Some(value_ref.clone()))
+                    }
+                    None => {
+                        // hack
+                        // Err(StorageError::StorageInconsistentState(
+                        //     "Value ref missing in flat storage".to_string(),
+                        // ))
+
+                        let db_read_nodes = storage.db_read_nodes.get();
+                        let mem_read_nodes = storage.mem_read_nodes.get();
+                        let mut chunk_cache_items: Vec<_> =
+                            storage.chunk_cache.borrow_mut().drain().collect();
+
+                        let key_nibbles = NibbleSlice::new(key);
+                        let value_ref = self.lookup(root, key_nibbles)?;
+                        if value_ref.is_none() {
+                            return Ok(value_ref);
+                        }
+                        let value_ref = value_ref.unwrap();
+                        tracing::debug!(target: "runtime", "flat miss {:?}", value_ref);
+
+                        storage.db_read_nodes.set(db_read_nodes);
+                        storage.mem_read_nodes.set(mem_read_nodes);
+                        let mut chunk_cache = storage.chunk_cache.borrow_mut();
+                        chunk_cache.clear();
+                        for (k, v) in chunk_cache_items.drain(..) {
+                            chunk_cache.insert(k, v);
+                        }
+
+                        flat_storage.insert(key.to_vec(), value_ref);
+                        value_ref
+                    }
                 };
             }
         }
+
         let key = NibbleSlice::new(key);
         self.lookup(root, key)
     }
