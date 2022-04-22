@@ -708,9 +708,8 @@ impl Trie {
                         let value_ref = self.lookup(root, key_nibbles)?;
                         if value_ref.is_some() {
                             let value_ref_unwrapped = value_ref.clone().unwrap();
-                            flat_storage.insert(key.to_vec(), value_ref_unwrapped);
-                        } else {
                             tracing::debug!(target: "runtime", "flat miss {:?}", value_ref_unwrapped);
+                            flat_storage.insert(key.to_vec(), value_ref_unwrapped);
                         }
 
                         storage.db_read_nodes.set(db_read_nodes);
