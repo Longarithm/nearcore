@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 use std::iter::Peekable;
 
-use near_primitives::hash::CryptoHash;
+use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::types::{
     RawStateChange, RawStateChanges, RawStateChangesWithTrieKey, StateChangeCause, TrieCacheMode,
 };
 
-use crate::trie::TrieChanges;
+use crate::trie::{TrieChanges, POISONED_LOCK_ERR};
 use crate::StorageError;
 
 use super::{Trie, TrieIterator};
@@ -124,6 +124,21 @@ impl TrieUpdate {
         assert!(self.prospective.is_empty(), "Finalize cannot be called with uncommitted changes.");
         let TrieUpdate { trie, root, committed, .. } = self;
         let mut state_changes = Vec::with_capacity(committed.len());
+        if let Some(caching_storage) = trie.storage.as_caching_storage() {
+            let mut flat_storage =
+                caching_storage.store.flat_storage.write().expect(POISONED_LOCK_ERR);
+            for (key, raw_changes) in committed.iter() {
+                let value = raw_changes.changes.last().unwrap().data.clone();
+                match value {
+                    None => {
+                        flat_storage.remove(key);
+                    }
+                    Some(value) => {
+                        flat_storage.insert(key.clone(), (value.len() as u32, hash(&value)));
+                    }
+                }
+            }
+        }
         let trie_changes = trie.update(
             &root,
             committed.into_iter().map(|(k, changes_with_trie_key)| {

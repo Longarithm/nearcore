@@ -295,13 +295,13 @@ fn apply_block_from_range(
             if verbose_output {
                 println!("block_height: {}, block_hash: {}\nchunk_extra: {:#?}\nexisting_chunk_extra: {:#?}\noutcomes: {:#?}", height, block_hash, chunk_extra, existing_chunk_extra, apply_result.outcomes);
             }
-            if !smart_equals(&existing_chunk_extra, &chunk_extra) {
-                assert!(false, "Got a different ChunkExtra:\nblock_height: {}, block_hash: {}\nchunk_extra: {:#?}\nexisting_chunk_extra: {:#?}\nnew outcomes: {:#?}\n\nold outcomes: {:#?}\n", height, block_hash, chunk_extra, existing_chunk_extra, apply_result.outcomes, old_outcomes(store, &apply_result.outcomes));
-            }
+            // if !smart_equals(&existing_chunk_extra, &chunk_extra) {
+            //     assert!(false, "Got a different ChunkExtra:\nblock_height: {}, block_hash: {}\nchunk_extra: {:#?}\nexisting_chunk_extra: {:#?}\nnew outcomes: {:#?}\n\nold outcomes: {:#?}\n", height, block_hash, chunk_extra, existing_chunk_extra, apply_result.outcomes, old_outcomes(store, &apply_result.outcomes));
+            // }
         }
         None => {
-            assert!(prev_chunk_extra.is_some());
-            assert!(apply_result.outcomes.is_empty());
+            // assert!(prev_chunk_extra.is_some());
+            // assert!(apply_result.outcomes.is_empty());
             if verbose_output {
                 println!("block_height: {}, block_hash: {}\nchunk_extra: {:#?}\nprev_chunk_extra: {:#?}\noutcomes: {:#?}", height, block_hash, chunk_extra, prev_chunk_extra, apply_result.outcomes);
             }
@@ -397,9 +397,8 @@ fn smart_equals(extra1: &ChunkExtra, extra2: &ChunkExtra) -> bool {
     if (extra1.outcome_root() != extra2.outcome_root())
         || (extra1.state_root() != extra2.state_root())
         || (extra1.gas_limit() != extra2.gas_limit())
-    // DEBUG
-    // || (extra1.gas_used() != extra2.gas_used())
-    // || (extra1.balance_burnt() != extra2.balance_burnt())
+        || (extra1.gas_used() != extra2.gas_used())
+        || (extra1.balance_burnt() != extra2.balance_burnt())
     {
         return false;
     }
