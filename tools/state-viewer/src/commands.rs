@@ -75,6 +75,7 @@ pub(crate) fn flat_state(
     };
 
     let trie = runtime.get_trie_for_shard(shard_id as u64, header.prev_hash()).unwrap();
+    let state_root = state_roots[shard_id];
     let trie = TrieIterator::new(&trie, state_root).unwrap();
     let mut store_update = store.store_update();
     let mut i: u64 = 0;
