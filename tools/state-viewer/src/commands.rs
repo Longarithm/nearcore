@@ -82,7 +82,7 @@ pub(crate) fn flat_state(
     let batch_size = 1000;
     for item in trie {
         let (key, value) = item.unwrap();
-        if let Some(state_record) = StateRecord::from_raw_key_value(key, value.clone()) {
+        if let Some(state_record) = StateRecord::from_raw_key_value(key.clone(), value.clone()) {
             i += 1;
             let value = hash(&value);
             if i % batch_size == 0 {
