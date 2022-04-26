@@ -2496,7 +2496,8 @@ impl<'a> ChainStoreUpdate<'a> {
             | DBCol::_ColLastBlockWithNewChunk
             | DBCol::_ColTransactionRefCount
             | DBCol::ColStateChangesForSplitStates
-            | DBCol::ColCachedContractCode => {
+            | DBCol::ColCachedContractCode
+            | DBCol::ColFlatState => {
                 unreachable!();
             }
         }
