@@ -17,6 +17,8 @@ use std::str::FromStr;
 pub enum StateViewerSubCommand {
     Peers,
     State,
+    #[clap(alias = "dump_flat_state")]
+    DumpFlatState(DumpFlatStateCmd),
     /// Generate a genesis file from the current state of the DB.
     #[clap(alias = "dump_state")]
     DumpState(DumpStateCmd),
@@ -76,6 +78,7 @@ impl StateViewerSubCommand {
         match self {
             StateViewerSubCommand::Peers => peers(store),
             StateViewerSubCommand::State => state(home_dir, near_config, store),
+            StateViewerSubCommand::DumpFlatState(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::DumpState(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::DumpStateRedis(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::Chain(cmd) => cmd.run(home_dir, near_config, store),
@@ -95,6 +98,20 @@ impl StateViewerSubCommand {
             StateViewerSubCommand::ApplyTx(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::ApplyReceipt(cmd) => cmd.run(home_dir, near_config, store),
         }
+    }
+}
+
+#[derive(Parser)]
+pub struct DumpFlatStateCmd {
+    #[clap(long)]
+    height: Option<BlockHeight>,
+    #[clap(long)]
+    shard_id: Option<ShardId>,
+}
+
+impl DumpFlatStateCmd {
+    pub fn run(self, home_dir: &Path, near_config: NearConfig, store: Store) {
+        flat_state(home_dir, near_config, store, self.height, self.shard_id);
     }
 }
 

@@ -8,6 +8,7 @@ use near_chain::migrations::check_if_block_is_first_with_chunk_of_version;
 use near_chain::types::{ApplyTransactionResult, BlockHeaderInfo};
 use near_chain::{ChainStore, ChainStoreAccess, ChainStoreUpdate, RuntimeAdapter};
 use near_epoch_manager::EpochManager;
+use near_logger_utils::init_integration_logger;
 use near_network::iter_peers_from_store;
 use near_primitives::account::id::AccountId;
 use near_primitives::block::{Block, BlockHeader};
@@ -19,9 +20,10 @@ use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, ShardId, StateRoot};
+use near_primitives_core::hash::hash;
 use near_primitives_core::types::Gas;
 use near_store::test_utils::create_test_store;
-use near_store::{Store, TrieIterator};
+use near_store::{DBCol, Store, TrieIterator};
 use nearcore::{NearConfig, NightshadeRuntime};
 use node_runtime::adapter::ViewRuntimeAdapter;
 use std::collections::HashMap;
@@ -49,6 +51,50 @@ pub(crate) fn state(home_dir: &Path, near_config: NearConfig, store: Store) {
             }
         }
     }
+}
+
+pub(crate) fn flat_state(
+    home_dir: &Path,
+    near_config: NearConfig,
+    store: Store,
+    height: Option<BlockHeight>,
+    shard_id: Option<ShardId>,
+) {
+    init_integration_logger();
+    let trie_mode = match height {
+        None => LoadTrieMode::Latest,
+        Some(height) => LoadTrieMode::Height(height),
+    };
+    let (runtime, state_roots, header) =
+        load_trie_stop_at_height(store.clone(), home_dir, &near_config, trie_mode);
+    println!("Storage roots are {:?}, block height is {}", state_roots, header.height());
+
+    let shard_id = match shard_id {
+        None => unimplemented!(),
+        Some(shard_id) => shard_id,
+    };
+
+    let trie = runtime.get_trie_for_shard(shard_id as u64, header.prev_hash()).unwrap();
+    let trie = TrieIterator::new(&trie, state_root).unwrap();
+    let mut store_update = store.store_update();
+    let mut i: u64 = 0;
+    let batch_size = 1000;
+    for item in trie {
+        let (key, value) = item.unwrap();
+        if let Some(state_record) = StateRecord::from_raw_key_value(key, value.clone()) {
+            i += 1;
+            let value = hash(&value);
+            if i % batch_size == 0 {
+                tracing::info!(target: "neard", "processed: {} {}", i, state_record);
+                store_update.commit().unwrap();
+                store_update = store.store_update();
+            }
+            store_update.set(DBCol::ColFlatState, &key, &value.0)
+        }
+    }
+    tracing::info!("committing changes!");
+    store_update.commit().unwrap();
+    tracing::info!("done!");
 }
 
 pub(crate) fn dump_state(

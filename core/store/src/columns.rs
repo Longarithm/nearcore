@@ -234,6 +234,8 @@ pub enum DBCol {
     /// - *Rows*: BlockShardId (BlockHash || ShardId) - 40 bytes
     /// - *Column type*: StateChangesForSplitStates
     ColStateChangesForSplitStates = 49,
+
+    ColFlatState = 50,
 }
 
 impl DBCol {
@@ -355,6 +357,7 @@ impl fmt::Display for DBCol {
             Self::ColStateChangesForSplitStates => {
                 "state changes indexed by block hash and shard id"
             }
+            Self::ColFlatState => "flat state",
         };
         write!(f, "{}", desc)
     }
