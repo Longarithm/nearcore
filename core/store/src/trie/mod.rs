@@ -752,8 +752,14 @@ impl Trie {
             }
         }
 
+        let orig_key = key.clone();
         let key = NibbleSlice::new(key);
-        self.lookup(root, key)
+        let result = self.lookup(root, key);
+        match result.clone() {
+            Ok(value) => tracing::debug!(target: "runtime", "lookup {:?} {:?}", orig_key, value),
+            Err(_) => {}
+        }
+        result
     }
 
     pub fn get(&self, root: &CryptoHash, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
