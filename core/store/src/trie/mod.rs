@@ -752,13 +752,13 @@ impl Trie {
             }
         }
 
-        let orig_key = key.clone();
+        // let orig_key = key.clone();
         let key = NibbleSlice::new(key);
         let result = self.lookup(root, key);
-        match result.clone() {
-            Ok(value) => tracing::debug!(target: "runtime", "lookup {:?} {:?}", orig_key, value),
-            Err(_) => {}
-        }
+        // match result.clone() {
+        //     Ok(value) => tracing::debug!(target: "runtime", "lookup {:?} {:?}", orig_key, value),
+        //     Err(_) => {}
+        // }
         result
     }
 

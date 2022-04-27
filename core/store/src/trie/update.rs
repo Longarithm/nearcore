@@ -88,7 +88,7 @@ impl TrieUpdate {
                 return Ok(data.as_ref().map(TrieUpdateValuePtr::MemoryRef));
             }
         }
-        self.trie.get_ref(&self.root, &key, false).map(|option| {
+        self.trie.get_ref(&self.root, &key, use_flat).map(|option| {
             option.map(|(length, hash)| TrieUpdateValuePtr::HashAndSize(&self.trie, length, hash))
         })
     }
