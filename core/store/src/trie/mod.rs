@@ -715,7 +715,9 @@ impl Trie {
                             .read_u32::<LittleEndian>()
                             .map_err(|_| StorageError::StorageInternalError)?;
                         let mut value_hash = [0u8; 32];
-                        cursor.read_exact(&mut value_hash);
+                        cursor
+                            .read_exact(&mut value_hash)
+                            .map_err(|_| StorageError::StorageInternalError)?;
                         tracing::debug!(target: "runtime", "flat miss {:?}", value_hash);
                         Ok(Some((value_len, CryptoHash(value_hash))))
                         // hack
