@@ -87,7 +87,7 @@ pub(crate) fn flat_state(
             i += 1;
             let mut value_ser = [0u8; 36];
             value_ser[0..4].copy_from_slice(&(value.len() as u32).to_le_bytes());
-            value_ser[4..36].copy_from_slice(&hash(&value));
+            value_ser[4..36].copy_from_slice(&hash(&value).0);
             if i % batch_size == 0 {
                 tracing::info!(target: "neard", "processed: {} {}", i, state_record);
                 store_update.commit().unwrap();
