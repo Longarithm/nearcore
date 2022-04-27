@@ -688,10 +688,11 @@ impl Trie {
         if use_flat {
             if let Some(storage) = self.storage.as_caching_storage() {
                 let mut flat_storage = storage.store.flat_storage.write().expect(POISONED_LOCK_ERR);
-                return match flat_storage.get(key).cloned() {
-                    Some(value_ref) => {
-                        tracing::debug!(target: "runtime", "flat hit {:?}", value_ref);
-                        Ok(Some(value_ref.clone()))
+                let result = flat_storage.get(key).cloned();
+                return match result {
+                    Some(result) => {
+                        tracing::debug!(target: "runtime", "flat hit {:?}", result);
+                        Ok(result)
                     }
                     None => {
                         let bytes_result = storage
@@ -716,8 +717,9 @@ impl Trie {
                         cursor
                             .read_exact(&mut value_hash)
                             .map_err(|_| StorageError::StorageInternalError)?;
-                        tracing::debug!(target: "runtime", "flat miss {:?}", value_hash);
-                        Ok(Some((value_len, CryptoHash(value_hash))))
+                        let result = Some((value_len, CryptoHash(value_hash)));
+                        tracing::debug!(target: "runtime", "flat miss {:?}", result);
+                        Ok(result)
                         // hack
                         // Err(StorageError::StorageInconsistentState(
                         //     "Value ref missing in flat storage".to_string(),

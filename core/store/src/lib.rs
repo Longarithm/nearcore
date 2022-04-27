@@ -50,7 +50,7 @@ mod trie;
 #[derive(Clone)]
 pub struct Store {
     storage: Arc<dyn Database>,
-    pub flat_storage: Arc<RwLock<HashMap<Vec<u8>, (u32, CryptoHash)>>>,
+    pub flat_storage: Arc<RwLock<HashMap<Vec<u8>, Option<(u32, CryptoHash)>>>>,
 }
 
 impl Store {

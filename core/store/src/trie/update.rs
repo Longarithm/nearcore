@@ -131,10 +131,10 @@ impl TrieUpdate {
                 let value = raw_changes.changes.last().unwrap().data.clone();
                 match value {
                     None => {
-                        flat_storage.remove(key);
+                        flat_storage.insert(key.clone(), None);
                     }
                     Some(value) => {
-                        flat_storage.insert(key.clone(), (value.len() as u32, hash(&value)));
+                        flat_storage.insert(key.clone(), Some((value.len() as u32, hash(&value))));
                     }
                 }
             }
