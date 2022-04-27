@@ -77,13 +77,15 @@ pub(crate) fn flat_state(
 
     let trie = runtime.get_trie_for_shard(shard_id as u64, header.prev_hash()).unwrap();
     let state_root = state_roots[shard_id as usize];
-    let mut trie = TrieIterator::new(&trie, &state_root).unwrap();
-    let result = trie.seek([
+    let debug_key = [
         9, 97, 117, 114, 111, 114, 97, 44, 7, 7, 32, 248, 174, 251, 86, 151, 183, 126, 11, 184, 53,
         168, 81, 139, 231, 7, 117, 205, 161, 176,
-    ]);
+    ];
+    let result = trie.get(&state_root, &debug_key);
     eprintln!("{:?}", result);
     panic!();
+
+    let mut trie = TrieIterator::new(&trie, &state_root).unwrap();
     let mut store_update = store.store_update();
     let mut i: u64 = 0;
     let batch_size = 1000;
