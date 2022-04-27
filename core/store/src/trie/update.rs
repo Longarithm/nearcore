@@ -129,14 +129,12 @@ impl TrieUpdate {
                 caching_storage.store.flat_storage.write().expect(POISONED_LOCK_ERR);
             for (key, raw_changes) in committed.iter() {
                 let value = raw_changes.changes.last().unwrap().data.clone();
-                match value {
-                    None => {
-                        flat_storage.insert(key.clone(), None);
-                    }
-                    Some(value) => {
-                        flat_storage.insert(key.clone(), Some((value.len() as u32, hash(&value))));
-                    }
-                }
+                let flat_value = match value {
+                    None => None,
+                    Some(value) => Some((value.len() as u32, hash(&value))),
+                };
+                tracing::debug!(target: "runtime", "flat insert {:?} {:?}", key, flat_value);
+                flat_storage.insert(key.clone(), flat_value);
             }
         }
         let trie_changes = trie.update(
