@@ -694,7 +694,10 @@ impl Trie {
                         Ok(Some(value_ref.clone()))
                     }
                     None => {
-                        let bytes_result = storage.store.get(DBCol::ColFlatState, key.as_ref());
+                        let bytes_result = storage
+                            .store
+                            .get(DBCol::ColFlatState, key.as_ref())
+                            .map_err(|_| StorageError::StorageInternalError)?;
                         let bytes = match bytes_result {
                             Some(bytes) => bytes,
                             None => return Ok(None),
