@@ -694,16 +694,11 @@ impl Trie {
                         Ok(Some(value_ref.clone()))
                     }
                     None => {
-                        let bytes = storage
-                            .store
-                            .get(DBCol::ColFlatState, key.as_ref())
-                            .map_err(|_| StorageError::StorageInternalError)?
-                            .ok_or_else(|| {
-                                StorageError::StorageInconsistentState(format!(
-                                    "Key missing: {:?}",
-                                    key
-                                ))
-                            })?;
+                        let bytes_result = storage.store.get(DBCol::ColFlatState, key.as_ref());
+                        let bytes = match bytes_result {
+                            Some(bytes) => bytes,
+                            None => return Ok(None),
+                        };
                         if bytes.len() != 36 {
                             return Err(StorageError::StorageInconsistentState(format!(
                                 "Incorrect length of serialized value: {} != 36",
