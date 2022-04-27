@@ -713,8 +713,8 @@ impl Trie {
                         let mut cursor = Cursor::new(bytes);
                         let value_len =
                             cursor.read_u32().map_err(|_| StorageError::StorageInternalError)?;
-                        let mut value_hash = [u8; 32];
-                        cursor.read_exact(&value_hash);
+                        let mut value_hash = [0u8; 32];
+                        cursor.read_exact(&mut value_hash);
                         tracing::debug!(target: "runtime", "flat miss {:?}", value_hash);
                         Ok(Some((value_len, CryptoHash(value_hash))))
                         // hack
