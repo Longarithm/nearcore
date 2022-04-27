@@ -3,6 +3,7 @@ use crate::state_dump::state_dump;
 use crate::state_dump::state_dump_redis;
 use crate::{apply_chunk, epoch_info};
 use ansi_term::Color::Red;
+use borsh::BorshSerialize;
 use near_chain::chain::collect_receipts_from_response;
 use near_chain::migrations::check_if_block_is_first_with_chunk_of_version;
 use near_chain::types::{ApplyTransactionResult, BlockHeaderInfo};
@@ -84,13 +85,15 @@ pub(crate) fn flat_state(
         let (key, value) = item.unwrap();
         if let Some(state_record) = StateRecord::from_raw_key_value(key.clone(), value.clone()) {
             i += 1;
-            let value = hash(&value);
+            let mut value_ser = [u8; 36];
+            value_ser[0..4].copy_from_slice(&(value.len() as u32).to_le_bytes());
+            value_ser[4..36].copy_from_slice(&hash(&value));
             if i % batch_size == 0 {
                 tracing::info!(target: "neard", "processed: {} {}", i, state_record);
                 store_update.commit().unwrap();
                 store_update = store.store_update();
             }
-            store_update.set(DBCol::ColFlatState, &key, &value.0)
+            store_update.set(DBCol::ColFlatState, &key, &value_ser)
         }
     }
     tracing::info!("committing changes!");

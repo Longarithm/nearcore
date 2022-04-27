@@ -19,7 +19,7 @@ use crate::trie::nibble_slice::NibbleSlice;
 pub use crate::trie::shard_tries::{KeyForStateChanges, ShardTries, WrappedTrieChanges};
 pub(crate) use crate::trie::trie_storage::{TrieCache, TrieCachingStorage};
 use crate::trie::trie_storage::{TrieMemoryPartialStorage, TrieRecordingStorage, TrieStorage};
-use crate::StorageError;
+use crate::{DBCol, StorageError};
 pub use near_primitives::types::TrieNodesCount;
 
 mod insert_delete;
@@ -694,33 +694,56 @@ impl Trie {
                         Ok(Some(value_ref.clone()))
                     }
                     None => {
+                        let bytes = storage
+                            .store
+                            .get(DBCol::ColFlatState, key.as_ref())
+                            .map_err(|_| StorageError::StorageInternalError)?
+                            .ok_or_else(|| {
+                                StorageError::StorageInconsistentState(format!(
+                                    "Key missing: {:?}",
+                                    key
+                                ))
+                            })?;
+                        if bytes.len() != 36 {
+                            return Err(StorageError::StorageInconsistentState(format!(
+                                "Incorrect length of serialized value: {} != 36",
+                                bytes.len()
+                            )));
+                        }
+                        let mut cursor = Cursor::new(bytes);
+                        let value_len =
+                            cursor.read_u32().map_err(|_| StorageError::StorageInternalError)?;
+                        let mut value_hash = [u8; 32];
+                        cursor.read_exact(&value_hash);
+                        tracing::debug!(target: "runtime", "flat miss {:?}", value_hash);
+                        Ok(Some((value_len, CryptoHash(value_hash))))
                         // hack
                         // Err(StorageError::StorageInconsistentState(
                         //     "Value ref missing in flat storage".to_string(),
                         // ))
 
-                        let db_read_nodes = storage.db_read_nodes.get();
-                        let mem_read_nodes = storage.mem_read_nodes.get();
-                        let mut chunk_cache_items: Vec<_> =
-                            storage.chunk_cache.borrow_mut().drain().collect();
-
-                        let key_nibbles = NibbleSlice::new(key);
-                        let value_ref = self.lookup(root, key_nibbles)?;
-                        if value_ref.is_some() {
-                            let value_ref_unwrapped = value_ref.clone().unwrap();
-                            tracing::debug!(target: "runtime", "flat miss {:?}", value_ref_unwrapped);
-                            flat_storage.insert(key.to_vec(), value_ref_unwrapped);
-                        }
-
-                        storage.db_read_nodes.set(db_read_nodes);
-                        storage.mem_read_nodes.set(mem_read_nodes);
-                        let mut chunk_cache = storage.chunk_cache.borrow_mut();
-                        chunk_cache.clear();
-                        for (k, v) in chunk_cache_items.drain(..) {
-                            chunk_cache.insert(k, v);
-                        }
-
-                        Ok(value_ref)
+                        // let db_read_nodes = storage.db_read_nodes.get();
+                        // let mem_read_nodes = storage.mem_read_nodes.get();
+                        // let mut chunk_cache_items: Vec<_> =
+                        //     storage.chunk_cache.borrow_mut().drain().collect();
+                        //
+                        // let key_nibbles = NibbleSlice::new(key);
+                        // let value_ref = self.lookup(root, key_nibbles)?;
+                        // if value_ref.is_some() {
+                        //     let value_ref_unwrapped = value_ref.clone().unwrap();
+                        //     tracing::debug!(target: "runtime", "flat miss {:?}", value_ref_unwrapped);
+                        //     flat_storage.insert(key.to_vec(), value_ref_unwrapped);
+                        // }
+                        //
+                        // storage.db_read_nodes.set(db_read_nodes);
+                        // storage.mem_read_nodes.set(mem_read_nodes);
+                        // let mut chunk_cache = storage.chunk_cache.borrow_mut();
+                        // chunk_cache.clear();
+                        // for (k, v) in chunk_cache_items.drain(..) {
+                        //     chunk_cache.insert(k, v);
+                        // }
+                        //
+                        // Ok(value_ref)
                     }
                 };
             }
