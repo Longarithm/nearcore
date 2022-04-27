@@ -85,7 +85,7 @@ pub(crate) fn flat_state(
         let (key, value) = item.unwrap();
         if let Some(state_record) = StateRecord::from_raw_key_value(key.clone(), value.clone()) {
             i += 1;
-            let mut value_ser = [u8; 36];
+            let mut value_ser = [0u8; 36];
             value_ser[0..4].copy_from_slice(&(value.len() as u32).to_le_bytes());
             value_ser[4..36].copy_from_slice(&hash(&value));
             if i % batch_size == 0 {
