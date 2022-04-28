@@ -296,6 +296,7 @@ fn apply_block_from_range(
         let raw_changes: RawStateChangesWithTrieKey =
             RawStateChangesWithTrieKey::try_from_slice(changes_ser.as_ref()).unwrap();
         let trie_key = raw_changes.trie_key;
+        let key = trie_key.to_vec();
         // let account = parse_account_id_from_raw_key(key.as_ref()).unwrap();
         let value = raw_changes.changes.last().unwrap().data.clone();
         let flat_value = match value {
@@ -304,7 +305,7 @@ fn apply_block_from_range(
         };
         tracing::debug!(target: "runtime", "flat insert {:?} {:?}", key, flat_value);
         tracing::debug!(target: "runtime", "trie_key {:?}", trie_key);
-        flat_storage.insert(key.to_vec(), flat_value);
+        flat_storage.insert(key, flat_value);
     }
     // let state_update =
     //     runtime_adapter.get_tries().new_trie_update(shard_uid, *chunk_extra.state_root());
