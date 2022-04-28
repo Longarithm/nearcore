@@ -689,14 +689,14 @@ impl Trie {
             if let Some(storage) = self.storage.as_caching_storage() {
                 // fake lookup to rollback costs
                 let key_nibbles = NibbleSlice::new(key);
-                let _ = self.lookup(root, key_nibbles);
+                let trie_value_ref = self.lookup(root, key_nibbles)?;
 
                 let mut flat_storage = storage.store.flat_storage.write().expect(POISONED_LOCK_ERR);
                 let result = flat_storage.get(key).cloned();
-                return match result {
+                let final_result = match result {
                     Some(result) => {
                         tracing::debug!(target: "runtime", "flat hit {:?}", result);
-                        Ok(result)
+                        result
                     }
                     None => {
                         let bytes_result = storage
@@ -723,7 +723,7 @@ impl Trie {
                             .map_err(|_| StorageError::StorageInternalError)?;
                         let result = Some((value_len, CryptoHash(value_hash)));
                         tracing::debug!(target: "runtime", "flat miss {:?}", result);
-                        Ok(result)
+                        result
                         // hack
                         // Err(StorageError::StorageInconsistentState(
                         //     "Value ref missing in flat storage".to_string(),
@@ -753,6 +753,8 @@ impl Trie {
                         // Ok(value_ref)
                     }
                 };
+                assert_eq!(trie_value_ref, final_result);
+                return Ok(final_result);
             }
         }
 
