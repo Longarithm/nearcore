@@ -5,6 +5,7 @@ use std::sync::Mutex;
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
+use borsh::BorshDeserialize;
 use near_chain::chain::collect_receipts_from_response;
 use near_chain::migrations::check_if_block_is_first_with_chunk_of_version;
 use near_chain::types::ApplyTransactionResult;
@@ -18,8 +19,9 @@ use near_primitives::transaction::{
 };
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
-use near_primitives::types::{BlockHeight, ShardId};
-use near_store::{get, DBCol, Store};
+use near_primitives::types::{BlockHeight, RawStateChangesWithTrieKey, ShardId, StateChanges};
+use near_primitives_core::hash::hash;
+use near_store::{get, ColStateChanges, DBCol, KeyForStateChanges, Store};
 use nearcore::NightshadeRuntime;
 
 fn timestamp() -> u64 {
@@ -285,6 +287,20 @@ fn apply_block_from_range(
         apply_result.total_balance_burnt,
     );
 
+    // Hack. Here we take updates for the whole block, but this should work anyway
+    let storage_key = KeyForStateChanges::for_block(&block_hash);
+    let state_changes = store.iter_prefix(ColStateChanges, storage_key.as_ref());
+    let mut flat_storage = store.flat_storage.write().expect("Poisoned lock");
+    for (key, changes_ser) in state_changes {
+        let raw_changes: RawStateChangesWithTrieKey = changes_ser.try_from_slice();
+        let value = raw_changes.changes.last().unwrap().data.clone();
+        let flat_value = match value {
+            None => None,
+            Some(value) => Some((value.len() as u32, hash(&value))),
+        };
+        tracing::debug!(target: "runtime", "flat insert {:?} {:?}", key, flat_value);
+        flat_storage.insert(key.to_vec(), flat_value);
+    }
     // let state_update =
     //     runtime_adapter.get_tries().new_trie_update(shard_uid, *chunk_extra.state_root());
     // let delayed_indices =
