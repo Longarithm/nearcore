@@ -295,14 +295,15 @@ fn apply_block_from_range(
     for (key, changes_ser) in state_changes {
         let raw_changes: RawStateChangesWithTrieKey =
             RawStateChangesWithTrieKey::try_from_slice(changes_ser.as_ref()).unwrap();
-        let account = parse_account_id_from_raw_key(key.as_ref()).unwrap();
+        let trie_key = raw_changes.trie_key;
+        // let account = parse_account_id_from_raw_key(key.as_ref()).unwrap();
         let value = raw_changes.changes.last().unwrap().data.clone();
         let flat_value = match value {
             None => None,
             Some(value) => Some((value.len() as u32, hash(&value))),
         };
         tracing::debug!(target: "runtime", "flat insert {:?} {:?}", key, flat_value);
-        tracing::debug!(target: "runtime", "account {:?}", account);
+        tracing::debug!(target: "runtime", "trie_key {:?}", trie_key);
         flat_storage.insert(key.to_vec(), flat_value);
     }
     // let state_update =
