@@ -14,6 +14,7 @@ use near_chain_configs::Genesis;
 use near_primitives::borsh::maybestd::sync::Arc;
 use near_primitives::hash::CryptoHash;
 use near_primitives::receipt::DelayedReceiptIndices;
+use near_primitives::shard_layout::{account_id_to_shard_id, ShardLayout};
 use near_primitives::transaction::{
     Action, ExecutionOutcomeWithId, ExecutionOutcomeWithIdAndProof,
 };
@@ -292,21 +293,26 @@ fn apply_block_from_range(
     let storage_key = KeyForStateChanges::for_block(&block_hash);
     let state_changes = store.iter_prefix(ColStateChanges, storage_key.as_ref());
     let mut flat_storage = store.flat_storage.write().expect("Poisoned lock");
-    for (key, changes_ser) in state_changes {
+    let shard_layout =
+        runtime_adapter.get_shard_layout_from_prev_block(block.header().prev_hash()).unwrap();
+    for (_, changes_ser) in state_changes {
         let raw_changes: RawStateChangesWithTrieKey =
             RawStateChangesWithTrieKey::try_from_slice(changes_ser.as_ref()).unwrap();
         let trie_key = raw_changes.trie_key;
         let key = trie_key.to_vec();
-        tracing::debug!(target: "runtime", "trie_key {:?}", trie_key);
+        // tracing::debug!(target: "runtime", "trie_key {:?}", trie_key);
         let account = parse_account_id_from_raw_key(&key).unwrap().unwrap();
-        tracing::debug!(target: "runtime", "account {:?}", account);
-        let value = raw_changes.changes.last().unwrap().data.clone();
-        let flat_value = match value {
-            None => None,
-            Some(value) => Some((value.len() as u32, hash(&value))),
-        };
-        tracing::debug!(target: "runtime", "flat insert {:?} {:?}", key, flat_value);
-        flat_storage.insert(key, flat_value);
+        // tracing::debug!(target: "runtime", "account {:?}", account);
+        let key_shard_id = account_id_to_shard_id(&account, &shard_layout);
+        if key_shard_id == shard_id {
+            let value = raw_changes.changes.last().unwrap().data.clone();
+            let flat_value = match value {
+                None => None,
+                Some(value) => Some((value.len() as u32, hash(&value))),
+            };
+            tracing::debug!(target: "runtime", "flat insert {:?} {:?}", key, flat_value);
+            flat_storage.insert(key, flat_value);
+        }
     }
     // let state_update =
     //     runtime_adapter.get_tries().new_trie_update(shard_uid, *chunk_extra.state_root());
