@@ -40,7 +40,7 @@ use near_primitives::types::{
     EpochInfoProvider, Gas, MerkleHash, NumShards, ShardId, StateChangeCause,
     StateChangesForSplitStates, StateRoot, StateRootNode,
 };
-use near_primitives::version::ProtocolVersion;
+use near_primitives::version::{ProtocolVersion, PROTOCOL_VERSION};
 use near_primitives::views::{
     AccessKeyInfoView, CallResult, EpochValidatorInfo, QueryRequest, QueryResponse,
     QueryResponseKind, ViewApplyState, ViewStateResult,
@@ -525,7 +525,7 @@ impl NightshadeRuntime {
 
         let epoch_height = self.get_epoch_height_from_prev_block(prev_block_hash)?;
         let prev_block_epoch_id = self.get_epoch_id(prev_block_hash)?;
-        let current_protocol_version = self.get_epoch_protocol_version(&epoch_id)?;
+        let current_protocol_version = PROTOCOL_VERSION; // self.get_epoch_protocol_version(&epoch_id)?;
         let prev_block_protocol_version = self.get_epoch_protocol_version(&prev_block_epoch_id)?;
         let is_first_block_of_version = current_protocol_version != prev_block_protocol_version;
 
