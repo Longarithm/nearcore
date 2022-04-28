@@ -310,7 +310,7 @@ fn apply_block_from_range(
                 None => None,
                 Some(value) => Some((value.len() as u32, hash(&value))),
             };
-            tracing::debug!(target: "runtime", "flat insert {:?} {:?}", key, flat_value);
+            // tracing::debug!(target: "runtime", "flat insert {:?} {:?}", key, flat_value);
             flat_storage.insert(key, flat_value);
         }
     }

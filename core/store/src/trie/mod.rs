@@ -695,7 +695,7 @@ impl Trie {
                 let result = flat_storage.get(key).cloned();
                 let final_result = match result {
                     Some(result) => {
-                        tracing::debug!(target: "runtime", "flat hit {:?}", result);
+                        // tracing::debug!(target: "runtime", "flat hit {:?}", result);
                         result
                     }
                     None => {
@@ -722,7 +722,7 @@ impl Trie {
                             .read_exact(&mut value_hash)
                             .map_err(|_| StorageError::StorageInternalError)?;
                         let result = Some((value_len, CryptoHash(value_hash)));
-                        tracing::debug!(target: "runtime", "flat miss {:?}", result);
+                        // tracing::debug!(target: "runtime", "flat miss {:?}", result);
                         result
                         // hack
                         // Err(StorageError::StorageInconsistentState(
