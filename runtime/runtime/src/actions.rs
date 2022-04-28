@@ -231,6 +231,8 @@ pub(crate) fn action_function_call(
         None => true,
     };
 
+    tracing::debug!(target: "runtime", outcome_burnt_gas = outcome.burnt_gas);
+
     result.gas_burnt = safe_add_gas(result.gas_burnt, outcome.burnt_gas)?;
     result.gas_burnt_for_function_call =
         safe_add_gas(result.gas_burnt_for_function_call, outcome.burnt_gas)?;
