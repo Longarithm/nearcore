@@ -293,7 +293,7 @@ fn apply_block_from_range(
     let mut flat_storage = store.flat_storage.write().expect("Poisoned lock");
     for (key, changes_ser) in state_changes {
         let raw_changes: RawStateChangesWithTrieKey =
-            RawStateChangesWithTrieKey::try_from_slice(changes_ser.as_ref());
+            RawStateChangesWithTrieKey::try_from_slice(changes_ser.as_ref()).unwrap();
         let value = raw_changes.changes.last().unwrap().data.clone();
         let flat_value = match value {
             None => None,
