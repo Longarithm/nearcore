@@ -23,7 +23,7 @@ use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, RawStateChangesWithTrieKey, ShardId, StateChanges};
 use near_primitives_core::hash::hash;
-use near_store::{get, ColStateChanges, DBCol, KeyForStateChanges, Store};
+use near_store::{get, DBCol, KeyForStateChanges, Store};
 use nearcore::NightshadeRuntime;
 
 fn timestamp() -> u64 {
@@ -291,7 +291,7 @@ fn apply_block_from_range(
 
     // Hack. Here we take updates for the whole block, but this should work anyway
     let storage_key = KeyForStateChanges::for_block(&block_hash);
-    let state_changes = store.iter_prefix(ColStateChanges, storage_key.as_ref());
+    let state_changes = store.iter_prefix(DBCol::StateChanges, storage_key.as_ref());
     let mut flat_storage = store.flat_storage.write().expect("Poisoned lock");
     let shard_layout =
         runtime_adapter.get_shard_layout_from_prev_block(block.header().prev_hash()).unwrap();
