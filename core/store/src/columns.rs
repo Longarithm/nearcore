@@ -389,6 +389,7 @@ impl fmt::Display for DBCol {
             Self::EpochValidatorInfo => "epoch validator info",
             Self::HeaderHashesByHeight => "header hashes indexed by their height",
             Self::StateChangesForSplitStates => "state changes indexed by block hash and shard id",
+            Self::ColFlatState => "flat state",
         };
         write!(f, "{}", desc)
     }
