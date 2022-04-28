@@ -687,6 +687,10 @@ impl Trie {
     ) -> Result<Option<(u32, CryptoHash)>, StorageError> {
         if use_flat {
             if let Some(storage) = self.storage.as_caching_storage() {
+                // fake lookup to rollback costs
+                let key_nibbles = NibbleSlice::new(key);
+                let _ = self.lookup(root, key_nibbles);
+
                 let mut flat_storage = storage.store.flat_storage.write().expect(POISONED_LOCK_ERR);
                 let result = flat_storage.get(key).cloned();
                 return match result {
