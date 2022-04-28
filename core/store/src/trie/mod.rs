@@ -688,8 +688,8 @@ impl Trie {
         if use_flat {
             if let Some(storage) = self.storage.as_caching_storage() {
                 // fake lookup to rollback costs
-                let key_nibbles = NibbleSlice::new(key);
-                let trie_value_ref = self.lookup(root, key_nibbles)?;
+                // let key_nibbles = NibbleSlice::new(key);
+                // let trie_value_ref = self.lookup(root, key_nibbles)?;
 
                 let mut flat_storage = storage.store.flat_storage.write().expect(POISONED_LOCK_ERR);
                 let result = flat_storage.get(key).cloned();
@@ -753,7 +753,7 @@ impl Trie {
                         // Ok(value_ref)
                     }
                 };
-                assert_eq!(trie_value_ref, final_result);
+                // assert_eq!(trie_value_ref, final_result);
                 return Ok(final_result);
             }
         }
