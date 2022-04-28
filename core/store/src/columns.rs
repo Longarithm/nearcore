@@ -233,6 +233,8 @@ pub enum DBCol {
     /// - *Rows*: BlockShardId (BlockHash || ShardId) - 40 bytes
     /// - *Column type*: StateChangesForSplitStates
     StateChangesForSplitStates = 49,
+
+    ColFlatState = 50,
 }
 
 impl DBCol {
