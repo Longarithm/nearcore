@@ -171,7 +171,7 @@ impl fmt::Debug for ProfileData {
         for cost in Cost::ALL {
             match cost {
                 Cost::WasmInstruction => {
-                    writeln!(f, "wasm_instruction -> {}", self[cost])?;
+                    writeln!(f, "wasm_instruction -> {}", self[*cost])?;
                 }
                 _ => {}
             }
