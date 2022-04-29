@@ -293,6 +293,7 @@ fn apply_block_from_range(
     let storage_key = KeyForStateChanges::for_block(&block_hash);
     let state_changes = store.iter_prefix(DBCol::StateChanges, storage_key.as_ref());
     let mut flat_storage = store.flat_storage.write().expect("Poisoned lock");
+    tracing::debug!(target: "runtime", flat_storage_len = flat_storage.len());
     let shard_layout =
         runtime_adapter.get_shard_layout_from_prev_block(block.header().prev_hash()).unwrap();
     for (_, changes_ser) in state_changes {
