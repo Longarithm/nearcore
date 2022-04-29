@@ -2306,6 +2306,8 @@ impl<'a> VMLogic<'a> {
         value_ptr: u64,
         register_id: u64,
     ) -> Result<u64> {
+        let _span = tracing::debug_span!(target: "runtime", "storage_write").entered();
+
         self.gas_counter.pay_base(base)?;
         if self.context.is_view() {
             return Err(
@@ -2401,6 +2403,8 @@ impl<'a> VMLogic<'a> {
     /// `base + storage_read_base + storage_read_key_byte * num_key_bytes + storage_read_value_byte + num_value_bytes
     ///  cost to read key from register + cost to write value into register`.
     pub fn storage_read(&mut self, key_len: u64, key_ptr: u64, register_id: u64) -> Result<u64> {
+        let _span = tracing::debug_span!(target: "runtime", "storage_read").entered();
+
         self.gas_counter.pay_base(base)?;
         self.gas_counter.pay_base(storage_read_base)?;
         let key = self.get_vec_from_memory_or_register(key_ptr, key_len)?;
@@ -2446,6 +2450,8 @@ impl<'a> VMLogic<'a> {
     /// `base + storage_remove_base + storage_remove_key_byte * num_key_bytes + storage_remove_ret_value_byte * num_value_bytes
     /// + cost to read the key + cost to write the value`.
     pub fn storage_remove(&mut self, key_len: u64, key_ptr: u64, register_id: u64) -> Result<u64> {
+        let _span = tracing::debug_span!(target: "runtime", "storage_remove").entered();
+
         self.gas_counter.pay_base(base)?;
         if self.context.is_view() {
             return Err(
@@ -2502,6 +2508,8 @@ impl<'a> VMLogic<'a> {
     ///
     /// `base + storage_has_key_base + storage_has_key_byte * num_bytes + cost of reading key`
     pub fn storage_has_key(&mut self, key_len: u64, key_ptr: u64) -> Result<u64> {
+        let _span = tracing::debug_span!(target: "runtime", "storage_has_key").entered();
+
         self.gas_counter.pay_base(base)?;
         self.gas_counter.pay_base(storage_has_key_base)?;
         let key = self.get_vec_from_memory_or_register(key_ptr, key_len)?;
