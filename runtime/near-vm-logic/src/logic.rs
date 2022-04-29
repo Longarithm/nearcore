@@ -2417,7 +2417,7 @@ impl<'a> VMLogic<'a> {
         }
         self.gas_counter.pay_per(storage_read_key_byte, key.len() as u64)?;
         let nodes_before = self.ext.get_trie_nodes_count();
-        let read = self.ext.storage_get_optimized(&key);
+        let read = self.ext.storage_get(&key);
         let nodes_delta = self.ext.get_trie_nodes_count() - nodes_before;
         self.gas_counter.add_trie_fees(nodes_delta)?;
         let read = Self::deref_value(&mut self.gas_counter, storage_read_value_byte, read?)?;
