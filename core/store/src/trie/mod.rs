@@ -686,7 +686,7 @@ impl Trie {
     ) -> Result<Option<(u32, CryptoHash)>, StorageError> {
         if use_flat {
             if let Some(storage) = self.storage.as_caching_storage() {
-                let _span = tracing::debug_span!(target: "runtime", "get_ref").entered();
+                // let _span = tracing::debug_span!(target: "runtime", "get_ref").entered();
 
                 // fake lookup to rollback costs
                 // let key_nibbles = NibbleSlice::new(key);
