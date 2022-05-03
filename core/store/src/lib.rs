@@ -391,7 +391,7 @@ impl StoreConfig {
     /// Tests have shown that increase of col_state_cache_size up to 25GB (we've used this big
     /// value to estimate performance improvement headroom) having max_open_files=10K improved
     /// performance of state viewer by 60%.
-    pub const DEFAULT_COL_STATE_CACHE_SIZE: usize = 25 * bytesize::GIB as usize; // 512 * bytesize::MIB as usize;
+    pub const DEFAULT_COL_STATE_CACHE_SIZE: usize = 512 * bytesize::MIB as usize;
 
     /// Earlier this value was taken from the openethereum default parameter and we use it since
     /// then.
