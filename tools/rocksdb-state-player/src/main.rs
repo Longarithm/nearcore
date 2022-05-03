@@ -29,11 +29,12 @@ fn main() -> std::io::Result<()> {
         }
         let (value, _) = decode_value_with_rc(&bytes);
         let result = match value {
-            Some(value) => RawTrieNodeWithSize::decode(&value),
+            Some(value) => value,
             None => {
                 warn!(target: "rocksdb-state-player", "couldn't decode rc from: {:?} {:?}", key, bytes);
             }
         };
+        let result = RawTrieNodeWithSize::decode(result);
         match result {
             Ok(_) => {
                 nodes += 1;
