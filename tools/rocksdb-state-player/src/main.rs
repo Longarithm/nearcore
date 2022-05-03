@@ -1,6 +1,6 @@
 use near_chain_configs::GenesisValidationMode;
 use near_o11y::tracing::{info, warn};
-use near_store::{create_store_with_config, DBCol, decode_value_with_rc, RawTrieNodeWithSize};
+use near_store::{create_store_with_config, decode_value_with_rc, DBCol, RawTrieNodeWithSize};
 use nearcore::{get_default_home, get_store_path, load_config};
 
 fn main() -> std::io::Result<()> {
@@ -30,17 +30,19 @@ fn main() -> std::io::Result<()> {
         let (value, _) = decode_value_with_rc(&bytes);
         let result = match value {
             Some(value) => RawTrieNodeWithSize::decode(&value),
-            None => warn!(target: "rocksdb-state-player", "couldn't decode rc from: {:?} {:?}", key, bytes);
+            None => {
+                warn!(target: "rocksdb-state-player", "couldn't decode rc from: {:?} {:?}", key, bytes);
+            }
         };
         match result {
             Ok(_) => {
                 nodes += 1;
                 store_update.set(DBCol::StateNode, &key, &bytes);
-            },
+            }
             Err(_) => {
                 values += 1;
                 store_update.set(DBCol::StateValue, &key, &bytes);
-            },
+            }
         }
     }
     store_update.commit().unwrap();
