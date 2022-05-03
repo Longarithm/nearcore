@@ -4556,6 +4556,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rocksdb-state-player"
+version = "0.0.0"
+dependencies = [
+ "near-chain-configs",
+ "near-o11y",
+ "near-store",
+ "nearcore",
+]
+
+[[package]]
 name = "runtime-params-estimator"
 version = "0.0.0"
 dependencies = [

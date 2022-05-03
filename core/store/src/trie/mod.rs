@@ -251,7 +251,7 @@ impl TrieNode {
 
 #[derive(Debug, Eq, PartialEq)]
 #[allow(clippy::large_enum_variant)]
-enum RawTrieNode {
+pub enum RawTrieNode {
     Leaf(Vec<u8>, u32, CryptoHash),
     Branch([Option<CryptoHash>; 16], Option<(u32, CryptoHash)>),
     Extension(Vec<u8>, CryptoHash),
@@ -260,7 +260,7 @@ enum RawTrieNode {
 /// Trie node + memory cost of its subtree
 /// memory_usage is serialized, stored, and contributes to hash
 #[derive(Debug, Eq, PartialEq)]
-struct RawTrieNodeWithSize {
+pub struct RawTrieNodeWithSize {
     node: RawTrieNode,
     memory_usage: u64,
 }
@@ -391,7 +391,7 @@ impl RawTrieNodeWithSize {
         Ok(out)
     }
 
-    fn decode(bytes: &[u8]) -> Result<Self, std::io::Error> {
+    pub fn decode(bytes: &[u8]) -> Result<Self, std::io::Error> {
         if bytes.len() < 8 {
             return Err(std::io::Error::new(std::io::ErrorKind::Other, "Wrong type"));
         }

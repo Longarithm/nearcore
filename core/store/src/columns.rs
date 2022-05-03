@@ -235,6 +235,8 @@ pub enum DBCol {
     StateChangesForSplitStates = 49,
 
     ColFlatState = 50,
+    StateNode = 51,
+    StateValue = 52,
 }
 
 impl DBCol {

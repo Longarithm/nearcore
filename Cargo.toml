@@ -46,6 +46,7 @@ members = [
     "tools/indexer/example",
     "tools/restaked",
     "tools/restored-receipts-verifier",
+    "tools/rocksdb-state-player",
     "tools/rpctypegen/core",
     "tools/rpctypegen/macro",
     "tools/state-viewer",
