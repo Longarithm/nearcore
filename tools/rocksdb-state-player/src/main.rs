@@ -32,6 +32,7 @@ fn main() -> std::io::Result<()> {
             Some(value) => value,
             None => {
                 warn!(target: "rocksdb-state-player", "couldn't decode rc from: {:?} {:?}", key, bytes);
+                continue;
             }
         };
         let result = RawTrieNodeWithSize::decode(result);
