@@ -530,6 +530,8 @@ fn choose_cache_size(col: DBCol, store_config: &StoreConfig) -> usize {
     match col {
         DBCol::State => store_config.col_state_cache_size,
         DBCol::ColFlatState => store_config.col_state_cache_size,
+        DBCol::StateNode => store_config.col_state_cache_size / 2,
+        DBCol::StateValue => store_config.col_state_cache_size / 2,
         _ => 32 * 1024 * 1024,
     }
 }
