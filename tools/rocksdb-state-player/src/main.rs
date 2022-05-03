@@ -12,7 +12,7 @@ fn main() -> std::io::Result<()> {
     let near_config = load_config(&home_dir, GenesisValidationMode::UnsafeFast)
         .unwrap_or_else(|e| panic!("Error loading config: {:#}", e));
     let store_path = get_store_path(&home_dir);
-    let store_config = &near_config.config.store.clone().with_read_only(true);
+    let store_config = &near_config.config.store.clone().with_read_only(false);
     let store = create_store_with_config(&store_path, store_config);
 
     let mut store_update = store.store_update();
