@@ -290,11 +290,12 @@ impl TrieStorage for TrieCachingStorage {
 
         // Try to get value from shard cache containing most recently touched nodes.
         let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
-        let col = match value_type {
-            ValueType::Value => DBCol::StateValue,
-            ValueType::Node => DBCol::StateNode,
-            ValueType::Any => DBCol::State,
-        };
+        let col = DBCol::State;
+        // let col = match value_type {
+        //     ValueType::Value => DBCol::StateValue,
+        //     ValueType::Node => DBCol::StateNode,
+        //     ValueType::Any => DBCol::State,
+        // };
 
         let val = match guard.get(hash) {
             Some(val) => val.clone(),
