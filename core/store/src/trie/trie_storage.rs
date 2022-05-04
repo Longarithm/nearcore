@@ -58,11 +58,19 @@ impl TrieCache {
     }
 }
 
+pub enum ValueType {
+    Node,
+    Value,
+    Any,
+};
+
 pub trait TrieStorage {
     /// Get bytes of a serialized TrieNode.
     /// # Errors
     /// StorageError if the storage fails internally or the hash is not present.
     fn retrieve_raw_bytes(&self, hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError>;
+
+    fn retrieve_raw_bytes_new(&self, hash: &CryptoHash, value_type: ValueType) -> Result<Arc<[u8]>, StorageError>;
 
     fn as_caching_storage(&self) -> Option<&TrieCachingStorage> {
         None
@@ -106,6 +114,10 @@ impl TrieStorage for TrieRecordingStorage {
         }
     }
 
+    fn retrieve_raw_bytes_new(&self, _hash: &CryptoHash, _value_type: ValueType) -> Result<Arc<[u8]>, StorageError> {
+        unimplemented!();
+    }
+
     fn as_recording_storage(&self) -> Option<&TrieRecordingStorage> {
         Some(self)
     }
@@ -132,6 +144,10 @@ impl TrieStorage for TrieMemoryPartialStorage {
             self.visited_nodes.borrow_mut().insert(*hash);
         }
         result
+    }
+
+    fn retrieve_raw_bytes_new(&self, _hash: &CryptoHash, _value_type: ValueType) -> Result<Arc<[u8]>, StorageError> {
+        unimplemented!();
     }
 
     fn as_partial_storage(&self) -> Option<&TrieMemoryPartialStorage> {
@@ -232,6 +248,10 @@ impl TrieCachingStorage {
 
 impl TrieStorage for TrieCachingStorage {
     fn retrieve_raw_bytes(&self, hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError> {
+        self.retrieve_raw_bytes_new(hash, ValueType::Any)
+    }
+
+    fn retrieve_raw_bytes_new(&self, hash: &CryptoHash, value_type: ValueType) -> Result<Arc<[u8]>, StorageError> {
         // let _span = tracing::debug_span!(target: "runtime", "retrieve_raw_bytes").entered();
 
         // Try to get value from chunk cache containing nodes with cheaper access. We can do it for any `TrieCacheMode`,
@@ -243,6 +263,12 @@ impl TrieStorage for TrieCachingStorage {
 
         // Try to get value from shard cache containing most recently touched nodes.
         let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
+        let col = match value_type {
+            ValueType::Value => DBCol::StateValue,
+            ValueType::Node => DBCol::StateNode,
+            ValueType::Any => DBCol::State,
+        };
+
         let val = match guard.get(hash) {
             Some(val) => val.clone(),
             None => {
@@ -250,7 +276,7 @@ impl TrieStorage for TrieCachingStorage {
                 let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
                 let val = self
                     .store
-                    .get(DBCol::State, key.as_ref())
+                    .get(col, key.as_ref())
                     .map_err(|_| StorageError::StorageInternalError)?
                     .ok_or_else(|| {
                         StorageError::StorageInconsistentState(format!(

@@ -1,5 +1,5 @@
 use crate::test_utils::{create_tries_complex, gen_changes, simplify_changes, test_populate_trie};
-use crate::trie::trie_storage::{TrieMemoryPartialStorage, TrieStorage};
+use crate::trie::trie_storage::{TrieMemoryPartialStorage, TrieStorage, ValueType};
 use crate::{PartialStorage, Trie, TrieUpdate};
 use near_primitives::errors::StorageError;
 use near_primitives::hash::{hash, CryptoHash};
@@ -48,6 +48,14 @@ impl TrieStorage for IncompletePartialStorage {
         } else {
             result
         }
+    }
+
+    fn retrieve_raw_bytes_new(
+        &self,
+        _hash: &CryptoHash,
+        _value_type: ValueType,
+    ) -> Result<Arc<[u8]>, StorageError> {
+        unimplemented!();
     }
 
     fn as_partial_storage(&self) -> Option<&TrieMemoryPartialStorage> {

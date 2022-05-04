@@ -17,7 +17,9 @@ use crate::trie::insert_delete::NodesStorage;
 use crate::trie::iterator::TrieIterator;
 use crate::trie::nibble_slice::NibbleSlice;
 pub use crate::trie::shard_tries::{KeyForStateChanges, ShardTries, WrappedTrieChanges};
-use crate::trie::trie_storage::{TrieMemoryPartialStorage, TrieRecordingStorage, TrieStorage};
+use crate::trie::trie_storage::{
+    TrieMemoryPartialStorage, TrieRecordingStorage, TrieStorage, ValueType,
+};
 use crate::{DBCol, StorageError};
 pub use near_primitives::types::TrieNodesCount;
 
@@ -634,7 +636,7 @@ impl Trie {
             if hash == Trie::empty_root() {
                 return Ok(None);
             }
-            let bytes = self.storage.retrieve_raw_bytes(&hash)?;
+            let bytes = self.storage.retrieve_raw_bytes_new(&hash, ValueType::Node)?;
             let node = RawTrieNodeWithSize::decode(&bytes).map_err(|_| {
                 StorageError::StorageInconsistentState("RawTrieNode decode failed".to_string())
             })?;
@@ -771,9 +773,10 @@ impl Trie {
 
     pub fn get(&self, root: &CryptoHash, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
         match self.get_ref(root, key, false)? {
-            Some((_length, hash)) => {
-                self.storage.retrieve_raw_bytes(&hash).map(|bytes| Some(bytes.to_vec()))
-            }
+            Some((_length, hash)) => self
+                .storage
+                .retrieve_raw_bytes_new(&hash, ValueType::Value)
+                .map(|bytes| Some(bytes.to_vec())),
             None => Ok(None),
         }
     }
