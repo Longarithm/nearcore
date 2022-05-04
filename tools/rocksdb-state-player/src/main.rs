@@ -27,7 +27,7 @@ fn main() -> std::io::Result<()> {
             store_update.commit().unwrap();
             store_update = store.store_update();
         }
-        let (value, _) = decode_value_with_rc(&bytes);
+        let (value, _rc) = decode_value_with_rc(&bytes);
         let result = match value {
             Some(value) => value,
             None => {
