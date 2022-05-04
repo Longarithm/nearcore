@@ -21,11 +21,12 @@ fn main() -> std::io::Result<()> {
     let store = create_store_with_config(&store_path, store_config);
 
     let debug_key_hash = from_base("8BnzDgiEQLztq7TNt99A2a4rvN2Kxa1yu7Me5MKNxeNo").unwrap();
-    let debug_hash: CryptoHash = debug_key_hash.into();
+    info!(target: "rocksdb-state-player", hash_len = debug_key_hash.len());
+
     let shard_uid = ShardUId { version: 1, shard_id: 1 };
     let mut debug_key = [0; 40];
     debug_key[0..8].copy_from_slice(&shard_uid.to_bytes());
-    debug_key[8..].copy_from_slice(debug_hash.as_ref());
+    debug_key[8..].copy_from_slice(debug_key_hash.as_ref());
 
     let expected: Vec<u8> = vec![
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 78, 69,
