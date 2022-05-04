@@ -686,6 +686,8 @@ impl Trie {
         key: &[u8],
         use_flat: bool,
     ) -> Result<Option<(u32, CryptoHash)>, StorageError> {
+        let _span = tracing::debug_span!(target: "runtime", "get_ref").entered();
+
         if use_flat {
             if let Some(storage) = self.storage.as_caching_storage() {
                 // let _span = tracing::debug_span!(target: "runtime", "get_ref").entered();
@@ -702,6 +704,9 @@ impl Trie {
                         result
                     }
                     None => {
+                        let _span =
+                            tracing::debug_span!(target: "runtime", "get_col_flat_state").entered();
+
                         let bytes_result = storage
                             .store
                             .get(DBCol::ColFlatState, key.as_ref())
@@ -762,8 +767,11 @@ impl Trie {
         }
 
         // let orig_key = key.clone();
-        let key = NibbleSlice::new(key);
-        let result = self.lookup(root, key);
+        let result = {
+            let _span = tracing::debug_span!(target: "runtime", "lookup").entered();
+            let key = NibbleSlice::new(key);
+            self.lookup(root, key)
+        };
         // match result.clone() {
         //     Ok(value) => tracing::debug!(target: "runtime", "lookup {:?} {:?}", orig_key, value),
         //     Err(_) => {}
