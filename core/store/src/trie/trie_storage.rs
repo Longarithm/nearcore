@@ -62,7 +62,7 @@ pub enum ValueType {
     Node,
     Value,
     Any,
-};
+}
 
 pub trait TrieStorage {
     /// Get bytes of a serialized TrieNode.
@@ -70,7 +70,11 @@ pub trait TrieStorage {
     /// StorageError if the storage fails internally or the hash is not present.
     fn retrieve_raw_bytes(&self, hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError>;
 
-    fn retrieve_raw_bytes_new(&self, hash: &CryptoHash, value_type: ValueType) -> Result<Arc<[u8]>, StorageError>;
+    fn retrieve_raw_bytes_new(
+        &self,
+        hash: &CryptoHash,
+        value_type: ValueType,
+    ) -> Result<Arc<[u8]>, StorageError>;
 
     fn as_caching_storage(&self) -> Option<&TrieCachingStorage> {
         None
@@ -114,7 +118,11 @@ impl TrieStorage for TrieRecordingStorage {
         }
     }
 
-    fn retrieve_raw_bytes_new(&self, _hash: &CryptoHash, _value_type: ValueType) -> Result<Arc<[u8]>, StorageError> {
+    fn retrieve_raw_bytes_new(
+        &self,
+        _hash: &CryptoHash,
+        _value_type: ValueType,
+    ) -> Result<Arc<[u8]>, StorageError> {
         unimplemented!();
     }
 
@@ -146,7 +154,11 @@ impl TrieStorage for TrieMemoryPartialStorage {
         result
     }
 
-    fn retrieve_raw_bytes_new(&self, _hash: &CryptoHash, _value_type: ValueType) -> Result<Arc<[u8]>, StorageError> {
+    fn retrieve_raw_bytes_new(
+        &self,
+        _hash: &CryptoHash,
+        _value_type: ValueType,
+    ) -> Result<Arc<[u8]>, StorageError> {
         unimplemented!();
     }
 
@@ -251,7 +263,11 @@ impl TrieStorage for TrieCachingStorage {
         self.retrieve_raw_bytes_new(hash, ValueType::Any)
     }
 
-    fn retrieve_raw_bytes_new(&self, hash: &CryptoHash, value_type: ValueType) -> Result<Arc<[u8]>, StorageError> {
+    fn retrieve_raw_bytes_new(
+        &self,
+        hash: &CryptoHash,
+        value_type: ValueType,
+    ) -> Result<Arc<[u8]>, StorageError> {
         // let _span = tracing::debug_span!(target: "runtime", "retrieve_raw_bytes").entered();
 
         // Try to get value from chunk cache containing nodes with cheaper access. We can do it for any `TrieCacheMode`,
