@@ -261,8 +261,8 @@ impl TrieCachingStorage {
 
 impl TrieStorage for TrieCachingStorage {
     fn retrieve_raw_bytes(&self, hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError> {
-        unimplemented!();
-        // self.retrieve_raw_bytes_new(hash, ValueType::Any)
+        // unimplemented!();
+        self.retrieve_raw_bytes_new(hash, ValueType::Any)
     }
 
     fn retrieve_raw_bytes_new(
@@ -271,14 +271,14 @@ impl TrieStorage for TrieCachingStorage {
         value_type: ValueType,
     ) -> Result<Arc<[u8]>, StorageError> {
         // let _span = tracing::debug_span!(target: "runtime", "retrieve_raw_bytes").entered();
-        let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
-        let val = self
-            .store
-            .get(DBCol::State, key.as_ref())
-            .map_err(|_| StorageError::StorageInternalError)?
-            .ok_or_else(|| {
-                StorageError::StorageInconsistentState(format!("Trie node missing: {}", hash))
-            })?;
+        // let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
+        // let val = self
+        //     .store
+        //     .get(DBCol::State, key.as_ref())
+        //     .map_err(|_| StorageError::StorageInternalError)?
+        //     .ok_or_else(|| {
+        //         StorageError::StorageInconsistentState(format!("Trie node missing: {}", hash))
+        //     })?;
         // tracing::debug!(target: "runtime", hash = ?hash, value_type = ?value_type, expected = ?val);
 
         // Try to get value from chunk cache containing nodes with cheaper access. We can do it for any `TrieCacheMode`,
