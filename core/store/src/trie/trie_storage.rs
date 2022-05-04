@@ -58,7 +58,7 @@ impl TrieCache {
     }
 }
 
-#[derive(Display, Debug)]
+#[derive(Debug)]
 pub enum ValueType {
     Node,
     Value,
@@ -271,6 +271,7 @@ impl TrieStorage for TrieCachingStorage {
         value_type: ValueType,
     ) -> Result<Arc<[u8]>, StorageError> {
         let _span = tracing::debug_span!(target: "runtime", "retrieve_raw_bytes").entered();
+        let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
         let val = self
             .store
             .get(DBCol::State, key.as_ref())
