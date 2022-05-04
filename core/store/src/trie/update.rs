@@ -125,7 +125,7 @@ impl TrieUpdate {
     pub fn finalize(self) -> Result<(TrieChanges, Vec<RawStateChangesWithTrieKey>), StorageError> {
         assert!(self.prospective.is_empty(), "Finalize cannot be called with uncommitted changes.");
         let TrieUpdate { trie, root, committed, .. } = self;
-        return Ok((TrieChanges::empty(root), vec![]));
+        // return Ok((TrieChanges::empty(root), vec![]));
         let mut state_changes = Vec::with_capacity(committed.len());
         // if let Some(caching_storage) = trie.storage.as_caching_storage() {
         //     let mut flat_storage =
