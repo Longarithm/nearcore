@@ -1,8 +1,10 @@
 use near_chain_configs::GenesisValidationMode;
 use near_o11y::tracing::{info, warn};
-use near_primitives_core::hash::hash;
+use near_primitives_core::hash::{hash, CryptoHash};
 use near_primitives_core::serialize::from_base;
-use near_store::{create_store_with_config, decode_value_with_rc, DBCol, RawTrieNodeWithSize};
+use near_store::{
+    create_store_with_config, decode_value_with_rc, DBCol, RawTrieNodeWithSize, ShardUId,
+};
 use nearcore::{get_default_home, get_store_path, load_config};
 use std::process::exit;
 
@@ -18,7 +20,13 @@ fn main() -> std::io::Result<()> {
     let store_config = &near_config.config.store.clone().with_read_only(false);
     let store = create_store_with_config(&store_path, store_config);
 
-    let debug_key = from_base("8BnzDgiEQLztq7TNt99A2a4rvN2Kxa1yu7Me5MKNxeNo").unwrap();
+    let debug_key_hash = from_base("8BnzDgiEQLztq7TNt99A2a4rvN2Kxa1yu7Me5MKNxeNo").unwrap();
+    let debug_hash: CryptoHash = debug_key_hash.into();
+    let shard_uid = ShardUId { version: 1, shard_id: 1 };
+    let mut debug_key = [0; 40];
+    debug_key[0..8].copy_from_slice(&shard_uid.to_bytes());
+    debug_key[8..].copy_from_slice(debug_hash.as_ref());
+
     let expected: Vec<u8> = vec![
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 78, 69,
         65, 82, 6, 0, 0, 0, 97, 117, 114, 111, 114, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
