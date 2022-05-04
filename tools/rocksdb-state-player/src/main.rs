@@ -1,5 +1,6 @@
 use near_chain_configs::GenesisValidationMode;
 use near_o11y::tracing::{info, warn};
+use near_primitives_core::hash::hash;
 use near_primitives_core::serialize::from_base;
 use near_store::{create_store_with_config, decode_value_with_rc, DBCol, RawTrieNodeWithSize};
 use nearcore::{get_default_home, get_store_path, load_config};
@@ -18,6 +19,13 @@ fn main() -> std::io::Result<()> {
     let store = create_store_with_config(&store_path, store_config);
 
     let debug_key = from_base("8BnzDgiEQLztq7TNt99A2a4rvN2Kxa1yu7Me5MKNxeNo").unwrap();
+    let expected: Vec<u8> = vec![
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 78, 69,
+        65, 82, 6, 0, 0, 0, 97, 117, 114, 111, 114, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let check_hash = hash(&expected);
+    info!(target: "rocksdb-state-player", hash = ?check_hash);
+
     let bytes = store.get(DBCol::State, &debug_key).unwrap().unwrap();
     let (value, _rc) = decode_value_with_rc(&bytes);
     let result = RawTrieNodeWithSize::decode(value.unwrap());
