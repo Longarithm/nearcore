@@ -36,8 +36,8 @@ fn main() -> std::io::Result<()> {
     info!(target: "rocksdb-state-player", hash = ?check_hash);
 
     let bytes = store.get(DBCol::State, &debug_key).unwrap().unwrap();
-    let (value, _rc) = decode_value_with_rc(&bytes);
-    let result = RawTrieNodeWithSize::decode(value.unwrap());
+    // let (value, _rc) = decode_value_with_rc(&bytes);
+    let result = RawTrieNodeWithSize::decode(&bytes);
     info!(target: "rocksdb-state-player", result = ?result);
     exit(0);
     // value_type=Value
