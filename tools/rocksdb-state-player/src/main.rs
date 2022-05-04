@@ -21,7 +21,7 @@ fn main() -> std::io::Result<()> {
     let bytes = store.get(DBCol::State, &debug_key).unwrap().unwrap();
     let (value, _rc) = decode_value_with_rc(&bytes);
     let result = RawTrieNodeWithSize::decode(value.unwrap());
-    info!(target: "rocksdb-state-player", result = result);
+    info!(target: "rocksdb-state-player", result = ?result);
     exit(0);
     // value_type=Value
     // expected=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 78, 69, 65, 82, 6, 0, 0, 0, 97, 117, 114, 111, 114, 97, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
