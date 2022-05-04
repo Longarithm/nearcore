@@ -260,7 +260,8 @@ impl TrieCachingStorage {
 
 impl TrieStorage for TrieCachingStorage {
     fn retrieve_raw_bytes(&self, hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError> {
-        self.retrieve_raw_bytes_new(hash, ValueType::Any)
+        unimplemented!();
+        // self.retrieve_raw_bytes_new(hash, ValueType::Any)
     }
 
     fn retrieve_raw_bytes_new(
