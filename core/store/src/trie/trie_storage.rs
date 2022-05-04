@@ -310,7 +310,25 @@ impl TrieStorage for TrieCachingStorage {
                             "Trie node missing: {}",
                             hash
                         ))
-                    })?;
+                    });
+                let val = match val {
+                    Ok(val) => val,
+                    Err(_) => match value_type {
+                        ValueType::Value => self
+                            .store
+                            .get(DBCol::StateNode, key.as_ref())
+                            .map_err(|_| StorageError::StorageInternalError)?
+                            .ok_or_else(|| {
+                                StorageError::StorageInconsistentState(format!(
+                                    "Trie node missing: {}",
+                                    hash
+                                ))
+                            })?,
+                        _ => {
+                            panic!("Trie node missing: {}", hash)
+                        }
+                    },
+                };
                 let val: Arc<[u8]> = val.into();
 
                 // Insert value to shard cache, if its size is small enough.
