@@ -270,9 +270,7 @@ impl TrieStorage for TrieCachingStorage {
         hash: &CryptoHash,
         value_type: ValueType,
     ) -> Result<Arc<[u8]>, StorageError> {
-        let _span =
-            tracing::debug_span!(target: "runtime", "retrieve_raw_bytes {} {}", hash, value_type)
-                .entered();
+        let _span = tracing::debug_span!(target: "runtime", "retrieve_raw_bytes").entered();
         let val = self
             .store
             .get(DBCol::State, key.as_ref())
