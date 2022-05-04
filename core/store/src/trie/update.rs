@@ -10,6 +10,7 @@ use crate::trie::{TrieChanges, POISONED_LOCK_ERR};
 use crate::StorageError;
 
 use super::{Trie, TrieIterator};
+use crate::trie::trie_storage::ValueType;
 use near_primitives::trie_key::TrieKey;
 use std::rc::Rc;
 
@@ -46,9 +47,10 @@ impl<'a> TrieUpdateValuePtr<'a> {
     pub fn deref_value(&self) -> Result<Vec<u8>, StorageError> {
         match self {
             TrieUpdateValuePtr::MemoryRef(value) => Ok((*value).clone()),
-            TrieUpdateValuePtr::HashAndSize(trie, _, hash) => {
-                trie.storage.retrieve_raw_bytes(hash).map(|bytes| bytes.to_vec())
-            }
+            TrieUpdateValuePtr::HashAndSize(trie, _, hash) => trie
+                .storage
+                .retrieve_raw_bytes_new(hash, ValueType::Value)
+                .map(|bytes| bytes.to_vec()),
         }
     }
 }
