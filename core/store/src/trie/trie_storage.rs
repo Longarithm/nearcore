@@ -270,7 +270,7 @@ impl TrieStorage for TrieCachingStorage {
         hash: &CryptoHash,
         value_type: ValueType,
     ) -> Result<Arc<[u8]>, StorageError> {
-        let _span = tracing::debug_span!(target: "runtime", "retrieve_raw_bytes").entered();
+        // let _span = tracing::debug_span!(target: "runtime", "retrieve_raw_bytes").entered();
         let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
         let val = self
             .store
@@ -279,7 +279,7 @@ impl TrieStorage for TrieCachingStorage {
             .ok_or_else(|| {
                 StorageError::StorageInconsistentState(format!("Trie node missing: {}", hash))
             })?;
-        tracing::debug!(target: "runtime", hash = ?hash, value_type = ?value_type, expected = ?val);
+        // tracing::debug!(target: "runtime", hash = ?hash, value_type = ?value_type, expected = ?val);
 
         // Try to get value from chunk cache containing nodes with cheaper access. We can do it for any `TrieCacheMode`,
         // because we charge for reading nodes only when `CachingChunk` mode is enabled anyway.
