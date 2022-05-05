@@ -419,15 +419,17 @@ pub fn apply_chain_range(
 
     if let Ok(mut counter) = store.latency_read.try_borrow_mut() {
         println!(
-            "reads: total: {} latency: {:?}",
+            "reads: total: {} mean: {} latency: {:?}",
             counter.0.total_count(),
+            (counter.0.sum() as f64) / counter.0.total_count(),
             counter.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
         );
     }
     if let Ok(mut counter) = store.latency_write.try_borrow_mut() {
         println!(
-            "writes: total: {} latency: {:?}",
+            "writes: total: {} mean: {} latency: {:?}",
             counter.0.total_count(),
+            (counter.0.sum() as f64) / counter.0.total_count(),
             counter.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
         );
     }
