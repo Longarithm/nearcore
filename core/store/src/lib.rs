@@ -52,16 +52,20 @@ pub struct Store {
     storage: Arc<dyn Database>,
 
     // for storage_[set|get]
-    pub latency_read: AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>,
-    pub latency_write: AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>,
+    pub latency_read: Arc<AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>>,
+    pub latency_write: Arc<AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>>,
 }
 
 impl Store {
     pub(crate) fn new(storage: Arc<dyn Database>) -> Store {
         Store {
             storage,
-            latency_read: AtomicRefCell::new((FastDistribution::new(0, 10_000), None, 0)),
-            latency_write: AtomicRefCell::new((FastDistribution::new(0, 10_000), None, 0)),
+            latency_read: Arc::new(AtomicRefCell::new((FastDistribution::new(0, 10_000), None, 0))),
+            latency_write: Arc::new(AtomicRefCell::new((
+                FastDistribution::new(0, 10_000),
+                None,
+                0,
+            ))),
         }
     }
 
