@@ -686,7 +686,7 @@ impl Trie {
         key: &[u8],
         use_flat: bool,
     ) -> Result<Option<(u32, CryptoHash)>, StorageError> {
-        let _span = tracing::debug_span!(target: "runtime", "get_ref").entered();
+        // let _span = tracing::debug_span!(target: "runtime", "get_ref").entered();
 
         if use_flat {
             if let Some(storage) = self.storage.as_caching_storage() {
@@ -704,8 +704,8 @@ impl Trie {
                         result
                     }
                     None => {
-                        let _span =
-                            tracing::debug_span!(target: "runtime", "get_col_flat_state").entered();
+                        // let _span =
+                        //     tracing::debug_span!(target: "runtime", "get_col_flat_state").entered();
 
                         let bytes_result = storage
                             .store
