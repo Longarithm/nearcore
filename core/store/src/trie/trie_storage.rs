@@ -9,7 +9,7 @@ use crate::trie::POISONED_LOCK_ERR;
 use crate::{DBCol, StorageError, Store};
 use lru::LruCache;
 use near_primitives::shard_layout::ShardUId;
-use near_primitives::types::{TrieCacheMode, TrieNodesCount};
+use near_primitives::types::{StoreEvent, TrieCacheMode, TrieNodesCount};
 use std::cell::{Cell, RefCell};
 use std::io::ErrorKind;
 
@@ -227,6 +227,18 @@ impl TrieCachingStorage {
     /// Set cache mode.
     pub fn set_mode(&self, state: TrieCacheMode) {
         self.cache_mode.set(state);
+    }
+
+    pub fn update_latency(&self, store_event: StoreEvent, latency_us: u128) {
+        let mut counter = match store_event {
+            StoreEvent::Read => self.store.latency_read.try_borrow_mut(),
+            StoreEvent::Write => self.store.latency_write.try_borrow_mut(),
+        };
+
+        if let Ok(mut counter) = counter {
+            let latency_us = std::cmp::min(10_000, latency_us);
+            let _ = counter.0.add(latency_us as i32);
+        }
     }
 }
 

@@ -15,7 +15,7 @@ use near_primitives_core::runtime::fees::{
     transfer_exec_fee, transfer_send_fee, RuntimeFeesConfig,
 };
 use near_primitives_core::types::{
-    AccountId, Balance, EpochHeight, Gas, ProtocolVersion, StorageUsage,
+    AccountId, Balance, EpochHeight, Gas, ProtocolVersion, StorageUsage, StoreEvent,
 };
 use near_primitives_core::types::{GasDistribution, GasWeight};
 use near_vm_errors::InconsistentStateError;
@@ -2306,7 +2306,7 @@ impl<'a> VMLogic<'a> {
         value_ptr: u64,
         register_id: u64,
     ) -> Result<u64> {
-        let _span = tracing::debug_span!(target: "runtime", "storage_write").entered();
+        let start_time = std::time::Instant::now();
 
         self.gas_counter.pay_base(base)?;
         if self.context.is_view() {
@@ -2341,6 +2341,8 @@ impl<'a> VMLogic<'a> {
         self.gas_counter.add_trie_fees(nodes_delta)?;
         self.ext.storage_set(&key, &value)?;
         let storage_config = &self.fees_config.storage_usage_config;
+        self.ext.update_latency(StoreEvent::Write, start_time.elapsed().as_micros());
+
         match evicted {
             Some(old_value) => {
                 // Inner value can't overflow, because the value length is limited.
@@ -2403,7 +2405,7 @@ impl<'a> VMLogic<'a> {
     /// `base + storage_read_base + storage_read_key_byte * num_key_bytes + storage_read_value_byte + num_value_bytes
     ///  cost to read key from register + cost to write value into register`.
     pub fn storage_read(&mut self, key_len: u64, key_ptr: u64, register_id: u64) -> Result<u64> {
-        let _span = tracing::debug_span!(target: "runtime", "storage_read").entered();
+        let start_time = std::time::Instant::now();
 
         self.gas_counter.pay_base(base)?;
         self.gas_counter.pay_base(storage_read_base)?;
@@ -2421,6 +2423,8 @@ impl<'a> VMLogic<'a> {
         let nodes_delta = self.ext.get_trie_nodes_count() - nodes_before;
         self.gas_counter.add_trie_fees(nodes_delta)?;
         let read = Self::deref_value(&mut self.gas_counter, storage_read_value_byte, read?)?;
+        self.ext.update_latency(StoreEvent::Read, start_time.elapsed().as_micros());
+
         match read {
             Some(value) => {
                 self.internal_write_register(register_id, value)?;
@@ -2450,8 +2454,6 @@ impl<'a> VMLogic<'a> {
     /// `base + storage_remove_base + storage_remove_key_byte * num_key_bytes + storage_remove_ret_value_byte * num_value_bytes
     /// + cost to read the key + cost to write the value`.
     pub fn storage_remove(&mut self, key_len: u64, key_ptr: u64, register_id: u64) -> Result<u64> {
-        let _span = tracing::debug_span!(target: "runtime", "storage_remove").entered();
-
         self.gas_counter.pay_base(base)?;
         if self.context.is_view() {
             return Err(
@@ -2508,8 +2510,6 @@ impl<'a> VMLogic<'a> {
     ///
     /// `base + storage_has_key_base + storage_has_key_byte * num_bytes + cost of reading key`
     pub fn storage_has_key(&mut self, key_len: u64, key_ptr: u64) -> Result<u64> {
-        let _span = tracing::debug_span!(target: "runtime", "storage_has_key").entered();
-
         self.gas_counter.pay_base(base)?;
         self.gas_counter.pay_base(storage_has_key_base)?;
         let key = self.get_vec_from_memory_or_register(key_ptr, key_len)?;

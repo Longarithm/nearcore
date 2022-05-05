@@ -7,7 +7,7 @@ use near_primitives::errors::{EpochError, StorageError};
 use near_primitives::hash::CryptoHash;
 use near_primitives::trie_key::{trie_key_parsers, TrieKey};
 use near_primitives::types::{
-    AccountId, Balance, EpochId, EpochInfoProvider, TrieCacheMode, TrieNodesCount,
+    AccountId, Balance, EpochId, EpochInfoProvider, StoreEvent, TrieCacheMode, TrieNodesCount,
 };
 use near_primitives::utils::create_data_id;
 use near_primitives::version::ProtocolVersion;
@@ -114,6 +114,12 @@ fn wrap_storage_error(error: StorageError) -> VMLogicError {
 type ExtResult<T> = ::std::result::Result<T, VMLogicError>;
 
 impl<'a> External for RuntimeExt<'a> {
+    fn update_latency(&mut self, store_event: StoreEvent, latency_us: u128) {
+        if let Some(caching_storage) = self.trie_update.trie.storage.as_caching_storage() {
+            caching_storage.update_latency(store_event, latency_us);
+        }
+    }
+
     fn storage_set(&mut self, key: &[u8], value: &[u8]) -> ExtResult<()> {
         let storage_key = self.create_storage_key(key);
         self.trie_update.set(storage_key, Vec::from(value));

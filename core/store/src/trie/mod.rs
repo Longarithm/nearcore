@@ -405,7 +405,7 @@ impl RawTrieNodeWithSize {
 }
 
 pub struct Trie {
-    pub(crate) storage: Box<dyn TrieStorage>,
+    pub storage: Box<dyn TrieStorage>,
 }
 
 /// Stores reference count change for some key-value pair in DB.

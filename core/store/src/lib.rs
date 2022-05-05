@@ -1,3 +1,4 @@
+use atomic_refcell::AtomicRefCell;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
@@ -20,6 +21,7 @@ use near_primitives::account::{AccessKey, Account};
 use near_primitives::contract::ContractCode;
 pub use near_primitives::errors::StorageError;
 use near_primitives::hash::CryptoHash;
+use near_primitives::math::FastDistribution;
 use near_primitives::receipt::{DelayedReceiptIndices, Receipt, ReceivedData};
 use near_primitives::serialize::to_base;
 pub use near_primitives::shard_layout::ShardUId;
@@ -48,11 +50,19 @@ mod trie;
 #[derive(Clone)]
 pub struct Store {
     storage: Arc<dyn Database>,
+
+    // for storage_[set|get]
+    pub latency_read: AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>,
+    pub latency_write: AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>,
 }
 
 impl Store {
     pub(crate) fn new(storage: Arc<dyn Database>) -> Store {
-        Store { storage }
+        Store {
+            storage,
+            latency_read: AtomicRefCell::new((FastDistribution::new(0, 10_000), None, 0)),
+            latency_write: AtomicRefCell::new((FastDistribution::new(0, 10_000), None, 0)),
+        }
     }
 
     pub fn get(&self, column: DBCol, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
