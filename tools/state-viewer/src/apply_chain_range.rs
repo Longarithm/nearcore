@@ -421,7 +421,7 @@ pub fn apply_chain_range(
         println!(
             "reads: total: {} mean: {} latency: {:?}",
             counter.0.total_count(),
-            (counter.0.sum() as f64) / counter.0.total_count(),
+            counter.0.sum() / counter.0.total_count(),
             counter.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
         );
     }
@@ -429,7 +429,7 @@ pub fn apply_chain_range(
         println!(
             "writes: total: {} mean: {} latency: {:?}",
             counter.0.total_count(),
-            (counter.0.sum() as f64) / counter.0.total_count(),
+            counter.0.sum() / counter.0.total_count(),
             counter.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
         );
     }
