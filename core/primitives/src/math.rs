@@ -28,6 +28,7 @@ impl FastDistribution {
         }
         let index = (value - self.min_val) as usize;
         self.count[index] += 1;
+        eprintln!("{} {}", index, self.count[index]);
         self.total_count += 1;
         Ok(())
     }
@@ -52,6 +53,7 @@ impl FastDistribution {
         let mut sum: u64 = 0;
         for i in 0..self.count.len() {
             sum += self.count[i];
+            eprintln!("{}", sum);
             while index < indexes.len() && sum >= indexes[index] {
                 result[index] = (percentiles[index], self.min_val + i as i32);
                 index += 1;

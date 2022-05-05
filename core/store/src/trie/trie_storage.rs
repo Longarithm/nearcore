@@ -265,7 +265,6 @@ impl TrieCachingStorage {
         };
 
         if let Ok(mut counter) = counter {
-            eprintln!("{}", latency_us);
             let latency_us = std::cmp::min(10_000, latency_us);
             let _ = counter.0.add(latency_us as i32);
         }
