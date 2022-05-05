@@ -178,7 +178,7 @@ impl TrieStorage for TrieMemoryPartialStorage {
 /// In our tests on a single shard, it barely occupied 40 MB, which is dominated by state cache size
 /// with 512 MB limit. The total RAM usage for a single shard was 1 GB.
 #[cfg(not(feature = "no_cache"))]
-const TRIE_MAX_SHARD_CACHE_SIZE: usize = 50000;
+const TRIE_MAX_SHARD_CACHE_SIZE: usize = 1;
 
 #[cfg(feature = "no_cache")]
 const TRIE_MAX_SHARD_CACHE_SIZE: usize = 1;
