@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct FastDistribution {
     min_val: i32,
     max_val: i32,
