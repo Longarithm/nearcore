@@ -1,7 +1,7 @@
 use crate::{External, ValuePtr};
 use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::types::TrieNodesCount;
-use near_primitives_core::types::{AccountId, Balance, Gas};
+use near_primitives_core::types::{AccountId, Balance, Gas, StoreEvent};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -46,6 +46,8 @@ use crate::dependencies::Result;
 use crate::types::PublicKey;
 
 impl External for MockedExternal {
+    fn update_latency(&mut self, _store_event: StoreEvent, _latency_us: u128) {}
+
     fn storage_set(&mut self, key: &[u8], value: &[u8]) -> Result<()> {
         self.fake_trie.insert(key.to_vec(), value.to_vec());
         Ok(())

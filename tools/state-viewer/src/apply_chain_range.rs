@@ -416,6 +416,21 @@ pub fn apply_chain_range(
         "No differences found after applying chunks in the range {}..={} for shard_id {}",
         start_height, end_height, shard_id
     );
+
+    if let Ok(mut counter) = store.latency_read.try_borrow_mut() {
+        println!(
+            "reads: total: {} latency: {:?}",
+            counter.0.total_count(),
+            counter.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
+        );
+    }
+    if let Ok(mut counter) = store.latency_write.try_borrow_mut() {
+        println!(
+            "writes: total: {} latency: {:?}",
+            counter.0.total_count(),
+            counter.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
+        );
+    }
 }
 
 /**

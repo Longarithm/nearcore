@@ -2,7 +2,7 @@
 
 use near_primitives::hash::CryptoHash;
 use near_primitives::types::TrieNodesCount;
-use near_primitives_core::types::{AccountId, Balance};
+use near_primitives_core::types::{AccountId, Balance, StoreEvent};
 use near_vm_errors::VMLogicError;
 
 /// An abstraction over the memory of the smart contract.
@@ -50,6 +50,8 @@ pub trait ValuePtr {
 
 /// An external blockchain interface for the Runtime logic
 pub trait External {
+    fn update_latency(&mut self, store_event: StoreEvent, latency_us: u128);
+
     /// Write `value` to the `key` of the storage trie associated with the current account.
     ///
     /// # Example

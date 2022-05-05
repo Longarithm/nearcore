@@ -1,3 +1,4 @@
+use atomic_refcell::AtomicRefCell;
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -22,6 +23,7 @@ use near_primitives::account::{AccessKey, Account};
 use near_primitives::contract::ContractCode;
 pub use near_primitives::errors::StorageError;
 use near_primitives::hash::CryptoHash;
+use near_primitives::math::FastDistribution;
 use near_primitives::receipt::{DelayedReceiptIndices, Receipt, ReceivedData};
 use near_primitives::serialize::to_base;
 pub use near_primitives::shard_layout::ShardUId;
@@ -52,11 +54,20 @@ mod trie;
 pub struct Store {
     storage: Arc<dyn Database>,
     pub flat_storage: Arc<RwLock<HashMap<Vec<u8>, Option<(u32, CryptoHash)>>>>,
+
+    // for storage_[set|get]
+    pub latency_read: AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>,
+    pub latency_write: AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>,
 }
 
 impl Store {
     pub(crate) fn new(storage: Arc<dyn Database>) -> Store {
-        Store { storage, flat_storage: Arc::new(RwLock::new(HashMap::new())) }
+        Store {
+            storage,
+            flat_storage: Arc::new(RwLock::new(HashMap::new())),
+            latency_read: AtomicRefCell::new((FastDistribution::new(0, 10_000), None, 0)),
+            latency_write: AtomicRefCell::new((FastDistribution::new(0, 10_000), None, 0)),
+        }
     }
 
     pub fn get(&self, column: DBCol, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
