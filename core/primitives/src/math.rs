@@ -43,7 +43,7 @@ impl FastDistribution {
     pub fn sum(&self) -> u64 {
         let mut sum = 0u64;
         for i in 0..self.count.len() {
-            sum += ((self.min_val + i) as u64) * self.count[i];
+            sum += ((self.min_val + i as i32) as u64) * self.count[i];
         }
         sum
     }
