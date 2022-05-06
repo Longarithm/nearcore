@@ -51,7 +51,7 @@ fn test_block_with_challenges() {
             left_block_header: vec![],
             right_block_header: vec![],
         });
-        let challenge = Challenge::produce(challenge_body, &signer);
+        let challenge = Challenge::produce(challenge_body, &*signer);
         body.challenges = vec![challenge];
         block.mut_header().resign(&*signer);
     }
