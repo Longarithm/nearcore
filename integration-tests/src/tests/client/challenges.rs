@@ -53,6 +53,8 @@ fn test_block_with_challenges() {
         });
         let challenge = Challenge::produce(challenge_body, &*signer);
         body.challenges = vec![challenge];
+        block.mut_header().get_mut().inner_rest.challenges_root =
+            Block::compute_challenges_root(&body.challenges);
         block.mut_header().resign(&*signer);
     }
 
