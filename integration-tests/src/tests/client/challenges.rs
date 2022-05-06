@@ -37,6 +37,30 @@ use nearcore::config::{GenesisExt, FISHERMEN_THRESHOLD};
 use nearcore::NightshadeRuntime;
 
 #[test]
+fn test_block_with_challenges() {
+    let mut env = TestEnv::builder(ChainGenesis::test()).build();
+    let mut block = env.clients[0].produce_block(1).unwrap().unwrap();
+    let signer = env.clients[0].validator_signer.as_ref().unwrap().clone();
+
+    {
+        let body = match &mut block {
+            Block::BlockV1(_) => unreachable!(),
+            Block::BlockV2(body) => body.as_mut(),
+        };
+        let challenge_body = ChallengeBody::BlockDoubleSign(BlockDoubleSign {
+            left_block_header: vec![],
+            right_block_header: vec![],
+        });
+        let challenge = Challenge::produce(challenge_body, &signer);
+        body.challenges = vec![challenge];
+        block.mut_header().resign(&*signer);
+    }
+
+    let (_, result) = env.clients[0].process_block(block.into(), Provenance::NONE);
+    assert!(result.is_ok());
+}
+
+#[test]
 fn test_verify_block_double_sign_challenge() {
     let mut env = TestEnv::builder(ChainGenesis::test()).clients_count(2).build();
     env.produce_block(0, 1);
