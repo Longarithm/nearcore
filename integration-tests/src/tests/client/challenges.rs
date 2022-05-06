@@ -63,9 +63,8 @@ fn test_block_with_challenges() {
     }
 
     let (_, result) = env.clients[0].process_block(block.into(), Provenance::NONE);
-    let error: Error = ErrorKind::InvalidChallengeRoot.into();
     eprintln!("{:?}", result);
-    assert_eq!(result.err(), Some(error));
+    assert_eq!(result.unwrap_err().kind(), ErrorKind::InvalidChallengeRoot);
 }
 
 #[test]
