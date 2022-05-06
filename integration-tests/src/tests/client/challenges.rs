@@ -36,6 +36,8 @@ use near_store::test_utils::create_test_store;
 use nearcore::config::{GenesisExt, FISHERMEN_THRESHOLD};
 use nearcore::NightshadeRuntime;
 
+/// Check that block containing a challenge is rejected.
+/// TODO (#2445): Enable challenges when they are working correctly.
 #[test]
 fn test_block_with_challenges() {
     init_test_logger();
