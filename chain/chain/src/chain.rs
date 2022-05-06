@@ -4681,6 +4681,10 @@ impl<'a> ChainUpdate<'a> {
             if &block_merkle_tree.root() != header.block_merkle_root() {
                 return Err(ErrorKind::InvalidBlockMerkleRoot.into());
             }
+
+            if header.challenges_root() != MerkleHash::default() {
+                return Err(ErrorKind::InvalidChallengeRoot.into());
+            }
         }
 
         Ok(())
