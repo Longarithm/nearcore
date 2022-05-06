@@ -4682,9 +4682,9 @@ impl<'a> ChainUpdate<'a> {
                 return Err(ErrorKind::InvalidBlockMerkleRoot.into());
             }
 
-            if header.challenges_root() != &MerkleHash::default() {
-                return Err(ErrorKind::InvalidChallengeRoot.into());
-            }
+            // if header.challenges_root() != &MerkleHash::default() {
+            //     return Err(ErrorKind::InvalidChallengeRoot.into());
+            // }
         }
 
         Ok(())
