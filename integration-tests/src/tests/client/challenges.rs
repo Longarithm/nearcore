@@ -57,6 +57,7 @@ fn test_block_with_challenges() {
     }
 
     let (_, result) = env.clients[0].process_block(block.into(), Provenance::NONE);
+    eprintln!("{:?}", result);
     assert!(result.is_ok());
 }
 
