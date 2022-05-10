@@ -386,21 +386,21 @@ pub fn apply_chain_range(
         "No differences found after applying chunks in the range {}..={} for shard_id {}",
         start_height, end_height, shard_id
     );
-    if let Ok(mut counter) = store.latency_read.try_borrow_mut() {
-        println!(
-            "reads: total: {} mean: {} latency: {:?}",
-            counter.0.total_count(),
-            counter.0.sum() / counter.0.total_count(),
-            counter.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
-        );
-    }
-    if let Ok(mut counter) = store.latency_write.try_borrow_mut() {
-        println!(
-            "writes: total: {} mean: {} latency: {:?}",
-            counter.0.total_count(),
-            counter.0.sum() / counter.0.total_count(),
-            counter.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
-        );
+    let mut counters = vec![
+        ("reads", store.latency_read.try_borrow_mut()),
+        ("writes", store.latency_write.try_borrow_mut()),
+        ("depth", store.depth.try_borrow_mut()),
+    ];
+    for (name, counter) in counters.drain(..) {
+        if let Ok(mut counter) = counter {
+            println!(
+                "{}: total: {} mean: {} latency: {:?}",
+                name,
+                counter.0.total_count(),
+                counter.0.sum() / counter.0.total_count(),
+                counter.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
+            );
+        }
     }
 }
 

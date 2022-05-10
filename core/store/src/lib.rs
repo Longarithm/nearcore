@@ -54,6 +54,7 @@ pub struct Store {
     // for storage_[set|get]
     pub latency_read: Arc<AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>>,
     pub latency_write: Arc<AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>>,
+    pub depth: Arc<AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>>,
 }
 
 impl Store {
@@ -66,6 +67,7 @@ impl Store {
                 None,
                 0,
             ))),
+            depth: Arc::new(AtomicRefCell::new((FastDistribution::new(0, 500), None, 0))),
         }
     }
 
