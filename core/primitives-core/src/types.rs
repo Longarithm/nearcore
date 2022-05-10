@@ -60,4 +60,5 @@ pub type ProtocolVersion = u32;
 pub enum StoreEvent {
     Read,
     Write,
+    CountDepth,
 }

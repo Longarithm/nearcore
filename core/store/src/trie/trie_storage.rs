@@ -262,6 +262,7 @@ impl TrieCachingStorage {
         let mut counter = match store_event {
             StoreEvent::Read => self.store.latency_read.try_borrow_mut(),
             StoreEvent::Write => self.store.latency_write.try_borrow_mut(),
+            StoreEvent::CountDepth => self.store.depth.try_borrow_mut(),
         };
 
         if let Ok(mut counter) = counter {

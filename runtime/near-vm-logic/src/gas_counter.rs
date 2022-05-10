@@ -272,7 +272,6 @@ impl GasCounter {
     }
 
     pub fn add_trie_fees(&mut self, count: TrieNodesCount) -> Result<()> {
-        eprintln!("depth = {}", count.mem_reads + count.db_reads);
         self.pay_per(touching_trie_node, count.db_reads)?;
         self.pay_per(read_cached_trie_node, count.mem_reads)?;
         Ok(())
