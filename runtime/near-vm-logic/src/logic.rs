@@ -2338,14 +2338,14 @@ impl<'a> VMLogic<'a> {
         let evicted =
             Self::deref_value(&mut self.gas_counter, storage_write_evicted_byte, evicted_ptr)?;
         let nodes_delta = self.ext.get_trie_nodes_count() - nodes_before;
+        self.gas_counter.add_trie_fees(nodes_delta.clone())?;
+        self.ext.storage_set(&key, &value)?;
+        let storage_config = &self.fees_config.storage_usage_config;
+        self.ext.update_latency(StoreEvent::Write, start_time.elapsed().as_micros());
         self.ext.update_latency(
             StoreEvent::CountDepth,
             (nodes_delta.mem_reads + nodes_delta.db_reads) as u128,
         );
-        self.gas_counter.add_trie_fees(nodes_delta)?;
-        self.ext.storage_set(&key, &value)?;
-        let storage_config = &self.fees_config.storage_usage_config;
-        self.ext.update_latency(StoreEvent::Write, start_time.elapsed().as_micros());
 
         match evicted {
             Some(old_value) => {
@@ -2425,13 +2425,13 @@ impl<'a> VMLogic<'a> {
         let nodes_before = self.ext.get_trie_nodes_count();
         let read = self.ext.storage_get(&key);
         let nodes_delta = self.ext.get_trie_nodes_count() - nodes_before;
+        self.gas_counter.add_trie_fees(nodes_delta.clone())?;
+        let read = Self::deref_value(&mut self.gas_counter, storage_read_value_byte, read?)?;
+        self.ext.update_latency(StoreEvent::Read, start_time.elapsed().as_micros());
         self.ext.update_latency(
             StoreEvent::CountDepth,
             (nodes_delta.mem_reads + nodes_delta.db_reads) as u128,
         );
-        self.gas_counter.add_trie_fees(nodes_delta)?;
-        let read = Self::deref_value(&mut self.gas_counter, storage_read_value_byte, read?)?;
-        self.ext.update_latency(StoreEvent::Read, start_time.elapsed().as_micros());
 
         match read {
             Some(value) => {
