@@ -32,8 +32,6 @@ near-primitives = { path = "../../core/primitives" }
 near-store = { path = "../../core/store" }
 
 [dev-dependencies]
-insta = "1"
-
 near-logger-utils = {path = "../../test-utils/logger"}
 
 [features]
