@@ -386,10 +386,12 @@ pub fn apply_chain_range(
         "No differences found after applying chunks in the range {}..={} for shard_id {}",
         start_height, end_height, shard_id
     );
+    let rocksdb = store.get_rocksdb().unwrap();
     let mut counters = vec![
         ("reads", store.latency_read.try_borrow_mut()),
         ("writes", store.latency_write.try_borrow_mut()),
         ("depth", store.depth.try_borrow_mut()),
+        ("latency_get", rocksdb.latency_get.try_borrow_mut()),
     ];
     for (name, counter) in counters.drain(..) {
         if let Ok(mut counter) = counter {
