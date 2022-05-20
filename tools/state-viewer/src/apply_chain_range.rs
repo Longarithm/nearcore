@@ -391,7 +391,7 @@ pub fn apply_chain_range(
     let mut occ_distribution = FastDistribution::new(0, 10_000);
     if let Ok(mut occ) = rocksdb.key_occurrences.try_borrow_mut() {
         for v in occ.values() {
-            occ_distribution.add(v as i32);
+            occ_distribution.add(*v as i32);
         }
     }
 
