@@ -269,7 +269,8 @@ impl Database for RocksDB {
                     start_time.elapsed().as_micros(),
                 );
                 if let Ok(mut occ) = self.key_occurrences.try_borrow_mut() {
-                    occ.entry(key.to_vec()).or_default() += 1;
+                    let mut val = occ.entry(key.to_vec()).or_default();
+                    val += 1;
                 }
             }
             _ => {}
