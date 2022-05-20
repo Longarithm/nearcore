@@ -270,7 +270,7 @@ impl Database for RocksDB {
                 );
                 if let Ok(mut occ) = self.key_occurrences.try_borrow_mut() {
                     let mut val = occ.entry(key.to_vec()).or_default();
-                    val += 1;
+                    *val += 1;
                 }
             }
             _ => {}
