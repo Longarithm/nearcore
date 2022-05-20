@@ -547,9 +547,9 @@ fn rocksdb_block_based_options(block_size: usize, cache_size: usize) -> BlockBas
     block_opts
 }
 
-fn choose_cache_size(col: DBCol, store_config: &StoreConfig) -> usize {
+fn choose_cache_size(col: DBCol, _store_config: &StoreConfig) -> usize {
     match col {
-        DBCol::State => store_config.col_state_cache_size,
+        DBCol::State => 1 * 1024 * 1024, //store_config.col_state_cache_size,
         _ => 32 * 1024 * 1024,
     }
 }
@@ -560,7 +560,7 @@ fn rocksdb_column_options(col: DBCol, store_config: &StoreConfig) -> Options {
     opts.set_level_compaction_dynamic_level_bytes(true);
     let cache_size = choose_cache_size(col, &store_config);
     opts.set_block_based_table_factory(&rocksdb_block_based_options(
-        1 * bytesize::KIB as usize, //store_config.block_size,
+        store_config.block_size,
         cache_size,
     ));
 
