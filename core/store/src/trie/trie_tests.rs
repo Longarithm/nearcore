@@ -50,14 +50,6 @@ impl TrieStorage for IncompletePartialStorage {
         }
     }
 
-    fn retrieve_raw_bytes_new(
-        &self,
-        _hash: &CryptoHash,
-        _value_type: ValueType,
-    ) -> Result<Arc<[u8]>, StorageError> {
-        unimplemented!();
-    }
-
     fn as_partial_storage(&self) -> Option<&TrieMemoryPartialStorage> {
         // Make sure it's not called - it pretends to be PartialStorage but is not
         unimplemented!()

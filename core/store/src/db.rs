@@ -109,7 +109,7 @@ pub struct RocksDB {
     check_free_space_counter: std::sync::atomic::AtomicU16,
     check_free_space_interval: u16,
     free_space_threshold: bytesize::ByteSize,
-    latency_get: AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>,
+    pub latency_get: AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>,
 
     // RAII-style of keeping track of the number of instances of RocksDB in a global variable.
     _instance_counter: InstanceCounter,
@@ -260,7 +260,13 @@ impl Database for RocksDB {
         let read_options = rocksdb_read_options();
         let result = self.db.get_cf_opt(unsafe { &*self.cfs[col as usize] }, key, &read_options)?;
         let result = Ok(RocksDB::get_with_rc_logic(col, result));
-        // self.update_latency_get_and_print_if_needed(start_time, start_time.elapsed().as_micros());
+        match col {
+            DBCol::State => self.update_latency_get_and_print_if_needed(
+                start_time,
+                start_time.elapsed().as_micros(),
+            ),
+            _ => {}
+        };
         result
     }
 
@@ -654,29 +660,29 @@ impl RocksDB {
             if latency_get.1.is_none() {
                 latency_get.1 = Some(current_time);
             }
-            let seconds_elapsed = latency_get.1.unwrap().elapsed().as_secs();
+            // let seconds_elapsed = latency_get.1.unwrap().elapsed().as_secs();
+            //
+            // if latency_us < 15 {
+            //     latency_get.2 += 1;
+            // } else {
+            let _ = latency_get.0.add(latency_us as i32);
+            // }
 
-            if latency_us < 15 {
-                latency_get.2 += 1;
-            } else {
-                let _ = latency_get.0.add(latency_us as i32);
-            }
-
-            let fast_calls = latency_get.2;
-            let slow_calls = latency_get.0.total_count();
-            if seconds_elapsed > 150 {
-                println!(
-                    "total: {} fast: {} slow: {} ratio: {:.2} slow latency: {:?}",
-                    fast_calls + slow_calls,
-                    fast_calls,
-                    slow_calls,
-                    fast_calls as f64 / slow_calls as f64,
-                    latency_get.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
-                );
-                latency_get.0.clear();
-                latency_get.1 = Some(current_time);
-                latency_get.2 = 0;
-            }
+            // let fast_calls = latency_get.2;
+            // let slow_calls = latency_get.0.total_count();
+            // if seconds_elapsed > 150 {
+            //     println!(
+            //         "total: {} fast: {} slow: {} ratio: {:.2} slow latency: {:?}",
+            //         fast_calls + slow_calls,
+            //         fast_calls,
+            //         slow_calls,
+            //         fast_calls as f64 / slow_calls as f64,
+            //         latency_get.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
+            //     );
+            //     latency_get.0.clear();
+            //     latency_get.1 = Some(current_time);
+            //     latency_get.2 = 0;
+            // }
         }
     }
 }

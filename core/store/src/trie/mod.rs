@@ -635,7 +635,7 @@ impl Trie {
             if hash == Trie::empty_root() {
                 return Ok(None);
             }
-            let bytes = self.storage.retrieve_raw_bytes_new(&hash, ValueType::Node)?;
+            let bytes = self.storage.retrieve_raw_bytes(&hash)?;
             let node = RawTrieNodeWithSize::decode(&bytes).map_err(|_| {
                 StorageError::StorageInconsistentState("RawTrieNode decode failed".to_string())
             })?;
@@ -779,10 +779,9 @@ impl Trie {
 
     pub fn get(&self, root: &CryptoHash, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
         match self.get_ref(root, key, false)? {
-            Some((_length, hash)) => self
-                .storage
-                .retrieve_raw_bytes_new(&hash, ValueType::Value)
-                .map(|bytes| Some(bytes.to_vec())),
+            Some((_length, hash)) => {
+                self.storage.retrieve_raw_bytes(&hash).map(|bytes| Some(bytes.to_vec()))
+            }
             None => Ok(None),
         }
     }
