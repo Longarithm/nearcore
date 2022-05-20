@@ -110,6 +110,7 @@ pub struct RocksDB {
     check_free_space_interval: u16,
     free_space_threshold: bytesize::ByteSize,
     pub latency_get: AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>,
+    pub key_occurrences: AtomicRefCell<HashMap<Vec<u8>, u64>>,
 
     // RAII-style of keeping track of the number of instances of RocksDB in a global variable.
     _instance_counter: InstanceCounter,
@@ -183,6 +184,7 @@ impl RocksDB {
             check_free_space_counter: std::sync::atomic::AtomicU16::new(0),
             free_space_threshold: bytesize::ByteSize::mb(16),
             latency_get: AtomicRefCell::new((FastDistribution::new(0, 10_000), None, 0)),
+            key_occurrences: Default::default(),
             _instance_counter: InstanceCounter::new(),
         })
     }
@@ -261,10 +263,15 @@ impl Database for RocksDB {
         let result = self.db.get_cf_opt(unsafe { &*self.cfs[col as usize] }, key, &read_options)?;
         let result = Ok(RocksDB::get_with_rc_logic(col, result));
         match col {
-            DBCol::State => self.update_latency_get_and_print_if_needed(
-                start_time,
-                start_time.elapsed().as_micros(),
-            ),
+            DBCol::State => {
+                self.update_latency_get_and_print_if_needed(
+                    start_time,
+                    start_time.elapsed().as_micros(),
+                );
+                if let Ok(mut occ) = self.key_occurrences.try_borrow_mut() {
+                    occ.entry(key.to_vec()).or_default() += 1;
+                }
+            }
             _ => {}
         };
         result
