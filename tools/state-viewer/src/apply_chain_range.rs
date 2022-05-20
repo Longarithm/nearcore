@@ -395,7 +395,7 @@ pub fn apply_chain_range(
             occ_distribution.add(*v as i32);
         }
     }
-    let occ_distribution = AtomicRefCell::new(occ_distribution);
+    let occ_distribution = AtomicRefCell::new((occ_distribution, None, 0));
 
     let mut counters = vec![
         ("storage_read call latency", store.latency_read.try_borrow_mut()),
