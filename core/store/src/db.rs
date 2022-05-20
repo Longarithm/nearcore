@@ -541,7 +541,7 @@ fn rocksdb_block_based_options(block_size: usize, cache_size: usize) -> BlockBas
 
 fn choose_cache_size(col: DBCol, _store_config: &StoreConfig) -> usize {
     match col {
-        DBCol::State => 1 * 1024 * 1024, // store_config.col_state_cache_size,
+        DBCol::State => store_config.col_state_cache_size,
         _ => 32 * 1024 * 1024,
     }
 }
