@@ -1,3 +1,4 @@
+use atomic_refcell::AtomicRefCell;
 use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -394,13 +395,14 @@ pub fn apply_chain_range(
             occ_distribution.add(*v as i32);
         }
     }
+    let occ_distribution = AtomicRefCell::new(occ_distribution);
 
     let mut counters = vec![
         ("storage_read call latency", store.latency_read.try_borrow_mut()),
         ("storage_write call latency", store.latency_write.try_borrow_mut()),
         ("depth", store.depth.try_borrow_mut()),
         ("latency_get", rocksdb.latency_get.try_borrow_mut()),
-        ("occ_distribution", occ_distribution),
+        ("occ_distribution", occ_distribution.try_borrow_mut()),
     ];
     for (name, counter) in counters.drain(..) {
         if let Ok(mut counter) = counter {
