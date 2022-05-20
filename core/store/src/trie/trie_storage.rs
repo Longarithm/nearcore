@@ -276,7 +276,7 @@ impl TrieStorage for TrieCachingStorage {
                             "Trie node missing: {}",
                             hash
                         ))
-                    });
+                    })?;
                 let val: Arc<[u8]> = val.into();
 
                 // Insert value to shard cache, if its size is small enough.
