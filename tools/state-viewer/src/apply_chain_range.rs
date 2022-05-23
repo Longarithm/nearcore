@@ -13,6 +13,7 @@ use near_chain::{ChainStore, ChainStoreAccess, ChainStoreUpdate, RuntimeAdapter}
 use near_chain_configs::Genesis;
 use near_primitives::borsh::maybestd::sync::Arc;
 use near_primitives::hash::CryptoHash;
+use near_primitives::math::FastDistribution;
 use near_primitives::receipt::DelayedReceiptIndices;
 use near_primitives::shard_layout::{account_id_to_shard_id, ShardLayout};
 use near_primitives::transaction::{
@@ -417,16 +418,24 @@ pub fn apply_chain_range(
         start_height, end_height, shard_id
     );
     let rocksdb = store.get_rocksdb().unwrap();
+    let mut occ_distribution = FastDistribution::new(0, 10_000);
+    if let Ok(mut occ) = rocksdb.key_occurrences.try_borrow_mut() {
+        for v in occ.values() {
+            occ_distribution.add(*v as i32);
+        }
+    }
+    let occ_distribution = AtomicRefCell::new((occ_distribution, None, 0));
     let mut counters = vec![
-        ("reads", store.latency_read.try_borrow_mut()),
-        ("writes", store.latency_write.try_borrow_mut()),
+        ("storage_read call latency", store.latency_read.try_borrow_mut()),
+        ("storage_write call latency", store.latency_write.try_borrow_mut()),
         ("depth", store.depth.try_borrow_mut()),
         ("latency_get", rocksdb.latency_get.try_borrow_mut()),
+        ("occ_distribution", occ_distribution.try_borrow_mut()),
     ];
     for (name, counter) in counters.drain(..) {
         if let Ok(mut counter) = counter {
             println!(
-                "{}: total: {} mean: {} latency: {:?}",
+                "{}: total: {} mean: {} value: {:?}",
                 name,
                 counter.0.total_count(),
                 counter.0.sum() / counter.0.total_count(),
