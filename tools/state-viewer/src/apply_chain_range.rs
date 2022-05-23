@@ -1,3 +1,4 @@
+use atomic_refcell::AtomicRefCell;
 use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};

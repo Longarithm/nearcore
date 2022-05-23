@@ -5047,6 +5047,7 @@ version = "0.0.0"
 dependencies = [
  "ansi_term",
  "anyhow",
+ "atomic_refcell",
  "borsh",
  "clap 3.1.6",
  "near-chain",
