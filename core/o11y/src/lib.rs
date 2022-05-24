@@ -2,8 +2,12 @@
 
 pub use {backtrace, tracing, tracing_appender, tracing_subscriber};
 
+use clap::lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 use std::borrow::Cow;
+use std::fs::File;
+use std::io::Write;
+use std::sync::Mutex;
 use tracing_appender::non_blocking::NonBlocking;
 use tracing_subscriber::filter::ParseError;
 use tracing_subscriber::fmt::format::{DefaultFields, Format};
@@ -13,6 +17,29 @@ use tracing_subscriber::layer::Layered;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::reload::{Error, Handle};
 use tracing_subscriber::{EnvFilter, Registry};
+
+pub struct StorageLogger {
+    file: File,
+}
+
+impl StorageLogger {
+    pub fn new() -> Self {
+        return Self { file: File::create("/tmp/storage.log").unwrap() };
+    }
+
+    pub fn write(&mut self, value: serde_json::Value) {
+        self.file.write(value.to_string().as_bytes());
+        self.file.write(b"\n");
+    }
+}
+
+lazy_static! {
+    static ref STORAGE_LOGGER: Mutex<StorageLogger> = Mutex::new(StorageLogger::new());
+}
+
+pub fn storage_log(value: serde_json::Value) {
+    STORAGE_LOGGER.lock().unwrap().write(value);
+}
 
 static ENV_FILTER_RELOAD_HANDLE: OnceCell<
     Handle<EnvFilter, Layered<Layer<Registry, DefaultFields, Format, NonBlocking>, Registry>>,

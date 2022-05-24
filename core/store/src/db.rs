@@ -2,6 +2,7 @@ use super::StoreConfig;
 use crate::db::refcount::merge_refcounted_records;
 use crate::{metrics, DBCol};
 use atomic_refcell::AtomicRefCell;
+use near_o11y::storage_log;
 use near_primitives::math::FastDistribution;
 use near_primitives::version::DbVersion;
 use once_cell::sync::Lazy;
@@ -10,6 +11,7 @@ use rocksdb::{
     BlockBasedOptions, Cache, ColumnFamily, ColumnFamilyDescriptor, Direction, Env, IteratorMode,
     Options, ReadOptions, WriteBatch, DB,
 };
+use serde_json::json;
 use std::collections::HashMap;
 use std::io;
 use std::path::Path;
@@ -293,6 +295,7 @@ impl Database for RocksDB {
     fn get(&self, col: DBCol, key: &[u8]) -> Result<Option<Vec<u8>>, DBError> {
         let timer =
             metrics::DATABASE_OP_LATENCY_HIST.with_label_values(&["get", col.into()]).start_timer();
+        storage_log(json!({"method": "rocksdb_get", "key": key}));
 
         let start_time = std::time::Instant::now();
         let read_options = rocksdb_read_options();

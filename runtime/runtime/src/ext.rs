@@ -1,5 +1,7 @@
+use serde_json::json;
 use std::sync::Arc;
 
+use near_o11y::storage_log;
 use tracing::debug;
 
 use near_primitives::contract::ContractCode;
@@ -128,6 +130,9 @@ impl<'a> External for RuntimeExt<'a> {
 
     fn storage_get<'b>(&'b self, key: &[u8]) -> ExtResult<Option<Box<dyn ValuePtr + 'b>>> {
         let storage_key = self.create_storage_key(key);
+
+        storage_log(json!({"method": "storage_get", "key": key.to_vec()}));
+
         self.trie_update
             .get_ref(&storage_key, false)
             .map_err(wrap_storage_error)
