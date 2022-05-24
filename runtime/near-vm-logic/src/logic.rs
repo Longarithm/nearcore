@@ -7,6 +7,7 @@ use crate::utils::split_method_names;
 use crate::{ReceiptMetadata, ValuePtr};
 use byteorder::ByteOrder;
 use near_crypto::Secp256K1Signature;
+use near_o11y::storage_log;
 use near_primitives::version::is_implicit_account_creation_enabled;
 use near_primitives_core::config::ExtCosts::*;
 use near_primitives_core::config::{ActionCosts, ExtCosts, VMConfig, ViewConfig};
@@ -20,6 +21,7 @@ use near_primitives_core::types::{
 use near_primitives_core::types::{GasDistribution, GasWeight};
 use near_vm_errors::InconsistentStateError;
 use near_vm_errors::{HostError, VMLogicError};
+use serde_json::json;
 use std::collections::HashMap;
 use std::mem::size_of;
 
@@ -2331,6 +2333,9 @@ impl<'a> VMLogic<'a> {
             }
             .into());
         }
+
+        storage_log(json!({"method": "storage_write", "key": key}));
+
         let value = self.get_vec_from_memory_or_register(value_ptr, value_len)?;
         if value.len() as u64 > self.config.limit_config.max_length_storage_value {
             return Err(HostError::ValueLengthExceeded {
@@ -2414,6 +2419,9 @@ impl<'a> VMLogic<'a> {
         self.gas_counter.pay_base(base)?;
         self.gas_counter.pay_base(storage_read_base)?;
         let key = self.get_vec_from_memory_or_register(key_ptr, key_len)?;
+
+        storage_log(json!({"method": "storage_read", "key": key}));
+
         if key.len() as u64 > self.config.limit_config.max_length_storage_key {
             return Err(HostError::KeyLengthExceeded {
                 length: key.len() as u64,
