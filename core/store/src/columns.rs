@@ -13,8 +13,10 @@ use strum::{EnumCount, IntoEnumIterator};
     Eq,
     BorshDeserialize,
     BorshSerialize,
+    enum_map::Enum,
     strum::EnumCount,
     strum::EnumIter,
+    strum::IntoStaticStr,
 )]
 pub enum DBCol {
     /// Column to indicate which version of database this is.
@@ -127,7 +129,7 @@ pub enum DBCol {
     /// - *Rows*: EpochId (CryptoHash)
     /// - *Content type*: LightClientBlockView
     EpochLightClientBlocks = 26,
-    /// Mapping from Receipt id to Shard id
+    /// Mapping from Receipt id to destination Shard Id, i.e, the shard that this receipt is sent to.
     /// - *Rows*: ReceiptId (CryptoHash)
     /// - *Content type*: Shard Id || ref_count (u64 || u64)
     ReceiptIdToShardId = 27,
@@ -332,7 +334,8 @@ const RC_COLUMNS: [bool; DBCol::COUNT] = col_set(&[
     DBCol::StateValue,
 ]);
 
-const INSERT_ONLY_COLUMNS: [bool; DBCol::COUNT] = col_set(&[DBCol::BlockInfo]);
+const INSERT_ONLY_COLUMNS: [bool; DBCol::COUNT] =
+    col_set(&[DBCol::BlockInfo, DBCol::ChunkPerHeightShard, DBCol::Chunks, DBCol::InvalidChunks]);
 
 const fn col_set(cols: &[DBCol]) -> [bool; DBCol::COUNT] {
     let mut res = [false; DBCol::COUNT];
