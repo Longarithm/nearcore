@@ -104,8 +104,8 @@ impl StoreConfig {
         match col {
             crate::DBCol::State => self.col_state_cache_size,
             crate::DBCol::ColFlatState => self.col_state_cache_size,
-            crate::DBCol::StateNode => self.col_state_cache_size / 2,
-            crate::DBCol::StateValue => self.col_state_cache_size / 2,
+            crate::DBCol::StateNode => bytesize::ByteSize::mib(256),
+            crate::DBCol::StateValue => bytesize::ByteSize::mib(256),
             _ => bytesize::ByteSize::mib(32),
         }
     }
