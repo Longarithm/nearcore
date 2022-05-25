@@ -312,7 +312,7 @@ fn apply_block_from_range(
         if key_shard_id == shard_id {
             let value = raw_changes.changes.last().unwrap().data.clone();
             match &trie_key {
-                TrieKey::ContractData{_, _} => {
+                TrieKey::ContractData => {
                     trie_changes_log(json!({"key": key, "value": value}));
                 }
                 _ => {}
