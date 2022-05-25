@@ -1,6 +1,8 @@
 use borsh::{BorshDeserialize, BorshSerialize};
+use serde_json::json;
 
 use near_crypto::PublicKey;
+use near_o11y::storage_log;
 use near_primitives::account::{AccessKey, AccessKeyPermission, Account};
 use near_primitives::checked_feature;
 use near_primitives::contract::ContractCode;
@@ -103,6 +105,7 @@ pub(crate) fn execute_function_call(
     // charge only for trie nodes touched during function calls.
     // TODO (#5920): Consider using RAII for switching the state back
     let protocol_version = runtime_ext.protocol_version();
+    storage_log(json!({"method": "funcall_begin"}));
     if checked_feature!("stable", ChunkNodesCache, protocol_version) {
         runtime_ext.set_trie_cache_mode(TrieCacheMode::CachingChunk);
     }
@@ -120,6 +123,7 @@ pub(crate) fn execute_function_call(
     if checked_feature!("stable", ChunkNodesCache, protocol_version) {
         runtime_ext.set_trie_cache_mode(TrieCacheMode::CachingShard);
     }
+    storage_log(json!({"method": "funcall_end"}));
 
     result
 }
