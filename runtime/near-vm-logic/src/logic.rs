@@ -2336,8 +2336,6 @@ impl<'a> VMLogic<'a> {
             .into());
         }
 
-        storage_log(json!({"method": "storage_write", "key": key}));
-
         let value = self.get_vec_from_memory_or_register(value_ptr, value_len)?;
         if value.len() as u64 > self.config.limit_config.max_length_storage_value {
             return Err(HostError::ValueLengthExceeded {
@@ -2346,6 +2344,9 @@ impl<'a> VMLogic<'a> {
             }
             .into());
         }
+
+        storage_log(json!({"method": "storage_write", "key": key, "value": value}));
+
         self.gas_counter.pay_per(storage_write_key_byte, key.len() as u64)?;
         self.gas_counter.pay_per(storage_write_value_byte, value.len() as u64)?;
         let nodes_before = self.ext.get_trie_nodes_count();
