@@ -544,6 +544,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
 dependencies = [
+ "block-padding",
  "generic-array 0.14.5",
 ]
 
@@ -555,6 +556,12 @@ checksum = "0bf7fe51849ea569fd452f37822f606a5cabb684dc918707a0193fd4664ff324"
 dependencies = [
  "generic-array 0.14.5",
 ]
+
+[[package]]
+name = "block-padding"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "borsh"
@@ -1483,9 +1490,9 @@ dependencies = [
 
 [[package]]
 name = "enum-map"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0348b2a57c82f98b9dbd8098b1abb2416f221823d3e50cbe24eaebdd16896826"
+checksum = "3292946788970fbf6b2c7427df60d9f8ddcbfce53a1c692d136703e885da9e24"
 dependencies = [
  "enum-map-derive",
 ]
@@ -2862,7 +2869,7 @@ dependencies = [
  "rand_core 0.5.1",
  "serde",
  "serde_json",
- "sha2 0.10.2",
+ "sha2 0.9.9",
  "subtle",
  "thiserror",
 ]
@@ -3352,7 +3359,7 @@ dependencies = [
  "arbitrary",
  "once_cell",
  "rand 0.8.5",
- "wasm-encoder",
+ "wasm-encoder 0.11.0",
  "wasm-smith",
  "wat",
 ]
@@ -3385,7 +3392,7 @@ dependencies = [
  "ripemd",
  "serde",
  "serde_json",
- "sha2 0.10.2",
+ "sha2 0.9.9",
  "sha3",
  "tracing",
  "zeropool-bn",
@@ -5181,12 +5188,14 @@ dependencies = [
 
 [[package]]
 name = "sha3"
-version = "0.10.1"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "881bf8156c87b6301fc5ca6b27f11eeb2761224c7081e69b409d5a1951a70c86"
+checksum = "f81199417d4e5de3f04b1e871023acea7389672c4135918f05aa9cbf2f2fa809"
 dependencies = [
- "digest 0.10.3",
+ "block-buffer 0.9.0",
+ "digest 0.9.0",
  "keccak",
+ "opaque-debug",
 ]
 
 [[package]]
@@ -6106,17 +6115,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-smith"
-version = "0.10.0"
+name = "wasm-encoder"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50b4138c138f975e29dbd3ceea3a8d3ea2bb43f71abd4b236640d0cb14cb8ef7"
+checksum = "2b47b995b096a689358ca9de6c727b94351b95b390dbbf6b7021c22797d36caa"
+dependencies = [
+ "leb128",
+]
+
+[[package]]
+name = "wasm-smith"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb87569c81c298836d88405a28a68e8dfcd43b75220a4b4522831a63921b7dbc"
 dependencies = [
  "arbitrary",
  "flagset",
  "indexmap",
  "leb128",
- "wasm-encoder",
- "wasmparser 0.84.0",
+ "wasm-encoder 0.12.0",
+ "wasmparser 0.85.0",
 ]
 
 [[package]]
@@ -6322,6 +6340,15 @@ name = "wasmparser"
 version = "0.84.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77dc97c22bb5ce49a47b745bed8812d30206eff5ef3af31424f2c1820c0974b2"
+dependencies = [
+ "indexmap",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.85.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "570460c58b21e9150d2df0eaaedbb7816c34bcec009ae0dcc976e40ba81463e7"
 dependencies = [
  "indexmap",
 ]
