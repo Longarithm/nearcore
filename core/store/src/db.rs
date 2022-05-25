@@ -295,7 +295,6 @@ impl Database for RocksDB {
     fn get(&self, col: DBCol, key: &[u8]) -> Result<Option<Vec<u8>>, DBError> {
         let timer =
             metrics::DATABASE_OP_LATENCY_HIST.with_label_values(&["get", col.into()]).start_timer();
-        storage_log(json!({"method": "rocksdb_get", "key": key}));
 
         let start_time = std::time::Instant::now();
         let read_options = rocksdb_read_options();
@@ -311,6 +310,7 @@ impl Database for RocksDB {
                     let val = occ.entry(key.to_vec()).or_default();
                     *val += 1;
                 }
+                storage_log(json!({"method": "rocksdb_get", "key": key}));
             }
             _ => {}
         };
