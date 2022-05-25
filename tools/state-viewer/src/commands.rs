@@ -498,11 +498,12 @@ pub(crate) fn apply_block_at_height(
 pub(crate) fn dump_state_records(home_dir: &Path, near_config: NearConfig, store: Store) {
     let (runtime, state_roots, header) = load_trie(store, home_dir, &near_config);
     println!("Storage roots are {:?}, block height is {}", state_roots, header.height());
-    eprintln!("shard_id,num_items_read,sum_value_sizes,node_sizes,");
+    eprintln!("shard_id,num_items_read,sum_value_sizes,node_sizes,root_mem_usage");
 
     state_roots.into_par_iter().enumerate().for_each(|(shard_id, state_root)| {
         let start = Instant::now();
         let trie = runtime.get_trie_for_shard(shard_id as u64, header.prev_hash()).unwrap();
+        let root_node = trie.retrieve_root_node(&state_root).unwrap();
         let mut node_sizes = Rc::new(Cell::new(0u64));
         let mut trie =
             TrieIterator::new_with_counters(&trie, &state_root, node_sizes.clone()).unwrap();
@@ -513,7 +514,14 @@ pub(crate) fn dump_state_records(home_dir: &Path, near_config: NearConfig, store
         let took = start.elapsed();
         eprintln!("took {} s on shard {:?}", shard_id, took);
         // I messed up extensions and leaves!
-        eprintln!("{},{},{},{},", shard_id, num_items_read, sum_sizes, node_sizes.get());
+        eprintln!(
+            "{},{},{},{},{}",
+            shard_id,
+            num_items_read,
+            sum_sizes,
+            node_sizes.get(),
+            root_node.memory_usage
+        );
     });
 }
 
