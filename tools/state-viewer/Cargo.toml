@@ -33,6 +33,7 @@ near-primitives-core = { path = "../../core/primitives-core" }
 near-store = { path = "../../core/store" }
 nearcore = { path = "../../nearcore" }
 node-runtime = { path = "../../runtime/runtime" }
+near-o11y = { path = "../../core/o11y" }
 
 
 [dev-dependencies]

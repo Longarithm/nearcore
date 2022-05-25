@@ -5312,6 +5312,7 @@ dependencies = [
  "near-epoch-manager",
  "near-logger-utils",
  "near-network",
+ "near-o11y",
  "near-primitives",
  "near-primitives-core",
  "near-store",

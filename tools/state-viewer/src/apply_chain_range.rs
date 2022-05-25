@@ -12,6 +12,7 @@ use near_chain::migrations::check_if_block_is_first_with_chunk_of_version;
 use near_chain::types::ApplyTransactionResult;
 use near_chain::{ChainStore, ChainStoreAccess, ChainStoreUpdate, RuntimeAdapter};
 use near_chain_configs::Genesis;
+use near_o11y::trie_changes_log;
 use near_primitives::borsh::maybestd::sync::Arc;
 use near_primitives::hash::CryptoHash;
 use near_primitives::math::FastDistribution;
@@ -27,6 +28,7 @@ use near_primitives::types::{BlockHeight, RawStateChangesWithTrieKey, ShardId, S
 use near_primitives_core::hash::hash;
 use near_store::{get, DBCol, KeyForStateChanges, Store};
 use nearcore::NightshadeRuntime;
+use serde_json::json;
 
 fn timestamp() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -309,6 +311,13 @@ fn apply_block_from_range(
         let key_shard_id = account_id_to_shard_id(&account, &shard_layout);
         if key_shard_id == shard_id {
             let value = raw_changes.changes.last().unwrap().data.clone();
+            match &trie_key {
+                TrieKey::ContractData(_, _) => {
+                    trie_changes_log(json!({"key": key, "value": value}));
+                }
+                _ => {}
+            };
+
             let flat_value = match value {
                 None => None,
                 Some(value) => Some((value.len() as u32, hash(&value))),
