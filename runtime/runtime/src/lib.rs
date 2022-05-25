@@ -1,3 +1,4 @@
+use serde_json::json;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -8,6 +9,7 @@ use tracing::debug;
 use near_chain_configs::Genesis;
 pub use near_crypto;
 use near_crypto::PublicKey;
+use near_o11y::storage_log;
 pub use near_primitives;
 #[cfg(feature = "sandbox")]
 use near_primitives::contract::ContractCode;
@@ -1255,6 +1257,8 @@ impl Runtime {
             outcomes.push(outcome_with_id);
         }
 
+        storage_log(json!({"method": "process_begin"}));
+
         let mut delayed_receipts_indices: DelayedReceiptIndices =
             get(&state_update, &TrieKey::DelayedReceiptIndices)?.unwrap_or_default();
         let initial_delayed_receipt_indices = delayed_receipts_indices.clone();
@@ -1302,6 +1306,8 @@ impl Runtime {
                 Self::delay_receipt(&mut state_update, &mut delayed_receipts_indices, receipt)?;
             }
         }
+
+        storage_log(json!({"method": "process_end"}));
 
         // Then we process the delayed receipts. It's a backlog of receipts from the past blocks.
         while delayed_receipts_indices.first_index < delayed_receipts_indices.next_available_index {

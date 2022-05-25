@@ -123,6 +123,14 @@ pub(crate) fn execute_function_call(
     if checked_feature!("stable", ChunkNodesCache, protocol_version) {
         runtime_ext.set_trie_cache_mode(TrieCacheMode::CachingShard);
     }
+    match &result {
+        VMResult::Ok(_) => {
+            storage_log(json!({"method": "funcall_ok"}));
+        }
+        VMResult::Aborted(_, _) => {
+            storage_log(json!({"method": "funcall_error"}));
+        }
+    }
     storage_log(json!({"method": "funcall_end"}));
 
     result
