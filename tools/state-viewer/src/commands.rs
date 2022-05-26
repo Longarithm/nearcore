@@ -507,9 +507,9 @@ pub(crate) fn dump_state_records(home_dir: &Path, near_config: NearConfig, store
         let mut node_sizes = Rc::new(Cell::new(0u64));
         let mut trie =
             TrieIterator::new_with_counters(&trie, &state_root, node_sizes.clone()).unwrap();
-        let (num_items_read, sum_sizes) =
-            trie.fold((0u64, 0u64), |(num_items_read, sum_sizes), item| {
-                (num_items_read + 1, sum_sizes + item.unwrap().1.len() as u64)
+        let (num_items_read, sum_value_sizes) =
+            trie.fold((0u64, 0u64), |(num_items_read, sum_value_sizes), item| {
+                (num_items_read + 1, sum_value_sizes + item.unwrap().1.len() as u64)
             });
         let took = start.elapsed();
         eprintln!("took {} s on shard {:?}", shard_id, took);
@@ -518,7 +518,7 @@ pub(crate) fn dump_state_records(home_dir: &Path, near_config: NearConfig, store
             "{},{},{},{},{}",
             shard_id,
             num_items_read,
-            sum_sizes,
+            sum_value_sizes,
             node_sizes.get(),
             root_node.memory_usage
         );
