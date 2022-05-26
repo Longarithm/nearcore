@@ -2333,9 +2333,6 @@ impl<'a> VMLogic<'a> {
             }
             .into());
         }
-
-        storage_log(json!({"method": "storage_write", "key": key}));
-
         let value = self.get_vec_from_memory_or_register(value_ptr, value_len)?;
         if value.len() as u64 > self.config.limit_config.max_length_storage_value {
             return Err(HostError::ValueLengthExceeded {
@@ -2344,6 +2341,9 @@ impl<'a> VMLogic<'a> {
             }
             .into());
         }
+
+        storage_log(json!({"method": "storage_write", "key": key, "value": value}));
+
         self.gas_counter.pay_per(storage_write_key_byte, key.len() as u64)?;
         self.gas_counter.pay_per(storage_write_value_byte, value.len() as u64)?;
         let nodes_before = self.ext.get_trie_nodes_count();
@@ -2416,11 +2416,11 @@ impl<'a> VMLogic<'a> {
     /// `base + storage_read_base + storage_read_key_byte * num_key_bytes + storage_read_value_byte + num_value_bytes
     ///  cost to read key from register + cost to write value into register`.
     pub fn storage_read(&mut self, key_len: u64, key_ptr: u64, register_id: u64) -> Result<u64> {
+        storage_log(json!({"method": "storage_read_begin"}));
+
         self.gas_counter.pay_base(base)?;
         self.gas_counter.pay_base(storage_read_base)?;
         let key = self.get_vec_from_memory_or_register(key_ptr, key_len)?;
-
-        storage_log(json!({"method": "storage_read", "key": key}));
 
         if key.len() as u64 > self.config.limit_config.max_length_storage_key {
             return Err(HostError::KeyLengthExceeded {
@@ -2437,10 +2437,17 @@ impl<'a> VMLogic<'a> {
         let read = Self::deref_value(&mut self.gas_counter, storage_read_value_byte, read?)?;
         match read {
             Some(value) => {
+                storage_log(
+                    json!({"method": "storage_read_end", "key": key, "value": hash(&value)}),
+                );
                 self.internal_write_register(register_id, value)?;
                 Ok(1)
             }
-            None => Ok(0),
+            None => {
+                let empty: Vec<u8> = vec![];
+                storage_log(json!({"method": "storage_read_end", "key": key, "value": empty}));
+                Ok(0)
+            }
         }
     }
 

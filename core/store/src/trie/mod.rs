@@ -6,6 +6,8 @@ use std::io::{Cursor, Read, Write};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use near_o11y::storage_log;
+use serde_json::json;
 
 use near_primitives::challenge::PartialState;
 use near_primitives::contract::ContractCode;
@@ -684,6 +686,7 @@ impl Trie {
         root: &CryptoHash,
         key: &[u8],
     ) -> Result<Option<(u32, CryptoHash)>, StorageError> {
+        storage_log(json!({"method": "trie_get_ref", "key": key}));
         let key = NibbleSlice::new(key);
         self.lookup(root, key)
     }

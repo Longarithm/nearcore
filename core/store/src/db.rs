@@ -289,11 +289,16 @@ impl Database for RocksDB {
     fn get(&self, col: DBCol, key: &[u8]) -> Result<Option<Vec<u8>>, DBError> {
         let timer =
             metrics::DATABASE_OP_LATENCY_HIST.with_label_values(&["get", col.into()]).start_timer();
-        storage_log(json!({"method": "rocksdb_get", "key": key}));
 
         let read_options = rocksdb_read_options();
         let result = self.db.get_cf_opt(self.cf_handle(col), key, &read_options)?;
         let result = Ok(RocksDB::get_with_rc_logic(col, result));
+        match col {
+            DBCol::State => {
+                storage_log(json!({"method": "rocksdb_get", "key": key}));
+            }
+            _ => {}
+        };
 
         timer.observe_duration();
         result

@@ -23,8 +23,8 @@ pub struct StorageLogger {
 }
 
 impl StorageLogger {
-    pub fn new() -> Self {
-        return Self { file: File::create("/tmp/storage.log").unwrap() };
+    pub fn new(file: &str) -> Self {
+        return Self { file: File::create(file).unwrap() };
     }
 
     pub fn write(&mut self, value: serde_json::Value) {
@@ -34,11 +34,18 @@ impl StorageLogger {
 }
 
 lazy_static! {
-    static ref STORAGE_LOGGER: Mutex<StorageLogger> = Mutex::new(StorageLogger::new());
+    static ref STORAGE_LOGGER: Mutex<StorageLogger> =
+        Mutex::new(StorageLogger::new("/tmp/storage.log"));
+    static ref TRIE_CHANGES_LOGGER: Mutex<StorageLogger> =
+        Mutex::new(StorageLogger::new("/tmp/trie_changes.log"));
 }
 
 pub fn storage_log(value: serde_json::Value) {
     STORAGE_LOGGER.lock().unwrap().write(value);
+}
+
+pub fn trie_changes_log(value: serde_json::Value) {
+    TRIE_CHANGES_LOGGER.lock().unwrap().write(value);
 }
 
 static ENV_FILTER_RELOAD_HANDLE: OnceCell<
