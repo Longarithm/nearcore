@@ -11,6 +11,7 @@ use near_o11y::storage_log;
 use near_primitives::version::is_implicit_account_creation_enabled;
 use near_primitives_core::config::ExtCosts::*;
 use near_primitives_core::config::{ActionCosts, ExtCosts, VMConfig, ViewConfig};
+use near_primitives_core::hash::hash;
 use near_primitives_core::profile::ProfileData;
 use near_primitives_core::runtime::fees::{
     transfer_exec_fee, transfer_send_fee, RuntimeFeesConfig,
