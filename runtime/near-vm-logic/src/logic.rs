@@ -2456,7 +2456,7 @@ impl<'a> VMLogic<'a> {
         match read {
             Some(value) => {
                 storage_log(
-                    json!({"method": "storage_read_end", "key": key, "value": hash(value)}),
+                    json!({"method": "storage_read_end", "key": key, "value": hash(&value)}),
                 );
                 // if value.len() < 32 {
                 //     storage_log(json!({"method": "storage_read_end", "key": key, "value": value}));
