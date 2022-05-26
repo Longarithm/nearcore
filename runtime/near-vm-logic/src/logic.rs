@@ -2336,7 +2336,6 @@ impl<'a> VMLogic<'a> {
             }
             .into());
         }
-
         let value = self.get_vec_from_memory_or_register(value_ptr, value_len)?;
         if value.len() as u64 > self.config.limit_config.max_length_storage_value {
             return Err(HostError::ValueLengthExceeded {
@@ -2427,7 +2426,6 @@ impl<'a> VMLogic<'a> {
     ///  cost to read key from register + cost to write value into register`.
     pub fn storage_read(&mut self, key_len: u64, key_ptr: u64, register_id: u64) -> Result<u64> {
         let start_time = std::time::Instant::now();
-
         storage_log(json!({"method": "storage_read_begin"}));
 
         self.gas_counter.pay_base(base)?;
@@ -2458,14 +2456,6 @@ impl<'a> VMLogic<'a> {
                 storage_log(
                     json!({"method": "storage_read_end", "key": key, "value": hash(&value)}),
                 );
-                // if value.len() < 32 {
-                //     storage_log(json!({"method": "storage_read_end", "key": key, "value": value}));
-                // } else {
-                //     storage_log(
-                //         json!({"method": "storage_read_end", "key": key, "value": value[..32]}),
-                //     );
-                // }
-
                 self.internal_write_register(register_id, value)?;
                 Ok(1)
             }

@@ -1352,6 +1352,8 @@ impl Runtime {
             }
         }
 
+        storage_log(json!({"method": "process_end"}));
+
         if delayed_receipts_indices != initial_delayed_receipt_indices {
             set(&mut state_update, TrieKey::DelayedReceiptIndices, &delayed_receipts_indices);
         }
