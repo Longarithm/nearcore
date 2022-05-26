@@ -2452,7 +2452,14 @@ impl<'a> VMLogic<'a> {
 
         match read {
             Some(value) => {
-                storage_log(json!({"method": "storage_read", "key": key, "value": value}));
+                if value.len() < 32 {
+                    storage_log(json!({"method": "storage_read", "key": key, "value": value}));
+                } else {
+                    storage_log(
+                        json!({"method": "storage_read", "key": key, "value": value[..32]}),
+                    );
+                }
+
                 self.internal_write_register(register_id, value)?;
                 Ok(1)
             }
