@@ -6,6 +6,8 @@ use std::io::{Cursor, Read, Write};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use near_o11y::storage_log;
+use serde_json::json;
 
 use near_primitives::challenge::PartialState;
 use near_primitives::contract::ContractCode;
@@ -685,6 +687,7 @@ impl Trie {
         key: &[u8],
         use_flat: bool,
     ) -> Result<Option<(u32, CryptoHash)>, StorageError> {
+        storage_log(json!({"method": "trie_get_ref", "key": key}));
         // let _span = tracing::debug_span!(target: "runtime", "get_ref").entered();
         if use_flat {
             if let Some(storage) = self.storage.as_caching_storage() {
