@@ -1,3 +1,4 @@
+use serde_json::json;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -8,6 +9,7 @@ use tracing::debug;
 use near_chain_configs::Genesis;
 pub use near_crypto;
 use near_crypto::PublicKey;
+use near_o11y::storage_log;
 pub use near_primitives;
 #[cfg(feature = "sandbox")]
 use near_primitives::contract::ContractCode;
@@ -222,8 +224,7 @@ impl Runtime {
         signed_transaction: &SignedTransaction,
         stats: &mut ApplyStats,
     ) -> Result<(Receipt, ExecutionOutcomeWithId), RuntimeError> {
-        let _span =
-            tracing::debug_span!(target: "runtime", "Runtime::process_transaction").entered();
+        let _span = tracing::debug_span!(target: "runtime", "process_transaction").entered();
         metrics::TRANSACTION_PROCESSED_TOTAL.inc();
 
         match verify_and_charge_transaction(
@@ -1169,7 +1170,11 @@ impl Runtime {
         epoch_info_provider: &dyn EpochInfoProvider,
         states_to_patch: Option<Vec<StateRecord>>,
     ) -> Result<ApplyResult, RuntimeError> {
-        let _span = tracing::debug_span!(target: "runtime", "Runtime::apply").entered();
+        let _span = tracing::debug_span!(
+            target: "runtime",
+            "apply",
+            num_transactions = transactions.len())
+        .entered();
 
         if states_to_patch.is_some() && !cfg!(feature = "sandbox") {
             panic!("Can only patch state in sandbox mode");
@@ -1252,6 +1257,8 @@ impl Runtime {
             outcomes.push(outcome_with_id);
         }
 
+        storage_log(json!({"method": "process_begin"}));
+
         let mut delayed_receipts_indices: DelayedReceiptIndices =
             get(&state_update, &TrieKey::DelayedReceiptIndices)?.unwrap_or_default();
         let initial_delayed_receipt_indices = delayed_receipts_indices.clone();
@@ -1260,7 +1267,12 @@ impl Runtime {
                                    state_update: &mut TrieUpdate,
                                    total_gas_burnt: &mut Gas|
          -> Result<_, RuntimeError> {
-            let _span = tracing::debug_span!(target: "runtime", "Runtime::process_receipt", receipt_id = %receipt.receipt_id, node_counter = ?state_update.trie.get_trie_nodes_count()).entered();
+            let _span = tracing::debug_span!(
+                target: "runtime",
+                "process_receipt",
+                receipt_id = %receipt.receipt_id,
+                node_counter = ?state_update.trie.get_trie_nodes_count())
+            .entered();
             let result = self.process_receipt(
                 state_update,
                 apply_state,
@@ -1337,6 +1349,8 @@ impl Runtime {
                 Self::delay_receipt(&mut state_update, &mut delayed_receipts_indices, receipt)?;
             }
         }
+
+        storage_log(json!({"method": "process_end"}));
 
         if delayed_receipts_indices != initial_delayed_receipt_indices {
             set(&mut state_update, TrieKey::DelayedReceiptIndices, &delayed_receipts_indices);

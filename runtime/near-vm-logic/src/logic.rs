@@ -7,6 +7,7 @@ use crate::utils::split_method_names;
 use crate::{ReceiptMetadata, ValuePtr};
 use byteorder::ByteOrder;
 use near_crypto::Secp256K1Signature;
+use near_o11y::storage_log;
 use near_primitives::version::is_implicit_account_creation_enabled;
 use near_primitives_core::config::ExtCosts::*;
 use near_primitives_core::config::{ActionCosts, ExtCosts, VMConfig, ViewConfig};
@@ -20,6 +21,7 @@ use near_primitives_core::types::{
 use near_primitives_core::types::{GasDistribution, GasWeight};
 use near_vm_errors::InconsistentStateError;
 use near_vm_errors::{HostError, VMLogicError};
+use serde_json::json;
 use std::collections::HashMap;
 use std::mem::size_of;
 
@@ -145,6 +147,16 @@ impl<'a> VMLogic<'a> {
             current_protocol_version,
             receipt_manager: ReceiptManager::default(),
         }
+    }
+
+    /// Returns reference to logs that have been created so far.
+    pub fn logs(&self) -> &[String] {
+        &self.logs
+    }
+
+    /// Returns receipt metadata for created receipts
+    pub fn action_receipts(&self) -> &[(AccountId, ReceiptMetadata)] {
+        &self.receipt_manager.action_receipts
     }
 
     #[allow(dead_code)]
@@ -1011,9 +1023,9 @@ impl<'a> VMLogic<'a> {
 
         self.gas_counter.pay_per(ripemd160_block, message_blocks as u64)?;
 
-        use ripemd160::Digest;
+        use ripemd::Digest;
 
-        let value_hash = ripemd160::Ripemd160::digest(&value);
+        let value_hash = ripemd::Ripemd160::digest(&value);
         self.internal_write_register(register_id, value_hash.as_slice().to_vec())
     }
 
@@ -1870,13 +1882,13 @@ impl<'a> VMLogic<'a> {
         self.gas_counter.pay_action_base(
             &self.fees_config.action_creation_config.add_key_cost.function_call_cost,
             sir,
-            ActionCosts::function_call,
+            ActionCosts::add_key,
         )?;
         self.gas_counter.pay_action_per_byte(
             &self.fees_config.action_creation_config.add_key_cost.function_call_cost_per_byte,
             num_bytes,
             sir,
-            ActionCosts::function_call,
+            ActionCosts::add_key,
         )?;
 
         self.receipt_manager.append_action_add_key_with_function_call(
@@ -2331,6 +2343,9 @@ impl<'a> VMLogic<'a> {
             }
             .into());
         }
+
+        storage_log(json!({"method": "storage_write", "key": key, "value": value}));
+
         self.gas_counter.pay_per(storage_write_key_byte, key.len() as u64)?;
         self.gas_counter.pay_per(storage_write_value_byte, value.len() as u64)?;
         let nodes_before = self.ext.get_trie_nodes_count();
@@ -2410,10 +2425,12 @@ impl<'a> VMLogic<'a> {
     ///  cost to read key from register + cost to write value into register`.
     pub fn storage_read(&mut self, key_len: u64, key_ptr: u64, register_id: u64) -> Result<u64> {
         let start_time = std::time::Instant::now();
+        storage_log(json!({"method": "storage_read_begin"}));
 
         self.gas_counter.pay_base(base)?;
         self.gas_counter.pay_base(storage_read_base)?;
         let key = self.get_vec_from_memory_or_register(key_ptr, key_len)?;
+
         if key.len() as u64 > self.config.limit_config.max_length_storage_key {
             return Err(HostError::KeyLengthExceeded {
                 length: key.len() as u64,
@@ -2435,10 +2452,17 @@ impl<'a> VMLogic<'a> {
 
         match read {
             Some(value) => {
+                storage_log(
+                    json!({"method": "storage_read_end", "key": key, "value": hash(&value)}),
+                );
                 self.internal_write_register(register_id, value)?;
                 Ok(1)
             }
-            None => Ok(0),
+            None => {
+                let empty: Vec<u8> = vec![];
+                storage_log(json!({"method": "storage_read_end", "key": key, "value": empty}));
+                Ok(0)
+            }
         }
     }
 

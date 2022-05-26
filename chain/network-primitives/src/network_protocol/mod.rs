@@ -165,7 +165,7 @@ pub struct Pong {
 
 // TODO(#1313): Use Box
 #[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Clone, strum::AsRefStr)]
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Clone, strum::IntoStaticStr)]
 #[allow(clippy::large_enum_variant)]
 pub enum RoutedMessageBody {
     BlockApproval(Approval),
@@ -341,6 +341,10 @@ impl RoutedMessage {
         self.ttl = self.ttl.saturating_sub(1);
         self.ttl > 0
     }
+
+    pub fn body_variant(&self) -> &'static str {
+        (&self.body).into()
+    }
 }
 
 #[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
@@ -376,7 +380,7 @@ impl PartialEncodedChunkForwardMsg {
             inner_header_hash: header.inner_header_hash(),
             merkle_root: header.encoded_merkle_root(),
             signature: header.signature().clone(),
-            prev_block_hash: header.prev_block_hash(),
+            prev_block_hash: header.prev_block_hash().clone(),
             height_created: header.height_created(),
             shard_id: header.shard_id(),
             parts,
