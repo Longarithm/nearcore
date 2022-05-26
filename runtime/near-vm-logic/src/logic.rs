@@ -2427,6 +2427,8 @@ impl<'a> VMLogic<'a> {
     pub fn storage_read(&mut self, key_len: u64, key_ptr: u64, register_id: u64) -> Result<u64> {
         let start_time = std::time::Instant::now();
 
+        storage_log(json!({"method": "storage_read_begin"}));
+
         self.gas_counter.pay_base(base)?;
         self.gas_counter.pay_base(storage_read_base)?;
         let key = self.get_vec_from_memory_or_register(key_ptr, key_len)?;
@@ -2453,10 +2455,10 @@ impl<'a> VMLogic<'a> {
         match read {
             Some(value) => {
                 if value.len() < 32 {
-                    storage_log(json!({"method": "storage_read", "key": key, "value": value}));
+                    storage_log(json!({"method": "storage_read_end", "key": key, "value": value}));
                 } else {
                     storage_log(
-                        json!({"method": "storage_read", "key": key, "value": value[..32]}),
+                        json!({"method": "storage_read_end", "key": key, "value": value[..32]}),
                     );
                 }
 
@@ -2465,7 +2467,7 @@ impl<'a> VMLogic<'a> {
             }
             None => {
                 let empty: Vec<u8> = vec![];
-                storage_log(json!({"method": "storage_read", "key": key, "value": empty}));
+                storage_log(json!({"method": "storage_read_end", "key": key, "value": empty}));
                 Ok(0)
             }
         }
