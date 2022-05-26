@@ -2431,8 +2431,6 @@ impl<'a> VMLogic<'a> {
         self.gas_counter.pay_base(storage_read_base)?;
         let key = self.get_vec_from_memory_or_register(key_ptr, key_len)?;
 
-        storage_log(json!({"method": "storage_read", "key": key}));
-
         if key.len() as u64 > self.config.limit_config.max_length_storage_key {
             return Err(HostError::KeyLengthExceeded {
                 length: key.len() as u64,
@@ -2454,10 +2452,14 @@ impl<'a> VMLogic<'a> {
 
         match read {
             Some(value) => {
+                storage_log(json!({"method": "storage_read", "key": key, "value": value}));
                 self.internal_write_register(register_id, value)?;
                 Ok(1)
             }
-            None => Ok(0),
+            None => {
+                storage_log(json!({"method": "storage_read", "key": key, "value": None}));
+                Ok(0)
+            }
         }
     }
 
