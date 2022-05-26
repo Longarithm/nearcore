@@ -2457,7 +2457,7 @@ impl<'a> VMLogic<'a> {
                 Ok(1)
             }
             None => {
-                storage_log(json!({"method": "storage_read", "key": key, "value": None}));
+                storage_log(json!({"method": "storage_read", "key": key, "value": vec![]}));
                 Ok(0)
             }
         }
