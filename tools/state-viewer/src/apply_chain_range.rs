@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::{thread, time};
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -284,7 +285,9 @@ fn apply_block_from_range(
         genesis.config.gas_limit,
         apply_result.total_balance_burnt,
     );
-
+    eprintln!("sleep start");
+    thread::sleep(time::Duration::from_secs(5));
+    eprintln!("sleep end");
     // let state_update =
     //     runtime_adapter.get_tries().new_trie_update(shard_uid, *chunk_extra.state_root());
     // let delayed_indices =
