@@ -2487,6 +2487,9 @@ impl<'a> VMLogic<'a> {
             }
             .into());
         }
+
+        storage_log(json!({"method": "storage_remove", "key": key}));
+
         self.gas_counter.pay_per(storage_remove_key_byte, key.len() as u64)?;
         let nodes_before = self.ext.get_trie_nodes_count();
         let removed_ptr = self.ext.storage_get(&key)?;
@@ -2538,6 +2541,9 @@ impl<'a> VMLogic<'a> {
             }
             .into());
         }
+
+        storage_log(json!({"method": "storage_has_key", "key": key}));
+
         self.gas_counter.pay_per(storage_has_key_byte, key.len() as u64)?;
         let nodes_before = self.ext.get_trie_nodes_count();
         let res = self.ext.storage_has_key(&key);
