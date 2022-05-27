@@ -40,12 +40,12 @@ lazy_static! {
         Mutex::new(StorageLogger::new("/tmp/trie_changes.log"));
 }
 
-pub fn storage_log(value: serde_json::Value) {
-    STORAGE_LOGGER.lock().unwrap().write(value);
+pub fn storage_log(_value: serde_json::Value) {
+    // STORAGE_LOGGER.lock().unwrap().write(value);
 }
 
-pub fn trie_changes_log(value: serde_json::Value) {
-    TRIE_CHANGES_LOGGER.lock().unwrap().write(value);
+pub fn trie_changes_log(_value: serde_json::Value) {
+    // TRIE_CHANGES_LOGGER.lock().unwrap().write(value);
 }
 
 static ENV_FILTER_RELOAD_HANDLE: OnceCell<

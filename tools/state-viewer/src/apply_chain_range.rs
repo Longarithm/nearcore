@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::{thread, time};
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -426,6 +427,8 @@ pub fn apply_chain_range(
         );
     };
 
+    eprintln!("5 seconds sleep...");
+    thread::sleep(time::Duration::from_secs(5));
     if sequential {
         range.into_iter().for_each(|height| {
             let _span = tracing::debug_span!(
