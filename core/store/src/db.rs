@@ -586,6 +586,12 @@ fn rocksdb_block_based_options(
 
 fn rocksdb_column_options(col: DBCol, store_config: &StoreConfig) -> Options {
     let mut opts = Options::default();
+    match col {
+        DBCol::State => {
+            opts.set_use_direct_reads(true);
+        }
+        _ => {}
+    }
     set_compression_options(&mut opts);
     opts.set_level_compaction_dynamic_level_bytes(true);
     let cache_size = store_config.col_cache_size(col);
