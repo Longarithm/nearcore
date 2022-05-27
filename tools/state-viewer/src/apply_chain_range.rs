@@ -285,9 +285,6 @@ fn apply_block_from_range(
         genesis.config.gas_limit,
         apply_result.total_balance_burnt,
     );
-    eprintln!("sleep start");
-    thread::sleep(time::Duration::from_secs(5));
-    eprintln!("sleep end");
     // let state_update =
     //     runtime_adapter.get_tries().new_trie_update(shard_uid, *chunk_extra.state_root());
     // let delayed_indices =
@@ -387,6 +384,10 @@ pub fn apply_chain_range(
             only_contracts,
         );
     };
+
+    eprintln!("sleep start");
+    thread::sleep(time::Duration::from_secs(5));
+    eprintln!("sleep end");
 
     if sequential {
         range.into_iter().for_each(|height| {
