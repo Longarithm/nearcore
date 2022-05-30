@@ -1,4 +1,6 @@
+use atomic_refcell::AtomicRefCell;
 use near_cache::CellLruCache;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
@@ -19,6 +21,7 @@ use near_primitives::account::{AccessKey, Account};
 use near_primitives::contract::ContractCode;
 pub use near_primitives::errors::StorageError;
 use near_primitives::hash::CryptoHash;
+use near_primitives::math::FastDistribution;
 use near_primitives::receipt::{DelayedReceiptIndices, Receipt, ReceivedData};
 use near_primitives::serialize::to_base;
 pub use near_primitives::shard_layout::ShardUId;
@@ -51,11 +54,47 @@ pub use crate::config::{get_store_path, store_path_exists, StoreConfig, StoreOpe
 #[derive(Clone)]
 pub struct Store {
     storage: Arc<dyn Database>,
+    pub latencies_retrieve:
+        Arc<AtomicRefCell<HashMap<ShardUId, (FastDistribution, Option<std::time::Instant>, u64)>>>,
 }
 
 impl Store {
     pub(crate) fn new(storage: Arc<dyn Database>) -> Store {
-        Store { storage }
+        Store { storage, latencies_retrieve: Arc::new(AtomicRefCell::new(HashMap::default())) }
+    }
+
+    fn update_latency_get_and_print_if_needed(
+        &self,
+        current_time: std::time::Instant,
+        latency_us: u128,
+        shard_uid: ShardUId,
+    ) {
+        let latency_us = std::cmp::min(10_000, latency_us);
+        if let Ok(mut latencies_retrieve) = self.latencies_retrieve.try_borrow_mut() {
+            let latency_retrieve = latencies_retrieve.entry(shard_uid).or_insert((
+                FastDistribution::new(0, 10_000),
+                None,
+                0,
+            ));
+            if latency_retrieve.1.is_none() {
+                latency_retrieve.1 = Some(current_time);
+            }
+            let seconds_elapsed = latency_retrieve.1.unwrap().elapsed().as_secs();
+
+            let _ = latency_retrieve.0.add(latency_us as i32);
+
+            let slow_calls = latency_retrieve.0.total_count();
+            if seconds_elapsed > 30 {
+                println!(
+                    "total retrieve: {} shard: {:?} latency: {:?}",
+                    slow_calls,
+                    self.shard_uid,
+                    latency_retrieve.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
+                );
+                latency_retrieve.0.clear();
+                latency_retrieve.1 = Some(current_time);
+            }
+        }
     }
 
     pub fn get(&self, column: DBCol, key: &[u8]) -> io::Result<Option<Vec<u8>>> {

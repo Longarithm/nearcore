@@ -182,7 +182,6 @@ pub struct TrieCachingStorage {
     pub(crate) db_read_nodes: Cell<u64>,
     /// Counts trie nodes retrieved from the chunk cache.
     pub(crate) mem_read_nodes: Cell<u64>,
-    latency_retrieve: AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>,
 }
 
 impl TrieCachingStorage {
@@ -195,7 +194,6 @@ impl TrieCachingStorage {
             chunk_cache: RefCell::new(Default::default()),
             db_read_nodes: Cell::new(0),
             mem_read_nodes: Cell::new(0),
-            latency_retrieve: AtomicRefCell::new((FastDistribution::new(0, 10_000), None, 0)),
         }
     }
 
@@ -238,27 +236,7 @@ impl TrieCachingStorage {
         current_time: std::time::Instant,
         latency_us: u128,
     ) {
-        let latency_us = std::cmp::min(10_000, latency_us);
-        if let Ok(mut latency_retrieve) = self.latency_retrieve.try_borrow_mut() {
-            if latency_retrieve.1.is_none() {
-                latency_retrieve.1 = Some(current_time);
-            }
-            let seconds_elapsed = latency_retrieve.1.unwrap().elapsed().as_secs();
-
-            let _ = latency_retrieve.0.add(latency_us as i32);
-
-            let slow_calls = latency_retrieve.0.total_count();
-            if seconds_elapsed > 30 {
-                println!(
-                    "total retrieve: {} shard: {:?} latency: {:?}",
-                    slow_calls,
-                    self.shard_uid,
-                    latency_retrieve.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
-                );
-                latency_retrieve.0.clear();
-                latency_retrieve.1 = Some(current_time);
-            }
-        }
+        self.store.update_latency_get_and_print_if_needed(current_time, latency_us, self.shard_uid);
     }
 }
 
