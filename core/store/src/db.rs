@@ -1,8 +1,9 @@
 use super::StoreConfig;
 use crate::db::refcount::merge_refcounted_records;
 use crate::{metrics, DBCol};
-use near_primitives::version::DbVersion;
+use atomic_refcell::AtomicRefCell;
 use near_primitives::math::FastDistribution;
+use near_primitives::version::DbVersion;
 use once_cell::sync::Lazy;
 use rocksdb::checkpoint::Checkpoint;
 use rocksdb::{
@@ -16,7 +17,6 @@ use std::sync::atomic::Ordering;
 use std::sync::{Condvar, Mutex, RwLock};
 use std::{cmp, fmt};
 use tracing::{error, info, warn};
-use atomic_refcell::AtomicRefCell;
 
 pub(crate) mod refcount;
 
@@ -301,7 +301,15 @@ impl Database for RocksDB {
         let result = Ok(RocksDB::get_with_rc_logic(col, result));
 
         timer.observe_duration();
-        self.update_latency_get_and_print_if_needed(start_time, start_time.elapsed().as_micros());
+        match col {
+            DBCol::State => {
+                self.update_latency_get_and_print_if_needed(
+                    start_time,
+                    start_time.elapsed().as_micros(),
+                );
+            }
+            _ => {}
+        };
         result
     }
 
@@ -673,7 +681,11 @@ impl RocksDB {
         self.db.flush().map_err(DBError::from)
     }
 
-    fn update_latency_get_and_print_if_needed(&self, current_time: std::time::Instant, latency_us: u128) {
+    fn update_latency_get_and_print_if_needed(
+        &self,
+        current_time: std::time::Instant,
+        latency_us: u128,
+    ) {
         let latency_us = std::cmp::min(10_000, latency_us);
         if let Ok(mut latency_get) = self.latency_get.try_borrow_mut() {
             if latency_get.1.is_none() {
@@ -685,8 +697,11 @@ impl RocksDB {
 
             let slow_calls = latency_get.0.total_count();
             if seconds_elapsed > 30 {
-                println!("total: {} latency: {:?}", slow_calls,
-                         latency_get.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.]));
+                println!(
+                    "total: {} latency: {:?}",
+                    slow_calls,
+                    latency_get.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
+                );
                 latency_get.0.clear();
                 latency_get.1 = Some(current_time);
             }
