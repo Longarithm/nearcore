@@ -268,58 +268,60 @@ impl TrieStorage for TrieCachingStorage {
 
         // Try to get value from chunk cache containing nodes with cheaper access. We can do it for any `TrieCacheMode`,
         // because we charge for reading nodes only when `CachingChunk` mode is enabled anyway.
-        let result = if let Some(val) = self.chunk_cache.borrow_mut().get(hash) {
+        if let Some(val) = self.chunk_cache.borrow_mut().get(hash) {
             self.inc_mem_read_nodes();
-            Ok(val.clone())
-        } else {
-            // Try to get value from shard cache containing most recently touched nodes.
-            let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
-            let val = match guard.get(hash) {
-                Some(val) => val.clone(),
-                None => {
-                    // If value is not present in cache, get it from the storage.
-                    let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
-                    let val = self
-                        .store
-                        .get(DBCol::State, key.as_ref())
-                        .map_err(|_| StorageError::StorageInternalError)?
-                        .ok_or_else(|| {
-                            StorageError::StorageInconsistentState("Trie node missing".to_string())
-                        })?;
-                    let val: Arc<[u8]> = val.into();
+            self.update_latency_get_and_print_if_needed(
+                start_time,
+                start_time.elapsed().as_micros(),
+            );
+            return Ok(val.clone());
+        }
 
-                    // Insert value to shard cache, if its size is small enough.
-                    // It is fine to have a size limit for shard cache and **not** have a limit for chunk cache, because key
-                    // is always a value hash, so for each key there could be only one value, and it is impossible to have
-                    // **different** values for the given key in shard and chunk caches.
-                    if val.len() < TRIE_LIMIT_CACHED_VALUE_SIZE {
-                        guard.put(*hash, val.clone());
-                    }
+        // Try to get value from shard cache containing most recently touched nodes.
+        let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
+        let val = match guard.get(hash) {
+            Some(val) => val.clone(),
+            None => {
+                // If value is not present in cache, get it from the storage.
+                let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
+                let val = self
+                    .store
+                    .get(DBCol::State, key.as_ref())
+                    .map_err(|_| StorageError::StorageInternalError)?
+                    .ok_or_else(|| {
+                        StorageError::StorageInconsistentState("Trie node missing".to_string())
+                    })?;
+                let val: Arc<[u8]> = val.into();
 
-                    val
+                // Insert value to shard cache, if its size is small enough.
+                // It is fine to have a size limit for shard cache and **not** have a limit for chunk cache, because key
+                // is always a value hash, so for each key there could be only one value, and it is impossible to have
+                // **different** values for the given key in shard and chunk caches.
+                if val.len() < TRIE_LIMIT_CACHED_VALUE_SIZE {
+                    guard.put(*hash, val.clone());
                 }
-            };
 
-            // Because node is not present in chunk cache, increment the nodes counter and optionally insert it into the
-            // chunk cache.
-            // Note that we don't have a size limit for values in the chunk cache. There are two reasons:
-            // - for nodes, value size is an implementation detail. If we change internal representation of a node (e.g.
-            // change `memory_usage` field from `RawTrieNodeWithSize`), this would have to be a protocol upgrade.
-            // - total size of all values is limited by the runtime fees. More thoroughly:
-            // - - number of nodes is limited by receipt gas limit / touching trie node fee ~= 500 Tgas / 16 Ggas = 31_250;
-            // - - size of trie keys and values is limited by receipt gas limit / lowest per byte fee
-            // (`storage_read_value_byte`) ~= (500 * 10**12 / 5611005) / 2**20 ~= 85 MB.
-            // All values are given as of 16/03/2022. We may consider more precise limit for the chunk cache as well.
-            self.inc_db_read_nodes();
-            if let TrieCacheMode::CachingChunk = self.cache_mode.borrow().get() {
-                self.chunk_cache.borrow_mut().insert(*hash, val.clone());
-            };
+                val
+            }
+        };
 
-            Ok(val)
+        // Because node is not present in chunk cache, increment the nodes counter and optionally insert it into the
+        // chunk cache.
+        // Note that we don't have a size limit for values in the chunk cache. There are two reasons:
+        // - for nodes, value size is an implementation detail. If we change internal representation of a node (e.g.
+        // change `memory_usage` field from `RawTrieNodeWithSize`), this would have to be a protocol upgrade.
+        // - total size of all values is limited by the runtime fees. More thoroughly:
+        // - - number of nodes is limited by receipt gas limit / touching trie node fee ~= 500 Tgas / 16 Ggas = 31_250;
+        // - - size of trie keys and values is limited by receipt gas limit / lowest per byte fee
+        // (`storage_read_value_byte`) ~= (500 * 10**12 / 5611005) / 2**20 ~= 85 MB.
+        // All values are given as of 16/03/2022. We may consider more precise limit for the chunk cache as well.
+        self.inc_db_read_nodes();
+        if let TrieCacheMode::CachingChunk = self.cache_mode.borrow().get() {
+            self.chunk_cache.borrow_mut().insert(*hash, val.clone());
         };
 
         self.update_latency_get_and_print_if_needed(start_time, start_time.elapsed().as_micros());
-        result
+        Ok(val)
     }
 
     fn as_caching_storage(&self) -> Option<&TrieCachingStorage> {
