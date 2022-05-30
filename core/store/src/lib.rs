@@ -71,7 +71,7 @@ impl Store {
     ) {
         let latency_us = std::cmp::min(10_000, latency_us);
         if let Ok(mut latencies_retrieve) = self.latencies_retrieve.try_borrow_mut() {
-            let latency_retrieve = latencies_retrieve.entry(shard_uid).or_insert((
+            let latency_retrieve = latencies_retrieve.entry(shard_uid.clone()).or_insert((
                 FastDistribution::new(0, 10_000),
                 None,
                 0,
@@ -88,7 +88,7 @@ impl Store {
                 println!(
                     "total retrieve: {} shard: {:?} latency: {:?}",
                     slow_calls,
-                    self.shard_uid,
+                    shard_uid,
                     latency_retrieve.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
                 );
                 latency_retrieve.0.clear();
