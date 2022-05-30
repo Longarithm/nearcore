@@ -701,8 +701,9 @@ impl RocksDB {
             let slow_calls = latency_get.0.total_count();
             if seconds_elapsed > 30 {
                 println!(
-                    "total get: {} latency: {:?}",
+                    "total get: {} mean: {} latency: {:?}",
                     slow_calls,
+                    latency_get.0.sum() / slow_calls,
                     latency_get.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
                 );
                 latency_get.0.clear();

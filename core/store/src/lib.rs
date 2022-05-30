@@ -86,8 +86,9 @@ impl Store {
             let slow_calls = latency_retrieve.0.total_count();
             if seconds_elapsed > 30 {
                 println!(
-                    "total retrieve: {} shard: {:?} latency: {:?}",
+                    "total retrieve: {} mean: {} shard: {:?} latency: {:?}",
                     slow_calls,
+                    latency_retrieve.0.sum() / slow_calls,
                     shard_uid,
                     latency_retrieve.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
                 );

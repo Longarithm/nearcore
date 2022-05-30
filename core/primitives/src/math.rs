@@ -40,6 +40,14 @@ impl FastDistribution {
         self.total_count
     }
 
+    pub fn sum(&self) -> u64 {
+        let mut sum = 0u64;
+        for i in 0..self.count.len() {
+            sum += ((self.min_val + i as i32) as u64) * self.count[i];
+        }
+        sum
+    }
+
     pub fn get_distribution(&self, percentiles: &Vec<f32>) -> Vec<(f32, i32)> {
         let mut indexes: Vec<u64> = vec![0; percentiles.len()];
         for i in 0..percentiles.len() {
