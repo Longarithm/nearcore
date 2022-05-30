@@ -306,12 +306,10 @@ impl Database for RocksDB {
         timer.observe_duration();
         match col {
             DBCol::State => {
-                if length < 4096 {
-                    self.update_latency_get_and_print_if_needed(
-                        start_time,
-                        start_time.elapsed().as_micros(),
-                    );
-                }
+                self.update_latency_get_and_print_if_needed(
+                    start_time,
+                    start_time.elapsed().as_micros(),
+                );
             }
             _ => {}
         };
@@ -703,7 +701,7 @@ impl RocksDB {
             let slow_calls = latency_get.0.total_count();
             if seconds_elapsed > 30 {
                 println!(
-                    "total: {} latency: {:?}",
+                    "total get: {} latency: {:?}",
                     slow_calls,
                     latency_get.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
                 );
