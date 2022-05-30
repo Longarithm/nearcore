@@ -299,14 +299,19 @@ impl Database for RocksDB {
         let read_options = rocksdb_read_options();
         let result = self.db.get_cf_opt(self.cf_handle(col), key, &read_options)?;
         let result = Ok(RocksDB::get_with_rc_logic(col, result));
-
+        let length = match &result {
+            Ok(Some(val)) => val.len(),
+            _ => 0,
+        };
         timer.observe_duration();
         match col {
             DBCol::State => {
-                self.update_latency_get_and_print_if_needed(
-                    start_time,
-                    start_time.elapsed().as_micros(),
-                );
+                if length < 4096 {
+                    self.update_latency_get_and_print_if_needed(
+                        start_time,
+                        start_time.elapsed().as_micros(),
+                    );
+                }
             }
             _ => {}
         };
