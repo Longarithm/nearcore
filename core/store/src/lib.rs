@@ -80,11 +80,12 @@ impl Store {
     //     }
     // }
 
-    fn get_slow_calls(&self, shard_uid: ShardUId) {
+    fn get_slow_calls(&self, shard_uid: ShardUId) -> u64 {
         if let Ok(mut shards_slow_calls) = self.slow_calls.try_borrow_mut() {
             let slow_calls = shards_slow_calls.entry(shard_uid.clone()).or_insert(0);
-            slow_calls
+            return *slow_calls;
         }
+        return 0;
     }
 
     pub fn get(&self, column: DBCol, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
