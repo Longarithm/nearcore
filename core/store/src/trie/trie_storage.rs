@@ -12,7 +12,7 @@ use lru::LruCache;
 use near_primitives::math::FastDistribution;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::transaction::Action;
-use near_primitives::types::{TrieCacheMode, TrieNodesCount};
+use near_primitives::types::{ShardId, TrieCacheMode, TrieNodesCount};
 use std::cell::{Cell, RefCell};
 use std::io::ErrorKind;
 
@@ -22,6 +22,7 @@ use std::io::ErrorKind;
 pub struct TrieCache(Arc<Mutex<SafeTrieCache>>);
 
 pub struct SafeTrieCache {
+    pub shard_id: u32,
     pub cache: LruCache<CryptoHash, Arc<[u8]>>,
     pub monitoring_data: HashMap<u8, (FastDistribution, Option<std::time::Instant>, u64)>,
 }
@@ -62,7 +63,7 @@ impl SafeTrieCache {
                 slow_calls,
                 monitoring_data.0.sum(),
                 monitoring_data.2 / 10u64.pow(9),
-                shard_uid,
+                self.shard_id,
                 action_type,
                 seconds_elapsed,
                 monitoring_data.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
@@ -76,11 +77,16 @@ impl SafeTrieCache {
 
 impl TrieCache {
     pub fn new() -> Self {
-        Self::with_capacity(TRIE_MAX_SHARD_CACHE_SIZE)
+        Self::with_capacity(TRIE_MAX_SHARD_CACHE_SIZE, 0)
     }
 
-    pub fn with_capacity(cap: usize) -> Self {
+    pub fn new_with_id(shard_id: u32) -> Self {
+        Self::with_capacity(TRIE_MAX_SHARD_CACHE_SIZE, shard_id)
+    }
+
+    pub fn with_capacity(cap: usize, shard_id: u32) -> Self {
         Self(Arc::new(Mutex::new(SafeTrieCache {
+            shard_id,
             cache: LruCache::new(cap),
             monitoring_data: HashMap::default(),
         })))

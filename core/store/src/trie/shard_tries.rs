@@ -30,7 +30,10 @@ pub struct ShardTries(Arc<ShardTriesInner>);
 
 impl ShardTries {
     fn get_new_cache(shards: &[ShardUId]) -> HashMap<ShardUId, TrieCache> {
-        shards.iter().map(|&shard_id| (shard_id, TrieCache::new())).collect()
+        shards
+            .iter()
+            .map(|&shard_id| (shard_id, TrieCache::new_with_id(shard_id.shard_id)))
+            .collect()
     }
 
     pub fn new(store: Store, shard_version: ShardVersion, num_shards: NumShards) -> Self {
@@ -61,7 +64,7 @@ impl ShardTries {
         let caches_to_use = if is_view { &self.0.view_caches } else { &self.0.caches };
         let cache = {
             let mut caches = caches_to_use.write().expect(POISONED_LOCK_ERR);
-            caches.entry(shard_uid).or_insert_with(TrieCache::new).clone()
+            caches.entry(shard_uid).or_insert(TrieCache::new_with_id(shard_uid.shard_id)).clone()
         };
         let store = Box::new(TrieCachingStorage::new(self.0.store.clone(), cache, shard_uid));
         Trie::new(store, shard_uid)
@@ -101,7 +104,10 @@ impl ShardTries {
             }
         }
         for (shard_uid, ops) in shards {
-            let cache = caches.entry(shard_uid).or_insert_with(TrieCache::new).clone();
+            let cache = caches
+                .entry(shard_uid)
+                .or_insert(TrieCache::new_with_id(shard_uid.shard_id))
+                .clone();
             cache.update_cache(ops);
         }
         Ok(())
