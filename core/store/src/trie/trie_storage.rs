@@ -73,6 +73,15 @@ impl SafeTrieCache {
             monitoring_data.2 = 0;
         }
     }
+
+    pub fn update_storage_cost(&mut self, cost: u64, action_type: u8) {
+        let monitoring_data = self.monitoring_data.entry(action_type.clone()).or_insert((
+            FastDistribution::new(0, 10_000),
+            None,
+            0,
+        ));
+        monitoring_data.2 += cost;
+    }
 }
 
 impl TrieCache {
@@ -311,7 +320,8 @@ impl TrieCachingStorage {
     }
 
     pub fn update_storage_cost(&self, cost: u64) {
-        self.store.update_storage_cost(cost, self.shard_uid, self.action_type.get());
+        let mut guard = self.shard_cache.0.lock().unwrap();
+        guard.update_storage_cost(cost, self.action_type.get());
     }
 
     pub fn get_slow_calls(&self) {

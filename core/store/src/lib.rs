@@ -58,7 +58,6 @@ pub struct Store {
     storage: Arc<dyn Database>,
     pub monitoring_indices: Arc<Mutex<HashSet<(ShardUId, u8)>>>,
     // (latency, start time, costs)
-    pub monitoring_data: Arc<Vec<Cell<(FastDistribution, Option<std::time::Instant>, u64)>>>,
     pub slow_calls: Arc<AtomicRefCell<HashMap<ShardUId, u64>>>,
 }
 
@@ -67,7 +66,6 @@ impl Store {
         Store {
             storage,
             monitoring_indices: Arc::new(Mutex::new(Default::default())),
-            monitoring_data: Arc::new(Vec::with_capacity(30)),
             slow_calls: Arc::new(Default::default()),
         }
     }
@@ -81,15 +79,6 @@ impl Store {
     //             .or_insert((FastDistribution::new(0, 10_000), None, 0));
     //     }
     // }
-
-    fn update_storage_cost(&self, cost: u64, shard_uid: ShardUId, action_type: u8) {
-        if let Ok(mut shards_monitoring_data) = self.monitoring_data.try_borrow_mut() {
-            let monitoring_data = shards_monitoring_data
-                .entry((shard_uid.clone(), action_type.clone()))
-                .or_insert((FastDistribution::new(0, 10_000), None, 0));
-            monitoring_data.2 += cost;
-        }
-    }
 
     fn get_slow_calls(&self, shard_uid: ShardUId) {
         if let Ok(mut shards_slow_calls) = self.slow_calls.try_borrow_mut() {
