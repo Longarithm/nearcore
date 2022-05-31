@@ -18,7 +18,61 @@ use std::io::ErrorKind;
 
 /// Wrapper over LruCache which doesn't hold too large elements.
 #[derive(Clone)]
-pub struct TrieCache(Arc<Mutex<LruCache<CryptoHash, Arc<[u8]>>>>);
+// pub struct TrieCache(Arc<Mutex<LruCache<CryptoHash, Arc<[u8]>>>>);
+pub struct TrieCache(Arc<Mutex<SafeTrieCache>>);
+
+pub struct SafeTrieCache {
+    pub cache: LruCache<CryptoHash, Arc<[u8]>>,
+    pub monitoring_data: HashMap<u8, (FastDistribution, Option<std::time::Instant>, u64)>,
+}
+
+impl SafeTrieCache {
+    pub fn update_latency_retrieve_and_print_if_needed(
+        &mut self,
+        current_time: std::time::Instant,
+        latency_us: u128,
+        action_type: u8,
+    ) {
+        let latency_us = std::cmp::min(10_000, latency_us);
+
+        // if let Ok(mut shards_slow_calls) = self.slow_calls.try_borrow_mut() {
+        //     let slow_calls = shards_slow_calls.entry(shard_uid.clone()).or_insert(0);
+        //     if latency_us >= 200 {
+        //         slow_calls.add_assign(1);
+        //     }
+        // }
+
+        let monitoring_data = self.monitoring_data.entry(action_type.clone()).or_insert((
+            FastDistribution::new(0, 10_000),
+            None,
+            0,
+        ));
+
+        if monitoring_data.1.is_none() {
+            monitoring_data.1 = Some(current_time);
+        }
+        let seconds_elapsed = monitoring_data.1.unwrap().elapsed().as_secs();
+
+        let _ = monitoring_data.0.add(latency_us as i32);
+
+        let slow_calls = monitoring_data.0.total_count();
+        if seconds_elapsed > 30 {
+            println!(
+                "total retrieve: {} sum: {} storage ggas: {} shard: {:?} action type: {} elapsed: {} latency: {:?}",
+                slow_calls,
+                monitoring_data.0.sum(),
+                monitoring_data.2 / 10u64.pow(9),
+                shard_uid,
+                action_type,
+                seconds_elapsed,
+                monitoring_data.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
+            );
+            monitoring_data.0.clear();
+            monitoring_data.1 = Some(current_time);
+            monitoring_data.2 = 0;
+        }
+    }
+}
 
 impl TrieCache {
     pub fn new() -> Self {
@@ -26,15 +80,18 @@ impl TrieCache {
     }
 
     pub fn with_capacity(cap: usize) -> Self {
-        Self(Arc::new(Mutex::new(LruCache::new(cap))))
+        Self(Arc::new(Mutex::new(SafeTrieCache {
+            cache: LruCache::new(cap),
+            monitoring_data: HashMap::default(),
+        })))
     }
 
     pub fn get(&self, key: &CryptoHash) -> Option<Arc<[u8]>> {
-        self.0.lock().expect(POISONED_LOCK_ERR).get(key).cloned()
+        self.0.lock().expect(POISONED_LOCK_ERR).cache.get(key).cloned()
     }
 
     pub fn clear(&self) {
-        self.0.lock().expect(POISONED_LOCK_ERR).clear()
+        self.0.lock().expect(POISONED_LOCK_ERR).cache.clear()
     }
 
     pub fn update_cache(&self, ops: Vec<(CryptoHash, Option<&Vec<u8>>)>) {
@@ -43,13 +100,13 @@ impl TrieCache {
             if let Some(value_rc) = opt_value_rc {
                 if let (Some(value), _rc) = decode_value_with_rc(&value_rc) {
                     if value.len() < TRIE_LIMIT_CACHED_VALUE_SIZE {
-                        guard.put(hash, value.into());
+                        guard.cache.put(hash, value.into());
                     }
                 } else {
-                    guard.pop(&hash);
+                    guard.cache.pop(&hash);
                 }
             } else {
-                guard.pop(&hash);
+                guard.cache.pop(&hash);
             }
         }
     }
@@ -57,7 +114,7 @@ impl TrieCache {
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         let guard = self.0.lock().expect(POISONED_LOCK_ERR);
-        guard.len()
+        guard.cache.len()
     }
 }
 
@@ -239,16 +296,20 @@ impl TrieCachingStorage {
         current_time: std::time::Instant,
         latency_us: u128,
     ) {
-        self.store.update_latency_retrieve_and_print_if_needed(
+        let mut guard = self.shard_cache.0.lock().unwrap();
+        guard.update_latency_retrieve_and_print_if_needed(
             current_time,
             latency_us,
-            self.shard_uid,
             self.action_type.get(),
         );
     }
 
     pub fn update_storage_cost(&self, cost: u64) {
         self.store.update_storage_cost(cost, self.shard_uid, self.action_type.get());
+    }
+
+    pub fn get_slow_calls(&self) {
+        self.store.get_slow_calls(self.shard_uid);
     }
 }
 

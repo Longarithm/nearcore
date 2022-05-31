@@ -1270,6 +1270,8 @@ impl Runtime {
                 receipt_id = %receipt.receipt_id,
                 node_counter = ?state_update.trie.get_trie_nodes_count())
             .entered();
+            let start_time = std::time::Instant::now();
+            // state_update.get_slow_calls(action.to_u8());
             let result = self.process_receipt(
                 state_update,
                 apply_state,
@@ -1279,6 +1281,8 @@ impl Runtime {
                 &mut stats,
                 epoch_info_provider,
             );
+            let elapsed = start_time.elapsed().as_millis();
+            if elapsed >= 100 {}
             tracing::debug!(target: "runtime", node_counter = ?state_update.trie.get_trie_nodes_count());
             result?.into_iter().try_for_each(
                 |outcome_with_id: ExecutionOutcomeWithId| -> Result<(), RuntimeError> {

@@ -184,6 +184,12 @@ impl TrieUpdate {
         }
     }
 
+    pub fn get_slow_calls(&self) {
+        if let Some(storage) = self.trie.storage.as_caching_storage() {
+            storage.get_slow_calls();
+        }
+    }
+
     pub fn update_storage_cost(&self, cost: u64) {
         if let Some(storage) = self.trie.storage.as_caching_storage() {
             storage.update_storage_cost(cost);

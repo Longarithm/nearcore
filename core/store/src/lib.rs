@@ -1,10 +1,12 @@
 use atomic_refcell::AtomicRefCell;
 use near_cache::CellLruCache;
-use std::collections::HashMap;
+use std::cell::Cell;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
+use std::ops::AddAssign;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{fmt, io};
 
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -54,16 +56,31 @@ pub use crate::config::{get_store_path, store_path_exists, StoreConfig, StoreOpe
 #[derive(Clone)]
 pub struct Store {
     storage: Arc<dyn Database>,
+    pub monitoring_indices: Arc<Mutex<HashSet<(ShardUId, u8)>>>,
     // (latency, start time, costs)
-    pub monitoring_data: Arc<
-        AtomicRefCell<HashMap<(ShardUId, u8), (FastDistribution, Option<std::time::Instant>, u64)>>,
-    >,
+    pub monitoring_data: Arc<Vec<Cell<(FastDistribution, Option<std::time::Instant>, u64)>>>,
+    pub slow_calls: Arc<AtomicRefCell<HashMap<ShardUId, u64>>>,
 }
 
 impl Store {
     pub(crate) fn new(storage: Arc<dyn Database>) -> Store {
-        Store { storage, monitoring_data: Arc::new(AtomicRefCell::new(HashMap::default())) }
+        Store {
+            storage,
+            monitoring_indices: Arc::new(Mutex::new(Default::default())),
+            monitoring_data: Arc::new(Vec::with_capacity(30)),
+            slow_calls: Arc::new(Default::default()),
+        }
     }
+
+    // fn get_monitoring_index(&self) -> usize {
+    //     let guard = self.monitoring_indices.lock().unwrap();
+    //     let key =
+    //     if let Ok(mut monitoring_indices) = self.monitoring_indices.try_borrow_mut() {
+    //         let monitoring_data = shards_monitoring_data
+    //             .entry((shard_uid.clone(), action_type.clone()))
+    //             .or_insert((FastDistribution::new(0, 10_000), None, 0));
+    //     }
+    // }
 
     fn update_storage_cost(&self, cost: u64, shard_uid: ShardUId, action_type: u8) {
         if let Ok(mut shards_monitoring_data) = self.monitoring_data.try_borrow_mut() {
@@ -74,41 +91,10 @@ impl Store {
         }
     }
 
-    fn update_latency_retrieve_and_print_if_needed(
-        &self,
-        current_time: std::time::Instant,
-        latency_us: u128,
-        shard_uid: ShardUId,
-        action_type: u8,
-    ) {
-        let latency_us = std::cmp::min(10_000, latency_us);
-        if let Ok(mut shards_monitoring_data) = self.monitoring_data.try_borrow_mut() {
-            let monitoring_data = shards_monitoring_data
-                .entry((shard_uid.clone(), action_type.clone()))
-                .or_insert((FastDistribution::new(0, 10_000), None, 0));
-            if monitoring_data.1.is_none() {
-                monitoring_data.1 = Some(current_time);
-            }
-            let seconds_elapsed = monitoring_data.1.unwrap().elapsed().as_secs();
-
-            let _ = monitoring_data.0.add(latency_us as i32);
-
-            let slow_calls = monitoring_data.0.total_count();
-            if seconds_elapsed > 30 {
-                println!(
-                    "total retrieve: {} sum: {} storage ggas: {} shard: {:?} action type: {} elapsed: {} latency: {:?}",
-                    slow_calls,
-                    monitoring_data.0.sum(),
-                    monitoring_data.2 / 10u64.pow(9),
-                    shard_uid,
-                    action_type,
-                    seconds_elapsed,
-                    monitoring_data.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
-                );
-                monitoring_data.0.clear();
-                monitoring_data.1 = Some(current_time);
-                monitoring_data.2 = 0;
-            }
+    fn get_slow_calls(&self, shard_uid: ShardUId) {
+        if let Ok(mut shards_slow_calls) = self.slow_calls.try_borrow_mut() {
+            let slow_calls = shards_slow_calls.entry(shard_uid.clone()).or_insert(0);
+            slow_calls
         }
     }
 
