@@ -183,6 +183,12 @@ impl TrieUpdate {
             storage.action_type.set(action);
         }
     }
+
+    pub fn update_storage_cost(&self, cost: u64) {
+        if let Some(storage) = self.trie.storage.as_caching_storage() {
+            storage.update_storage_cost(cost);
+        }
+    }
 }
 
 struct MergeIter<'a> {

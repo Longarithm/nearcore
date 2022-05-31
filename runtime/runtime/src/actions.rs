@@ -241,6 +241,7 @@ pub(crate) fn action_function_call(
     result.gas_used = safe_add_gas(result.gas_used, outcome.used_gas)?;
     result.logs.extend(outcome.logs);
     result.profile.merge(&outcome.profile);
+    state_update.update_storage_cost(outcome.profile.storage_gas());
     if execution_succeeded {
         let new_receipts: Vec<_> = outcome
             .action_receipts

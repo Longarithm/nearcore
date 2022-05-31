@@ -239,12 +239,16 @@ impl TrieCachingStorage {
         current_time: std::time::Instant,
         latency_us: u128,
     ) {
-        self.store.update_latency_get_and_print_if_needed(
+        self.store.update_latency_retrieve_and_print_if_needed(
             current_time,
             latency_us,
             self.shard_uid,
             self.action_type.get(),
         );
+    }
+
+    pub fn update_storage_cost(&self, cost: u64) {
+        self.store.update_storage_cost(cost, self.shard_uid, self.action_type.get());
     }
 }
 
