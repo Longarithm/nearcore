@@ -300,6 +300,7 @@ impl Runtime {
         actions: &[Action],
         epoch_info_provider: &dyn EpochInfoProvider,
     ) -> Result<ActionResult, RuntimeError> {
+        state_update.set_action_type(action.to_u8());
         // println!("enter apply_action");
         let mut result = ActionResult::default();
         let exec_fees = exec_fee(

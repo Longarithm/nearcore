@@ -11,6 +11,7 @@ use atomic_refcell::AtomicRefCell;
 use lru::LruCache;
 use near_primitives::math::FastDistribution;
 use near_primitives::shard_layout::ShardUId;
+use near_primitives::transaction::Action;
 use near_primitives::types::{TrieCacheMode, TrieNodesCount};
 use std::cell::{Cell, RefCell};
 use std::io::ErrorKind;
@@ -182,6 +183,7 @@ pub struct TrieCachingStorage {
     pub(crate) db_read_nodes: Cell<u64>,
     /// Counts trie nodes retrieved from the chunk cache.
     pub(crate) mem_read_nodes: Cell<u64>,
+    pub(crate) action_type: Cell<u8>,
 }
 
 impl TrieCachingStorage {
@@ -194,6 +196,7 @@ impl TrieCachingStorage {
             chunk_cache: RefCell::new(Default::default()),
             db_read_nodes: Cell::new(0),
             mem_read_nodes: Cell::new(0),
+            action_type: Cell::new(0),
         }
     }
 
@@ -236,7 +239,12 @@ impl TrieCachingStorage {
         current_time: std::time::Instant,
         latency_us: u128,
     ) {
-        self.store.update_latency_get_and_print_if_needed(current_time, latency_us, self.shard_uid);
+        self.store.update_latency_get_and_print_if_needed(
+            current_time,
+            latency_us,
+            self.shard_uid,
+            self.action_type.get(),
+        );
     }
 }
 

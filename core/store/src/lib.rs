@@ -54,8 +54,9 @@ pub use crate::config::{get_store_path, store_path_exists, StoreConfig, StoreOpe
 #[derive(Clone)]
 pub struct Store {
     storage: Arc<dyn Database>,
-    pub latencies_retrieve:
-        Arc<AtomicRefCell<HashMap<ShardUId, (FastDistribution, Option<std::time::Instant>, u64)>>>,
+    pub latencies_retrieve: Arc<
+        AtomicRefCell<HashMap<(ShardUId, u8), (FastDistribution, Option<std::time::Instant>, u64)>>,
+    >,
 }
 
 impl Store {
@@ -68,14 +69,13 @@ impl Store {
         current_time: std::time::Instant,
         latency_us: u128,
         shard_uid: ShardUId,
+        action_type: u8,
     ) {
         let latency_us = std::cmp::min(10_000, latency_us);
         if let Ok(mut latencies_retrieve) = self.latencies_retrieve.try_borrow_mut() {
-            let latency_retrieve = latencies_retrieve.entry(shard_uid.clone()).or_insert((
-                FastDistribution::new(0, 10_000),
-                None,
-                0,
-            ));
+            let latency_retrieve = latencies_retrieve
+                .entry((shard_uid.clone(), action_type.clone()))
+                .or_insert((FastDistribution::new(0, 10_000), None, 0));
             if latency_retrieve.1.is_none() {
                 latency_retrieve.1 = Some(current_time);
             }
@@ -86,10 +86,11 @@ impl Store {
             let slow_calls = latency_retrieve.0.total_count();
             if seconds_elapsed > 30 {
                 println!(
-                    "total retrieve: {} mean: {} shard: {:?} latency: {:?}",
+                    "total retrieve: {} mean: {} shard: {:?} action type: {} latency: {:?}",
                     slow_calls,
                     latency_retrieve.0.sum() / slow_calls,
                     shard_uid,
+                    action_type,
                     latency_retrieve.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
                 );
                 latency_retrieve.0.clear();

@@ -88,6 +88,13 @@ impl Action {
             _ => 0,
         }
     }
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            Action::FunctionCall(_) => 1,
+            Action::Transfer(_) => 2,
+            _ => 0, // other
+        }
+    }
 }
 
 /// Create account action

@@ -177,6 +177,12 @@ impl TrieUpdate {
             storage.set_mode(state);
         }
     }
+
+    pub fn set_action_type(&self, action: u8) {
+        if let Some(storage) = self.trie.storage.as_caching_storage() {
+            storage.action_type.set(action);
+        }
+    }
 }
 
 struct MergeIter<'a> {
