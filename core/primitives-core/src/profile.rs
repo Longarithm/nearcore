@@ -138,7 +138,7 @@ impl ProfileData {
 
         let mut result = 0;
         for i in cost_indices {
-            result += self[i];
+            result += self.data[i];
         }
         result
     }
