@@ -81,7 +81,9 @@ impl SafeTrieCache {
         monitoring_data.2 += cost;
     }
 
-    pub fn get_slow_calls(&mut self) -> u64 {}
+    pub fn get_slow_calls(&mut self) -> u64 {
+        self.slow_calls
+    }
 }
 
 impl TrieCache {
@@ -98,6 +100,7 @@ impl TrieCache {
             shard_id,
             cache: LruCache::new(cap),
             monitoring_data: HashMap::default(),
+            slow_calls: 0,
         })))
     }
 
