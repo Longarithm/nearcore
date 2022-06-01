@@ -36,7 +36,7 @@ impl SafeTrieCache {
         action_type: u8,
     ) {
         let latency_us = std::cmp::min(10_000, latency_us);
-        self.sum_calls += latency_us;
+        self.sum_calls += latency_us as u64;
 
         let monitoring_data = self.monitoring_data.entry(action_type.clone()).or_insert((
             FastDistribution::new(0, 10_000),
