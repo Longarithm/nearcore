@@ -1,6 +1,8 @@
 use super::StoreConfig;
 use crate::db::refcount::merge_refcounted_records;
 use crate::{metrics, CryptoHash, DBCol};
+use atomic_refcell::AtomicRefCell;
+use near_primitives::shard_layout::ShardUId;
 use near_primitives::version::DbVersion;
 use once_cell::sync::Lazy;
 use rocksdb::checkpoint::Checkpoint;
@@ -213,7 +215,11 @@ impl RocksDB {
             check_free_space_counter: std::sync::atomic::AtomicU16::new(0),
             free_space_threshold: bytesize::ByteSize::mb(16),
             _instance_counter: InstanceCounter::new(),
-            fast_db: fast_kv_store::HashTable::new(path_fast_db, CryptoHash::default().0, None),
+            fast_db: AtomicRefCell::new(fast_kv_store::HashTable::new(
+                path_fast_db,
+                CryptoHash::default().0,
+                None,
+            )),
         })
     }
 
@@ -298,7 +304,18 @@ impl Database for RocksDB {
 
         let read_options = rocksdb_read_options();
         let result = match col {
-            DBCol::State => self.fast_db.get(key.to_vec()),
+            DBCol::State => {
+                let mut db = self.fast_db.borrow_mut();
+                let shard_uid = ShardUId::try_from(&key[0..8]).unwrap();
+                match shard_uid.shard_id {
+                    1 => {
+                        return Ok(db.get(key.to_vec()));
+                    }
+                    _ => {
+                        panic!("Incorrect shard {}", shard_uid.shard_id);
+                    }
+                }
+            }
             _ => {
                 let result = self.db.get_cf_opt(self.cf_handle(col), key, &read_options)?;
                 let result = Ok(RocksDB::get_with_rc_logic(col, result));
