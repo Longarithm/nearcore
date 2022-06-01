@@ -70,24 +70,6 @@ impl Store {
         }
     }
 
-    // fn get_monitoring_index(&self) -> usize {
-    //     let guard = self.monitoring_indices.lock().unwrap();
-    //     let key =
-    //     if let Ok(mut monitoring_indices) = self.monitoring_indices.try_borrow_mut() {
-    //         let monitoring_data = shards_monitoring_data
-    //             .entry((shard_uid.clone(), action_type.clone()))
-    //             .or_insert((FastDistribution::new(0, 10_000), None, 0));
-    //     }
-    // }
-
-    fn get_slow_calls(&self, shard_uid: ShardUId) -> u64 {
-        if let Ok(mut shards_slow_calls) = self.slow_calls.try_borrow_mut() {
-            let slow_calls = shards_slow_calls.entry(shard_uid.clone()).or_insert(0);
-            return *slow_calls;
-        }
-        return 0;
-    }
-
     pub fn get(&self, column: DBCol, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
         self.storage.get(column, key).map_err(io::Error::from)
     }

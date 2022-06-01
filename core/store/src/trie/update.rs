@@ -184,9 +184,9 @@ impl TrieUpdate {
         }
     }
 
-    pub fn get_slow_calls(&self) -> u64 {
+    pub fn get_sum_calls(&self) -> u64 {
         if let Some(storage) = self.trie.storage.as_caching_storage() {
-            storage.get_slow_calls()
+            storage.get_sum_calls()
         } else {
             0
         }

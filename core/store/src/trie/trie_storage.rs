@@ -25,7 +25,7 @@ pub struct SafeTrieCache {
     pub shard_id: u32,
     pub cache: LruCache<CryptoHash, Arc<[u8]>>,
     pub monitoring_data: HashMap<u8, (FastDistribution, Option<std::time::Instant>, u64)>,
-    pub slow_calls: u64,
+    pub sum_calls: u64,
 }
 
 impl SafeTrieCache {
@@ -36,10 +36,7 @@ impl SafeTrieCache {
         action_type: u8,
     ) {
         let latency_us = std::cmp::min(10_000, latency_us);
-
-        if latency_us >= 200 {
-            self.slow_calls += 1;
-        }
+        self.sum_calls += latency_us;
 
         let monitoring_data = self.monitoring_data.entry(action_type.clone()).or_insert((
             FastDistribution::new(0, 10_000),
@@ -80,10 +77,6 @@ impl SafeTrieCache {
         ));
         monitoring_data.2 += cost;
     }
-
-    pub fn get_slow_calls(&mut self) -> u64 {
-        self.slow_calls
-    }
 }
 
 impl TrieCache {
@@ -100,7 +93,7 @@ impl TrieCache {
             shard_id,
             cache: LruCache::new(cap),
             monitoring_data: HashMap::default(),
-            slow_calls: 0,
+            sum_calls: 0,
         })))
     }
 
@@ -327,9 +320,9 @@ impl TrieCachingStorage {
         guard.update_storage_cost(cost, self.action_type.get());
     }
 
-    pub fn get_slow_calls(&self) -> u64 {
+    pub fn get_sum_calls(&self) -> u64 {
         let mut guard = self.shard_cache.0.lock().unwrap();
-        guard.slow_calls
+        guard.sum_calls
     }
 }
 
