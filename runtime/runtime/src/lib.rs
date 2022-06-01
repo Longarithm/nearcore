@@ -1294,7 +1294,7 @@ impl Runtime {
             let elapsed = start_time.elapsed().as_millis();
             if elapsed >= 100 && (elapsed as u64) * 10u64.pow(12) > gas_burnt * 3 {
                 let slow_calls = state_update.get_slow_calls() - slow_calls_before;
-                tracing::debug!(target: "store", elapsed = elapsed, gas_burnt = gas_burnt / 10u64.pow(12), receipt_id = %receipt.receipt_id, slow_calls = slow_calls);
+                tracing::debug!(target: "store", elapsed = elapsed as u64, gas_burnt = gas_burnt / 10u64.pow(12), receipt_id = %receipt.receipt_id, slow_calls = slow_calls);
             }
 
             Ok(())
