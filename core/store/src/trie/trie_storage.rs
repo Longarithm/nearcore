@@ -387,7 +387,11 @@ impl TrieStorage for TrieCachingStorage {
             self.chunk_cache.borrow_mut().insert(*hash, val.clone());
         };
 
-        self.update_latency_get_and_print_if_needed(start_time, start_time.elapsed().as_micros());
+        guard.update_latency_retrieve_and_print_if_needed(
+            start_time,
+            start_time.elapsed().as_micros(),
+            self.action_type.get(),
+        );
         Ok(val)
     }
 
