@@ -1271,7 +1271,7 @@ impl Runtime {
                 node_counter = ?state_update.trie.get_trie_nodes_count())
             .entered();
             let start_time = std::time::Instant::now();
-            // state_update.get_slow_calls(action.to_u8());
+            let slow_calls_before = state_update.get_slow_calls();
             let result = self.process_receipt(
                 state_update,
                 apply_state,
@@ -1281,17 +1281,22 @@ impl Runtime {
                 &mut stats,
                 epoch_info_provider,
             );
-            let elapsed = start_time.elapsed().as_millis();
-            if elapsed >= 100 {}
             tracing::debug!(target: "runtime", node_counter = ?state_update.trie.get_trie_nodes_count());
+            let mut gas_burnt = 0;
             result?.into_iter().try_for_each(
                 |outcome_with_id: ExecutionOutcomeWithId| -> Result<(), RuntimeError> {
-                    *total_gas_burnt =
-                        safe_add_gas(*total_gas_burnt, outcome_with_id.outcome.gas_burnt)?;
+                    gas_burnt = safe_add_gas(gas_burnt, outcome_with_id.outcome.gas_burnt)?;
                     outcomes.push(outcome_with_id);
                     Ok(())
                 },
             )?;
+            *total_gas_burnt = safe_add_gas(*total_gas_burnt, gas_burnt)?;
+            let elapsed = start_time.elapsed().as_millis();
+            if elapsed >= 100 && (elapsed as u64) * 10u64.pow(12) > gas_burnt * 3 {
+                let slow_calls = state_update.get_slow_calls() - slow_calls_before;
+                tracing::debug!(target: "store", elapsed = elapsed, gas_burnt = gas_burnt / 10u64.pow(12), receipt_id = %receipt.receipt_id, slow_calls = slow_calls);
+            }
+
             Ok(())
         };
 
