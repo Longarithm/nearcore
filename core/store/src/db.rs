@@ -1,6 +1,6 @@
 use super::StoreConfig;
 use crate::db::refcount::merge_refcounted_records;
-use crate::{metrics, DBCol};
+use crate::{metrics, CryptoHash, DBCol};
 use near_primitives::version::DbVersion;
 use once_cell::sync::Lazy;
 use rocksdb::checkpoint::Checkpoint;
@@ -119,6 +119,8 @@ pub struct RocksDB {
 
     // RAII-style of keeping track of the number of instances of RocksDB in a global variable.
     _instance_counter: InstanceCounter,
+
+    fast_db: AtomicRefCell<fast_kv_store::HashTable>,
 }
 
 // DB was already Send+Sync. cf and read_options are const pointers using only functions in
@@ -201,6 +203,8 @@ impl RocksDB {
                 panic!("Missing cf handle for {}", col.variant_name());
             })
         });
+
+        let mut path_fast_db = path.clone().join("fast_db.txt");
         Ok(Self {
             db,
             db_opt,
@@ -209,6 +213,7 @@ impl RocksDB {
             check_free_space_counter: std::sync::atomic::AtomicU16::new(0),
             free_space_threshold: bytesize::ByteSize::mb(16),
             _instance_counter: InstanceCounter::new(),
+            fast_db: fast_kv_store::HashTable::new(path_fast_db, CryptoHash::default().0, None),
         })
     }
 
@@ -292,8 +297,14 @@ impl Database for RocksDB {
             metrics::DATABASE_OP_LATENCY_HIST.with_label_values(&["get", col.into()]).start_timer();
 
         let read_options = rocksdb_read_options();
-        let result = self.db.get_cf_opt(self.cf_handle(col), key, &read_options)?;
-        let result = Ok(RocksDB::get_with_rc_logic(col, result));
+        let result = match col {
+            DBCol::State => self.fast_db.get(key.to_vec()),
+            _ => {
+                let result = self.db.get_cf_opt(self.cf_handle(col), key, &read_options)?;
+                let result = Ok(RocksDB::get_with_rc_logic(col, result));
+                result
+            }
+        };
 
         timer.observe_duration();
         result
