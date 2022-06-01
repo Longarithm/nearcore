@@ -387,8 +387,8 @@ impl StorageLogger {
     }
 
     pub fn write(&mut self, value: serde_json::Value) {
-        self.file.write(value.to_string().as_bytes());
-        self.file.write(b"\n");
+        self.file.write(value.to_string().as_bytes()).unwrap();
+        self.file.write(b"\n").unwrap();
     }
 }
 
