@@ -1257,8 +1257,6 @@ impl Runtime {
             outcomes.push(outcome_with_id);
         }
 
-        storage_log(json!({"method": "process_begin"}));
-
         let mut delayed_receipts_indices: DelayedReceiptIndices =
             get(&state_update, &TrieKey::DelayedReceiptIndices)?.unwrap_or_default();
         let initial_delayed_receipt_indices = delayed_receipts_indices.clone();
@@ -1267,6 +1265,9 @@ impl Runtime {
                                    state_update: &mut TrieUpdate,
                                    total_gas_burnt: &mut Gas|
          -> Result<_, RuntimeError> {
+            storage_log(
+                json!({"method": "process_begin", "receipt": format!("{}", receipt.receipt_id)}),
+            );
             let _span = tracing::debug_span!(
                 target: "runtime",
                 "process_receipt",
@@ -1283,6 +1284,7 @@ impl Runtime {
                 epoch_info_provider,
             );
             tracing::debug!(target: "runtime", node_counter = ?state_update.trie.get_trie_nodes_count());
+            storage_log(json!({"method": "process_end"}));
             result?.into_iter().try_for_each(
                 |outcome_with_id: ExecutionOutcomeWithId| -> Result<(), RuntimeError> {
                     *total_gas_burnt =
@@ -1349,8 +1351,6 @@ impl Runtime {
                 Self::delay_receipt(&mut state_update, &mut delayed_receipts_indices, receipt)?;
             }
         }
-
-        storage_log(json!({"method": "process_end"}));
 
         if delayed_receipts_indices != initial_delayed_receipt_indices {
             set(&mut state_update, TrieKey::DelayedReceiptIndices, &delayed_receipts_indices);
