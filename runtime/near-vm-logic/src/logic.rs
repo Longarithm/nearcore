@@ -2531,7 +2531,12 @@ impl<'a> VMLogic<'a> {
                 self.internal_write_register(register_id, value)?;
                 Ok(1)
             }
-            None => Ok(0),
+            None => {
+                storage_log(
+                    json!({"method": "storage_remove", "record": 1, "key": key, "value": log_value(&[0])}),
+                );
+                Ok(0)
+            }
         }
     }
 
