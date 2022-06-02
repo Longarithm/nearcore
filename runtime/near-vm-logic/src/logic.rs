@@ -103,10 +103,13 @@ macro_rules! memory_set {
     };
 }
 
-pub fn log_value(value: &[u8]) -> serde_json::Value {
-    let val = &hash(value).0;
-    val.into()
+pub fn log_value(value: &[u8]) -> &[u8] {
+    value
 }
+
+// pub fn log_value(value: &[u8]) -> String {
+//     format!("{}", hash(value))
+// }
 
 impl<'a> VMLogic<'a> {
     pub fn new_with_protocol_version(
