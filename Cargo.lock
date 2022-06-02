@@ -3135,6 +3135,7 @@ dependencies = [
  "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
+ "serde_json",
  "thiserror",
  "tokio",
  "tracing",
