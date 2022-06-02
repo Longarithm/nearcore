@@ -1296,10 +1296,9 @@ impl Runtime {
             *total_gas_burnt = safe_add_gas(*total_gas_burnt, gas_burnt)?;
             let elapsed = start_time.elapsed().as_millis();
 
-            if elapsed >= 1 && (elapsed as u64) * 10u64.pow(12) > gas_burnt {
+            if elapsed >= 100 && (elapsed as u64) * 10u64.pow(12) > gas_burnt * 3 {
                 let sum_calls = state_update.get_sum_calls() - sum_calls_before;
-                let (mut mem_calls_new, mut rocksdb_calls_new, mut db_calls_new) =
-                    state_update.get_reads();
+                let (mem_calls_new, rocksdb_calls_new, db_calls_new) = state_update.get_reads();
 
                 let data = json!({
                     "elapsed": elapsed as u64,
@@ -1310,7 +1309,7 @@ impl Runtime {
                     "rocksdb_calls": rocksdb_calls_new - rocksdb_calls,
                     "db_calls": db_calls_new - db_calls,
                 });
-                tracing::debug!(target: "store", data = format!("{}", data).as_str());
+                tracing::debug!(target: "store", data = format!("{}", data.as_object()).as_str());
                 receipt_log(data);
             }
 
