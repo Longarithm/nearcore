@@ -655,6 +655,7 @@ impl Trie {
                     if key.starts_with(&existing_key) {
                         hash = child;
                         key = key.mid(existing_key.len());
+                        storage_log(json!({"method": "trie_step", "len": existing_key.len()}));
                     } else {
                         return Ok(None);
                     }
@@ -672,6 +673,7 @@ impl Trie {
                             Some(x) => {
                                 hash = x;
                                 key = key.mid(1);
+                                storage_log(json!({"method": "trie_step", "len": 1}));
                             }
                             None => return Ok(None),
                         }
