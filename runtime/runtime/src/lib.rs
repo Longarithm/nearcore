@@ -1310,7 +1310,7 @@ impl Runtime {
                     "rocksdb_calls": rocksdb_calls_new - rocksdb_calls,
                     "db_calls": db_calls_new - db_calls,
                 });
-                tracing::debug!(target: "store", data = format!("{}", data));
+                tracing::debug!(target: "store", data = format!("{}", data).as_str());
                 receipt_log(data);
             }
 
