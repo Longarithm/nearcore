@@ -104,7 +104,7 @@ macro_rules! memory_set {
 }
 
 pub fn log_value(value: &[u8]) -> serde_json::Value {
-    hash(value).into()
+    hash(value).0.into()
 }
 
 impl<'a> VMLogic<'a> {
