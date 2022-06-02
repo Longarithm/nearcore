@@ -1300,6 +1300,15 @@ impl Runtime {
                 let sum_calls = state_update.get_sum_calls() - sum_calls_before;
                 let (mem_calls_new, rocksdb_calls_new, db_calls_new) = state_update.get_reads();
 
+                tracing::debug!(target: "store",
+                    elapsed = elapsed as u64,
+                    gas_burnt = gas_burnt / 10u64.pow(12),
+                    receipt_id = %receipt.receipt_id,
+                    sum_calls = sum_calls,
+                    mem_calls = mem_calls_new - mem_calls,
+                    rocksdb_calls = rocksdb_calls_new - rocksdb_calls,
+                    db_calls = db_calls_new - db_calls,
+                );
                 let data = json!({
                     "elapsed": elapsed as u64,
                     "gas_burnt": gas_burnt / 10u64.pow(12),
@@ -1309,7 +1318,6 @@ impl Runtime {
                     "rocksdb_calls": rocksdb_calls_new - rocksdb_calls,
                     "db_calls": db_calls_new - db_calls,
                 });
-                tracing::debug!(target: "store", data = format!("{}", data.as_object()).as_str());
                 receipt_log(data);
             }
 

@@ -376,7 +376,7 @@ impl UnderchargingLogger {
     }
 
     pub fn write(&mut self, value: serde_json::Value) {
-        let name = format!("receipts_{}", chrono::Utc::now().date().to_string());
+        let name = format!("receipts_{}.txt", chrono::Utc::now().date().to_string());
         let file = self.folder.join(name);
         if !file.exists() {
             File::create(file.clone());
