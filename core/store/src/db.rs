@@ -299,10 +299,6 @@ impl Database for RocksDB {
         let read_options = rocksdb_read_options();
         let result = self.db.get_cf_opt(self.cf_handle(col), key, &read_options)?;
         let result = Ok(RocksDB::get_with_rc_logic(col, result));
-        let length = match &result {
-            Ok(Some(val)) => val.len(),
-            _ => 0,
-        };
         timer.observe_duration();
         match col {
             DBCol::State => {

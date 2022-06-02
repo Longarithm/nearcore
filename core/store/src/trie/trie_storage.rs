@@ -251,6 +251,7 @@ pub struct TrieCachingStorage {
     pub(crate) db_read_nodes: Cell<u64>,
     /// Counts trie nodes retrieved from the chunk cache.
     pub(crate) mem_read_nodes: Cell<u64>,
+    pub(crate) rocksdb_read_nodes: Cell<u64>,
     pub(crate) action_type: Cell<u8>,
 }
 
@@ -264,6 +265,7 @@ impl TrieCachingStorage {
             chunk_cache: RefCell::new(Default::default()),
             db_read_nodes: Cell::new(0),
             mem_read_nodes: Cell::new(0),
+            rocksdb_read_nodes: Cell::new(0),
             action_type: Cell::new(0),
         }
     }
@@ -291,6 +293,10 @@ impl TrieCachingStorage {
 
     fn inc_db_read_nodes(&self) {
         self.db_read_nodes.set(self.db_read_nodes.get() + 1);
+    }
+
+    fn inc_rocksdb_read_nodes(&self) {
+        self.rocksdb_read_nodes.set(self.rocksdb_read_nodes.get() + 1);
     }
 
     fn inc_mem_read_nodes(&self) {
@@ -347,6 +353,7 @@ impl TrieStorage for TrieCachingStorage {
             Some(val) => val.clone(),
             None => {
                 // If value is not present in cache, get it from the storage.
+                self.inc_rocksdb_read_nodes();
                 let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
                 let val = self
                     .store

@@ -3130,6 +3130,7 @@ version = "0.0.0"
 dependencies = [
  "atty",
  "backtrace",
+ "chrono",
  "clap 3.1.18",
  "once_cell",
  "opentelemetry",
@@ -3593,6 +3594,7 @@ dependencies = [
  "near-chain-configs",
  "near-crypto",
  "near-metrics",
+ "near-o11y",
  "near-primitives",
  "near-store",
  "near-test-contracts",

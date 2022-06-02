@@ -1,3 +1,4 @@
+use serde_json::json;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -8,6 +9,7 @@ use tracing::debug;
 use near_chain_configs::Genesis;
 pub use near_crypto;
 use near_crypto::PublicKey;
+use near_o11y::receipt_log;
 pub use near_primitives;
 #[cfg(feature = "sandbox")]
 use near_primitives::contract::ContractCode;
@@ -1272,6 +1274,8 @@ impl Runtime {
             .entered();
             let start_time = std::time::Instant::now();
             let sum_calls_before = state_update.get_sum_calls();
+            let (mem_calls, rocksdb_calls, db_calls) = state_update.get_reads();
+
             let result = self.process_receipt(
                 state_update,
                 apply_state,
@@ -1281,7 +1285,6 @@ impl Runtime {
                 &mut stats,
                 epoch_info_provider,
             );
-            tracing::debug!(target: "runtime", node_counter = ?state_update.trie.get_trie_nodes_count());
             let mut gas_burnt = 0;
             result?.into_iter().try_for_each(
                 |outcome_with_id: ExecutionOutcomeWithId| -> Result<(), RuntimeError> {
@@ -1292,9 +1295,23 @@ impl Runtime {
             )?;
             *total_gas_burnt = safe_add_gas(*total_gas_burnt, gas_burnt)?;
             let elapsed = start_time.elapsed().as_millis();
-            if elapsed >= 100 && (elapsed as u64) * 10u64.pow(12) > gas_burnt * 3 {
+
+            if elapsed >= 1 && (elapsed as u64) * 10u64.pow(12) > gas_burnt {
                 let sum_calls = state_update.get_sum_calls() - sum_calls_before;
-                tracing::debug!(target: "store", elapsed = elapsed as u64, gas_burnt = gas_burnt / 10u64.pow(12), receipt_id = %receipt.receipt_id, sum_calls = sum_calls);
+                let (mut mem_calls_new, mut rocksdb_calls_new, mut db_calls_new) =
+                    state_update.get_reads();
+
+                let data = json!({
+                    "elapsed": elapsed as u64,
+                    "gas_burnt": gas_burnt / 10u64.pow(12),
+                    "receipt_id": format!("{}", receipt.receipt_id),
+                    "sum_calls": sum_calls,
+                    "mem_calls": mem_calls_new - mem_calls,
+                    "rocksdb_calls": rocksdb_calls_new - rocksdb_calls,
+                    "db_calls": db_calls_new - db_calls,
+                });
+                tracing::debug!(target: "store", data = data);
+                receipt_log(data);
             }
 
             Ok(())

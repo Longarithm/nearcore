@@ -192,6 +192,18 @@ impl TrieUpdate {
         }
     }
 
+    pub fn get_reads(&self) -> (u64, u64, u64) {
+        if let Some(storage) = self.trie.storage.as_caching_storage() {
+            (
+                storage.mem_read_nodes.get(),
+                storage.rocksdb_read_nodes.get(),
+                storage.db_read_nodes.get(),
+            )
+        } else {
+            (0, 0, 0)
+        }
+    }
+
     pub fn update_storage_cost(&self, cost: u64) {
         if let Some(storage) = self.trie.storage.as_caching_storage() {
             storage.update_storage_cost(cost);

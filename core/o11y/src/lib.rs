@@ -2,10 +2,16 @@
 
 pub use {backtrace, tracing, tracing_appender, tracing_subscriber};
 
+use clap::lazy_static::lazy_static;
 use clap::Parser;
 use once_cell::sync::OnceCell;
 use opentelemetry::sdk::trace::{self, IdGenerator, Sampler, Tracer};
 use std::borrow::Cow;
+use std::fs;
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking::NonBlocking;
 use tracing_opentelemetry::OpenTelemetryLayer;
@@ -358,4 +364,34 @@ macro_rules! log_assert {
             }
         }
     };
+}
+
+pub struct UnderchargingLogger {
+    folder: PathBuf,
+}
+
+impl UnderchargingLogger {
+    pub fn new(folder: &str) -> Self {
+        return Self { folder: Path::new(folder).to_path_buf() };
+    }
+
+    pub fn write(&mut self, value: serde_json::Value) {
+        let name = format!("receipts_{}", chrono::Utc::now().date().to_string());
+        let file = self.folder.join(name);
+        if !file.exists() {
+            File::create(file.clone());
+        }
+        let mut file = fs::OpenOptions::new().write(true).append(true).open(file).unwrap();
+        file.write(value.to_string().as_bytes()).unwrap();
+        file.write(b"\n").unwrap();
+    }
+}
+
+lazy_static! {
+    static ref UNDERCHARGING_LOGGER: Mutex<UnderchargingLogger> =
+        Mutex::new(UnderchargingLogger::new("/tmp/"));
+}
+
+pub fn receipt_log(value: serde_json::Value) {
+    UNDERCHARGING_LOGGER.lock().unwrap().write(value);
 }
