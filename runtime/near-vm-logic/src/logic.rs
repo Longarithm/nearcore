@@ -103,6 +103,10 @@ macro_rules! memory_set {
     };
 }
 
+pub fn log_value(value: &[u8]) -> serde_json::Value {
+    hash(value).into()
+}
+
 impl<'a> VMLogic<'a> {
     pub fn new_with_protocol_version(
         ext: &'a mut dyn External,
@@ -2319,6 +2323,8 @@ impl<'a> VMLogic<'a> {
         value_ptr: u64,
         register_id: u64,
     ) -> Result<u64> {
+        storage_log(json!({"method": "storage_write", "record": 0}));
+
         self.gas_counter.pay_base(base)?;
         if self.context.is_view() {
             return Err(
@@ -2343,8 +2349,6 @@ impl<'a> VMLogic<'a> {
             .into());
         }
 
-        storage_log(json!({"method": "storage_write", "key": key, "value": value}));
-
         self.gas_counter.pay_per(storage_write_key_byte, key.len() as u64)?;
         self.gas_counter.pay_per(storage_write_value_byte, value.len() as u64)?;
         let nodes_before = self.ext.get_trie_nodes_count();
@@ -2354,6 +2358,10 @@ impl<'a> VMLogic<'a> {
         let nodes_delta = self.ext.get_trie_nodes_count() - nodes_before;
         self.gas_counter.add_trie_fees(nodes_delta)?;
         self.ext.storage_set(&key, &value)?;
+        storage_log(
+            json!({"method": "storage_write", "record": 1, "key": key, "value": log_value(&value)}),
+        );
+
         let storage_config = &self.fees_config.storage_usage_config;
         match evicted {
             Some(old_value) => {
@@ -2417,7 +2425,7 @@ impl<'a> VMLogic<'a> {
     /// `base + storage_read_base + storage_read_key_byte * num_key_bytes + storage_read_value_byte + num_value_bytes
     ///  cost to read key from register + cost to write value into register`.
     pub fn storage_read(&mut self, key_len: u64, key_ptr: u64, register_id: u64) -> Result<u64> {
-        storage_log(json!({"method": "storage_read_begin"}));
+        storage_log(json!({"method": "storage_read", "record": 0}));
 
         self.gas_counter.pay_base(base)?;
         self.gas_counter.pay_base(storage_read_base)?;
@@ -2439,14 +2447,15 @@ impl<'a> VMLogic<'a> {
         match read {
             Some(value) => {
                 storage_log(
-                    json!({"method": "storage_read_end", "key": key, "value": hash(&value)}),
+                    json!({"method": "storage_read", "record": 1, "key": key, "value": log_value(&value)}),
                 );
                 self.internal_write_register(register_id, value)?;
                 Ok(1)
             }
             None => {
-                let empty: Vec<u8> = vec![];
-                storage_log(json!({"method": "storage_read_end", "key": key, "value": empty}));
+                storage_log(
+                    json!({"method": "storage_read", "record": 1, "key": key, "value": log_value(&[0])}),
+                );
                 Ok(0)
             }
         }
@@ -2472,6 +2481,8 @@ impl<'a> VMLogic<'a> {
     /// `base + storage_remove_base + storage_remove_key_byte * num_key_bytes + storage_remove_ret_value_byte * num_value_bytes
     /// + cost to read the key + cost to write the value`.
     pub fn storage_remove(&mut self, key_len: u64, key_ptr: u64, register_id: u64) -> Result<u64> {
+        storage_log(json!({"method": "storage_remove", "record": 0}));
+
         self.gas_counter.pay_base(base)?;
         if self.context.is_view() {
             return Err(
@@ -2488,8 +2499,6 @@ impl<'a> VMLogic<'a> {
             .into());
         }
 
-        storage_log(json!({"method": "storage_remove", "key": key}));
-
         self.gas_counter.pay_per(storage_remove_key_byte, key.len() as u64)?;
         let nodes_before = self.ext.get_trie_nodes_count();
         let removed_ptr = self.ext.storage_get(&key)?;
@@ -2502,6 +2511,10 @@ impl<'a> VMLogic<'a> {
         let storage_config = &self.fees_config.storage_usage_config;
         match removed {
             Some(value) => {
+                storage_log(
+                    json!({"method": "storage_remove", "record": 1, "key": key, "value": log_value(&value)}),
+                );
+
                 // Inner value can't overflow, because the key/value length is limited.
                 self.current_storage_usage = self
                     .current_storage_usage
@@ -2531,6 +2544,8 @@ impl<'a> VMLogic<'a> {
     ///
     /// `base + storage_has_key_base + storage_has_key_byte * num_bytes + cost of reading key`
     pub fn storage_has_key(&mut self, key_len: u64, key_ptr: u64) -> Result<u64> {
+        storage_log(json!({"method": "storage_has_key", "record": 0}));
+
         self.gas_counter.pay_base(base)?;
         self.gas_counter.pay_base(storage_has_key_base)?;
         let key = self.get_vec_from_memory_or_register(key_ptr, key_len)?;
@@ -2542,13 +2557,13 @@ impl<'a> VMLogic<'a> {
             .into());
         }
 
-        storage_log(json!({"method": "storage_has_key", "key": key}));
-
         self.gas_counter.pay_per(storage_has_key_byte, key.len() as u64)?;
         let nodes_before = self.ext.get_trie_nodes_count();
         let res = self.ext.storage_has_key(&key);
         let nodes_delta = self.ext.get_trie_nodes_count() - nodes_before;
         self.gas_counter.add_trie_fees(nodes_delta)?;
+        storage_log(json!({"method": "storage_has_key", "record": 1, "key": key}));
+
         Ok(res? as u64)
     }
 
