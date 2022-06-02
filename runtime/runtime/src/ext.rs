@@ -96,7 +96,10 @@ impl<'a> RuntimeExt<'a> {
     }
 
     pub fn create_storage_key(&self, key: &[u8]) -> TrieKey {
-        TrieKey::ContractData { account_id: self.account_id.clone(), key: key.to_vec() }
+        let storage_key =
+            TrieKey::ContractData { account_id: self.account_id.clone(), key: key.to_vec() };
+        storage_log(json!({"method": "create_storage_key", "key": storage_key.to_vec()}));
+        storage_key
     }
 
     pub fn set_trie_cache_mode(&mut self, state: TrieCacheMode) {
@@ -124,9 +127,6 @@ impl<'a> External for RuntimeExt<'a> {
 
     fn storage_get<'b>(&'b self, key: &[u8]) -> ExtResult<Option<Box<dyn ValuePtr + 'b>>> {
         let storage_key = self.create_storage_key(key);
-
-        storage_log(json!({"method": "storage_get", "key": key.to_vec()}));
-
         self.trie_update
             .get_ref(&storage_key)
             .map_err(wrap_storage_error)
