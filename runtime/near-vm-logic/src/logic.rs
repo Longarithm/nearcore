@@ -2362,9 +2362,6 @@ impl<'a> VMLogic<'a> {
         let nodes_delta = self.ext.get_trie_nodes_count() - nodes_before;
         self.gas_counter.add_trie_fees(nodes_delta)?;
         self.ext.storage_set(&key, &value)?;
-        storage_log(
-            json!({"method": "storage_write", "record": 1, "key": key, "value": log_value(&value)}),
-        );
 
         let storage_config = &self.fees_config.storage_usage_config;
         match evicted {
@@ -2379,6 +2376,10 @@ impl<'a> VMLogic<'a> {
                     .current_storage_usage
                     .checked_add(value.len() as u64)
                     .ok_or(InconsistentStateError::IntegerOverflow)?;
+                storage_log(
+                    json!({"method": "storage_write", "record": 1, "key": key, "value": log_value(&value), "old_value": log_value(&value)}),
+                );
+
                 self.internal_write_register(register_id, old_value)?;
                 Ok(1)
             }
@@ -2392,6 +2393,10 @@ impl<'a> VMLogic<'a> {
                             + storage_config.num_extra_bytes_record,
                     )
                     .ok_or(InconsistentStateError::IntegerOverflow)?;
+                storage_log(
+                    json!({"method": "storage_write", "record": 1, "key": key, "value": log_value(&value)}),
+                );
+
                 Ok(0)
             }
         }
