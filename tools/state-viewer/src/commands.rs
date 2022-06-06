@@ -505,6 +505,7 @@ pub(crate) fn view_chain(
             }
         }
     };
+    eprintln!("{:?}", block);
     let epoch_manager = EpochManager::new_from_genesis_config(store, &near_config.genesis.config)
         .expect("Failed to start Epoch Manager");
     let shard_layout = epoch_manager.get_shard_layout(block.header().epoch_id()).unwrap();
