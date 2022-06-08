@@ -71,7 +71,7 @@ impl TrieCache {
     }
 
     pub fn inc_hits(&self) {
-        let guard = self.0.lock().expect(POISONED_LOCK_ERR);
+        let mut guard = self.0.lock().expect(POISONED_LOCK_ERR);
         guard.hits += 1;
     }
 }
