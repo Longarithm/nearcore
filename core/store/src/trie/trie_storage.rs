@@ -260,7 +260,7 @@ impl TrieStorage for TrieCachingStorage {
 
         // Try to get value from shard cache containing most recently touched nodes.
         let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
-        let val = match guard.get(hash) {
+        let val = match guard.cache.get(hash) {
             Some(val) => val.clone(),
             None => {
                 // If value is not present in cache, get it from the storage.
@@ -279,7 +279,7 @@ impl TrieStorage for TrieCachingStorage {
                 // is always a value hash, so for each key there could be only one value, and it is impossible to have
                 // **different** values for the given key in shard and chunk caches.
                 if val.len() < TRIE_LIMIT_CACHED_VALUE_SIZE {
-                    guard.put(*hash, val.clone());
+                    guard.cache.put(*hash, val.clone());
                 }
 
                 val
