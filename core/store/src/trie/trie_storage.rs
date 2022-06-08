@@ -156,7 +156,7 @@ const TRIE_MAX_SHARD_CACHE_SIZE: usize = 1;
 
 /// Values above this size (in bytes) are never cached.
 /// Note that Trie inner nodes are always smaller than this.
-pub(crate) const TRIE_LIMIT_CACHED_VALUE_SIZE: usize = 4000;
+pub(crate) const TRIE_LIMIT_CACHED_VALUE_SIZE: usize = 1000;
 
 pub struct TrieCachingStorage {
     pub(crate) store: Store,

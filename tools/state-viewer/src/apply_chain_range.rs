@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::Instant;
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -385,6 +386,8 @@ pub fn apply_chain_range(
         );
     };
 
+    let start_time = Instant::now();
+
     if sequential {
         range.into_iter().for_each(|height| {
             let _span = tracing::debug_span!(
@@ -407,6 +410,7 @@ pub fn apply_chain_range(
         });
     }
 
+    eprintln!("elapsed: {}s", start_time.elapsed().as_secs());
     println!(
         "No differences found after applying chunks in the range {}..={} for shard_id {}",
         start_height, end_height, shard_id
