@@ -11,17 +11,19 @@ use lru::LruCache;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::types::{TrieCacheMode, TrieNodesCount};
 use std::cell::{Cell, RefCell};
+use std::cmp::max;
 use std::io::ErrorKind;
 
 /// Wrapper over LruCache which doesn't hold too large elements.
 #[derive(Clone)]
-pub struct TrieCache(Arc<Mutex<SafeTrieCache>>);
+pub struct TrieCache(pub Arc<Mutex<SafeTrieCache>>);
 // pub struct TrieCache(Arc<Mutex<LruCache<CryptoHash, Arc<[u8]>>>>);
 
 pub struct SafeTrieCache {
     pub cache: LruCache<CryptoHash, Arc<[u8]>>,
     pub hits: u64,
     pub misses: u64,
+    pub evictions: u64,
     pub max_size: u64,
 }
 
@@ -35,6 +37,7 @@ impl TrieCache {
             cache: LruCache::new(cap),
             hits: 0,
             misses: 0,
+            evictions: 0,
             max_size: 0,
         })))
     }
@@ -261,8 +264,12 @@ impl TrieStorage for TrieCachingStorage {
         // Try to get value from shard cache containing most recently touched nodes.
         let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
         let val = match guard.cache.get(hash) {
-            Some(val) => val.clone(),
+            Some(val) => {
+                guard.hits += 1;
+                val.clone()
+            }
             None => {
+                guard.misses += 1;
                 // If value is not present in cache, get it from the storage.
                 let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
                 let val = self
@@ -279,6 +286,10 @@ impl TrieStorage for TrieCachingStorage {
                 // is always a value hash, so for each key there could be only one value, and it is impossible to have
                 // **different** values for the given key in shard and chunk caches.
                 if val.len() < TRIE_LIMIT_CACHED_VALUE_SIZE {
+                    if guard.cache.cap() == guard.cache.len() {
+                        guard.evictions += 1;
+                    }
+                    guard.max_size = max(guard.max_size, guard.cache.len() as u64);
                     guard.cache.put(*hash, val.clone());
                 }
 

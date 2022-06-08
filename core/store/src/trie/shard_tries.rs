@@ -9,7 +9,7 @@ use near_primitives::shard_layout;
 use near_primitives::shard_layout::{ShardUId, ShardVersion};
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{
-    NumShards, RawStateChange, RawStateChangesWithTrieKey, StateChangeCause, StateRoot,
+    NumShards, RawStateChange, RawStateChangesWithTrieKey, ShardId, StateChangeCause, StateRoot,
 };
 
 use crate::trie::trie_storage::{TrieCache, TrieCachingStorage};
@@ -20,13 +20,13 @@ use crate::{Store, StoreUpdate, Trie, TrieChanges, TrieUpdate};
 struct ShardTriesInner {
     store: Store,
     /// Cache reserved for client actor to use
-    caches: RwLock<HashMap<ShardUId, TrieCache>>,
+    pub caches: RwLock<HashMap<ShardUId, TrieCache>>,
     /// Cache for readers.
     view_caches: RwLock<HashMap<ShardUId, TrieCache>>,
 }
 
 #[derive(Clone)]
-pub struct ShardTries(Arc<ShardTriesInner>);
+pub struct ShardTries(pub Arc<ShardTriesInner>);
 
 impl ShardTries {
     fn get_new_cache(shards: &[ShardUId]) -> HashMap<ShardUId, TrieCache> {

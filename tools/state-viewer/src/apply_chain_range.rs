@@ -14,6 +14,7 @@ use near_chain_configs::Genesis;
 use near_primitives::borsh::maybestd::sync::Arc;
 use near_primitives::hash::CryptoHash;
 use near_primitives::receipt::DelayedReceiptIndices;
+use near_primitives::shard_layout::ShardUId;
 use near_primitives::transaction::{
     Action, ExecutionOutcomeWithId, ExecutionOutcomeWithIdAndProof,
 };
@@ -411,6 +412,14 @@ pub fn apply_chain_range(
     }
 
     eprintln!("elapsed: {}s", start_time.elapsed().as_secs());
+    let tries = runtime_adapter.get_tries();
+    let caches = tries.0.caches.write().unwrap();
+    let shard_uid = ShardUId { version: 1, shard_id: shard_id as u32 };
+    let cache = caches.get(&shard_uid).unwrap().0.lock().unwrap();
+    eprintln!(
+        "max_size={} hits={} misses={} evictions={}",
+        cache.max_size, cache.hits, cache.misses, cache.evictions
+    );
     println!(
         "No differences found after applying chunks in the range {}..={} for shard_id {}",
         start_height, end_height, shard_id

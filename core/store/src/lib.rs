@@ -50,7 +50,7 @@ pub use crate::config::{get_store_path, StoreConfig, StoreOpener};
 
 #[derive(Clone)]
 pub struct Store {
-    storage: Arc<dyn Database>,
+    pub storage: Arc<dyn Database>,
 }
 
 impl Store {
