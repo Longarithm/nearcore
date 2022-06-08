@@ -30,7 +30,19 @@ pub struct ShardTries(Arc<ShardTriesInner>);
 
 impl ShardTries {
     fn get_new_cache(shards: &[ShardUId]) -> HashMap<ShardUId, TrieCache> {
-        shards.iter().map(|&shard_id| (shard_id, TrieCache::new())).collect()
+        shards
+            .iter()
+            .map(|&shard_id| {
+                (
+                    shard_id,
+                    if shard_uid.shard_id == 2 {
+                        TrieCache::with_capacity(2_000_000)
+                    } else {
+                        TrieCache::new()
+                    },
+                )
+            })
+            .collect()
     }
 
     pub fn new(store: Store, shard_version: ShardVersion, num_shards: NumShards) -> Self {
