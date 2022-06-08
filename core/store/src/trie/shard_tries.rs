@@ -17,7 +17,7 @@ use crate::trie::{TrieRefcountChange, POISONED_LOCK_ERR};
 use crate::{DBCol, DBOp, DBTransaction};
 use crate::{Store, StoreUpdate, Trie, TrieChanges, TrieUpdate};
 
-struct ShardTriesInner {
+pub struct ShardTriesInner {
     store: Store,
     /// Cache reserved for client actor to use
     pub caches: RwLock<HashMap<ShardUId, TrieCache>>,
