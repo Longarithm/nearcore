@@ -57,11 +57,11 @@ pub const GENESIS_STATE_ROOTS_KEY: &[u8; 19] = b"GENESIS_STATE_ROOTS";
 /// archival node.  The default value (if missing) is false.
 pub const IS_ARCHIVE_KEY: &[u8; 10] = b"IS_ARCHIVE";
 
-pub(crate) struct DBTransaction {
-    pub(crate) ops: Vec<DBOp>,
+pub struct DBTransaction {
+    pub ops: Vec<DBOp>,
 }
 
-pub(crate) enum DBOp {
+pub enum DBOp {
     /// Sets `key` to `value`, without doing any checks.
     Set { col: DBCol, key: Vec<u8>, value: Vec<u8> },
     /// Sets `key` to `value`, and additionally debug-checks that the value is
