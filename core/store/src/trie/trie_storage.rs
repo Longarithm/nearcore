@@ -263,13 +263,14 @@ impl TrieStorage for TrieCachingStorage {
 
         // Try to get value from shard cache containing most recently touched nodes.
         let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
+        let mut is_hit = false;
         let val = match guard.cache.get(hash) {
             Some(val) => {
-                guard.hits += 1;
+                is_hit = true;
                 val.clone()
             }
             None => {
-                guard.misses += 1;
+                is_hit = false;
                 // If value is not present in cache, get it from the storage.
                 let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
                 let val = self
@@ -297,6 +298,11 @@ impl TrieStorage for TrieCachingStorage {
             }
         };
 
+        if is_hit {
+            guard.hits += 1;
+        } else {
+            guard.misses += 1;
+        }
         // Because node is not present in chunk cache, increment the nodes counter and optionally insert it into the
         // chunk cache.
         // Note that we don't have a size limit for values in the chunk cache. There are two reasons:
