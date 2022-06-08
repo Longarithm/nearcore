@@ -35,7 +35,7 @@ impl ShardTries {
             .map(|&shard_id| {
                 (
                     shard_id,
-                    if shard_uid.shard_id == 2 {
+                    if shard_id.shard_id == 2 {
                         TrieCache::with_capacity(2_000_000)
                     } else {
                         TrieCache::new()
