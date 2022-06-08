@@ -262,7 +262,7 @@ pub struct TestDB {
     db: RwLock<enum_map::EnumMap<DBCol, HashMap<Vec<u8>, Vec<u8>>>>,
 }
 
-pub(crate) trait Database: Sync + Send {
+pub trait Database: Sync + Send {
     fn transaction(&self) -> DBTransaction {
         DBTransaction { ops: Vec::new() }
     }
