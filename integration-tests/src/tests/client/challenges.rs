@@ -71,10 +71,10 @@ fn test_invalid_chunk_state() {
     let mut env = TestEnv::builder(ChainGenesis::test())
         .runtime_adapters(create_nightshade_runtimes(&genesis, 1))
         .build();
-    for i in 1..4 {
+    for i in 1..2 {
         env.produce_block(0, i);
     }
-    let block_hash = env.clients[0].chain.get_block_hash_by_height(3).unwrap();
+    let block_hash = env.clients[0].chain.get_block_hash_by_height(1).unwrap();
 
     {
         let mut chunk_extra = ChunkExtra::clone(
@@ -82,6 +82,7 @@ fn test_invalid_chunk_state() {
         );
         let store = env.clients[0].chain.mut_store();
         let mut store_update = store.store_update();
+        assert_ne!(chunk_extra.state_root(), &CryptoHash::default());
         *chunk_extra.state_root_mut() = CryptoHash::default();
         store_update.save_chunk_extra(&block_hash, &ShardUId::single_shard(), chunk_extra);
         store_update.commit().unwrap();
