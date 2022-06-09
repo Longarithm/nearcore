@@ -275,6 +275,21 @@ fn apply_block_from_range(
             )
             .unwrap()
     };
+    let tries = runtime_adapter.get_tries();
+    let caches = tries.0.caches.write().unwrap();
+    let shard_uid = ShardUId { version: 1, shard_id: shard_id as u32 };
+    let cache = caches.get(&shard_uid).unwrap();
+    let ops: Vec<_> = apply_result
+        .trie_changes
+        .trie_changes
+        .insertions
+        .iter()
+        .map(|trie_change| {
+            let TrieRefcountChange { trie_node_or_value_hash, trie_node_or_value } = trie_change;
+            (trie_node_or_value_hash.clone(), Some(trie_node_or_value))
+        })
+        .collect();
+    cache.update_cache(ops);
 
     let (outcome_root, _) = ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
     let chunk_extra = ChunkExtra::new(
