@@ -289,7 +289,7 @@ fn apply_block_from_range(
             .map(|trie_change| {
                 (
                     trie_change.trie_node_or_value_hash.clone(),
-                    Some(encode_value_with_rc(
+                    Some(&encode_value_with_rc(
                         &trie_change.trie_node_or_value,
                         trie_change.rc as i64,
                     )),
