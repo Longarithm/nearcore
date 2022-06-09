@@ -11,7 +11,7 @@ use near_client::Client;
 use near_crypto::{InMemorySigner, KeyType, Signer};
 use near_logger_utils::init_test_logger;
 use near_network::test_utils::MockPeerManagerAdapter;
-use near_network::types::{NetworkClientResponses, NetworkRequests};
+use near_network::types::NetworkRequests;
 use near_primitives::challenge::{
     BlockDoubleSign, Challenge, ChallengeBody, ChunkProofs, MaybeEncodedShardChunk, StateItem,
 };
@@ -71,8 +71,6 @@ fn test_invalid_chunk_state() {
     let mut env = TestEnv::builder(ChainGenesis::test())
         .runtime_adapters(create_nightshade_runtimes(&genesis, 1))
         .build();
-    let genesis_hash = env.clients[0].chain.get_block_hash_by_height(0).unwrap().clone();
-    let signer = InMemorySigner::from_seed("test0".parse().unwrap(), KeyType::ED25519, "test0");
     for i in 1..4 {
         env.produce_block(0, i);
     }
