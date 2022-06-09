@@ -285,8 +285,7 @@ fn apply_block_from_range(
         .insertions
         .iter()
         .map(|trie_change| {
-            let TrieRefcountChange { trie_node_or_value_hash, trie_node_or_value } = trie_change;
-            (trie_node_or_value_hash.clone(), Some(trie_node_or_value))
+            (trie_change.trie_node_or_value_hash.clone(), Some(&trie_change.trie_node_or_value))
         })
         .collect();
     cache.update_cache(ops);
