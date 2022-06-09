@@ -73,21 +73,6 @@ fn test_invalid_chunk_state() {
         .build();
     let genesis_hash = env.clients[0].chain.get_block_hash_by_height(0).unwrap().clone();
     let signer = InMemorySigner::from_seed("test0".parse().unwrap(), KeyType::ED25519, "test0");
-    assert_eq!(
-        env.clients[0].process_tx(
-            SignedTransaction::send_money(
-                1,
-                "test0".parse().unwrap(),
-                "test0".parse().unwrap(),
-                &signer,
-                1000,
-                genesis_hash,
-            ),
-            false,
-            false,
-        ),
-        NetworkClientResponses::ValidTx
-    );
     for i in 1..4 {
         env.produce_block(0, i);
     }
