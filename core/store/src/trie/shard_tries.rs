@@ -37,6 +37,7 @@ impl ShardTries {
                     shard_id,
                     if shard_id.shard_id == 2 {
                         TrieCache::with_capacity(2_000_000)
+                        // TrieCache::new()
                     } else {
                         TrieCache::new()
                     },
@@ -77,8 +78,8 @@ impl ShardTries {
                 .entry(shard_uid)
                 .or_insert({
                     if shard_uid.shard_id == 2 {
-                        // TrieCache::with_capacity(2_000_000)
-                        TrieCache::new()
+                        TrieCache::with_capacity(2_000_000)
+                        // TrieCache::new()
                     } else {
                         TrieCache::new()
                     }
