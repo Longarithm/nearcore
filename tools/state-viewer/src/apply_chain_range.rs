@@ -21,7 +21,7 @@ use near_primitives::transaction::{
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, ShardId};
-use near_store::{get, DBCol, Store};
+use near_store::{encode_value_with_rc, get, DBCol, Store};
 use nearcore::NightshadeRuntime;
 
 fn timestamp() -> u64 {
@@ -287,7 +287,13 @@ fn apply_block_from_range(
             .insertions
             .iter()
             .map(|trie_change| {
-                (trie_change.trie_node_or_value_hash.clone(), Some(&trie_change.trie_node_or_value))
+                (
+                    trie_change.trie_node_or_value_hash.clone(),
+                    Some(encode_value_with_rc(
+                        &trie_change.trie_node_or_value,
+                        trie_change.rc as i64,
+                    )),
+                )
             })
             .collect();
         cache.update_cache(ops);

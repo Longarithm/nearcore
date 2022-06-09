@@ -419,7 +419,7 @@ pub struct TrieRefcountChange {
     pub trie_node_or_value: Vec<u8>,
     /// Reference count difference which will be added to the total refcount if it corresponds to
     /// insertion and subtracted from it in the case of deletion.
-    rc: u32,
+    pub rc: u32,
 }
 
 ///
