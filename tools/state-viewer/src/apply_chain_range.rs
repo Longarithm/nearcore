@@ -288,15 +288,13 @@ fn apply_block_from_range(
             .iter()
             .map(|trie_change| {
                 (
-                    trie_change.trie_node_or_value_hash.clone(),
-                    Some(&encode_value_with_rc(
-                        &trie_change.trie_node_or_value,
-                        trie_change.rc as i64,
-                    )),
+                    trie_change.trie_node_or_value_hash,
+                    encode_value_with_rc(&trie_change.trie_node_or_value, trie_change.rc as i64),
                 )
             })
             .collect();
-        cache.update_cache(ops);
+        let op_refs: Vec<_> = ops.iter().map(|(hash, value)| (hash.clone(), Some(value))).collect();
+        cache.update_cache(op_refs);
     }
 
     let (outcome_root, _) = ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
