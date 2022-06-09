@@ -71,10 +71,7 @@ fn test_invalid_chunk_state() {
     let mut env = TestEnv::builder(ChainGenesis::test())
         .runtime_adapters(create_nightshade_runtimes(&genesis, 1))
         .build();
-    for i in 1..2 {
-        env.produce_block(0, i);
-    }
-    let block_hash = env.clients[0].chain.get_block_hash_by_height(1).unwrap();
+    let block_hash = env.clients[0].chain.get_block_hash_by_height(0).unwrap();
 
     {
         let mut chunk_extra = ChunkExtra::clone(
@@ -88,7 +85,7 @@ fn test_invalid_chunk_state() {
         store_update.commit().unwrap();
     }
 
-    let block = env.clients[0].produce_block(4).unwrap().unwrap();
+    let block = env.clients[0].produce_block(1).unwrap().unwrap();
     let (_, result) = env.clients[0].process_block(block.into(), Provenance::NONE);
     assert_matches!(result.unwrap_err(), Error::InvalidChunkState(_));
 }
