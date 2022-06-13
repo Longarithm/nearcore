@@ -59,6 +59,9 @@ pub struct ShardTries(Arc<ShardTriesInner>);
 impl ShardTries {
     pub fn new(store: Store, trie_cache_factory: TrieCacheFactory) -> Self {
         let caches = trie_cache_factory.create_initial_caches();
+        for (uid, cache) in caches.iter() {
+            eprintln!("{:?} {:?}", uid, cache.len());
+        }
         let view_caches = trie_cache_factory.create_initial_caches();
         ShardTries(Arc::new(ShardTriesInner {
             store,
