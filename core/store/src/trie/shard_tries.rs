@@ -37,7 +37,10 @@ impl TrieCacheFactory {
     /// Create new cache for the given shard uid.
     pub fn create_cache(&self, shard_uid: &ShardUId) -> TrieCache {
         match self.capacities.get(shard_uid) {
-            Some(capacity) => TrieCache::with_capacity(*capacity),
+            Some(capacity) => {
+                eprintln!("{:?} {:?}", shard_uid, capacity);
+                TrieCache::with_capacity(*capacity)
+            }
             None => TrieCache::new(),
         }
     }
@@ -68,9 +71,6 @@ impl ShardTries {
     pub fn new(store: Store, trie_cache_factory: TrieCacheFactory) -> Self {
         let caches = trie_cache_factory.create_initial_caches();
         let view_caches = trie_cache_factory.create_initial_caches();
-        for (uid, cache) in caches.iter() {
-            eprintln!("{:?} {:?}", uid, cache.len());
-        }
         ShardTries(Arc::new(ShardTriesInner {
             store,
             trie_cache_factory,
