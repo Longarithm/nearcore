@@ -81,11 +81,11 @@ impl SafeTrieCache {
 
 impl TrieCache {
     pub fn new() -> Self {
-        Self::with_capacity(TRIE_MAX_SHARD_CACHE_SIZE, 0)
+        Self::with_capacity(TRIE_DEFAULT_SHARD_CACHE_SIZE, 0)
     }
 
     pub fn new_with_id(shard_id: u32) -> Self {
-        Self::with_capacity(TRIE_MAX_SHARD_CACHE_SIZE, shard_id)
+        Self::with_capacity(TRIE_DEFAULT_SHARD_CACHE_SIZE, shard_id)
     }
 
     pub fn with_capacity(cap: usize, shard_id: u32) -> Self {
