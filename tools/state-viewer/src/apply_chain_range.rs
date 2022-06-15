@@ -14,6 +14,7 @@ use near_chain_configs::Genesis;
 use near_primitives::borsh::maybestd::sync::Arc;
 use near_primitives::hash::CryptoHash;
 use near_primitives::receipt::DelayedReceiptIndices;
+use near_primitives::shard_layout::ShardUId;
 use near_primitives::transaction::{
     Action, ExecutionOutcomeWithId, ExecutionOutcomeWithIdAndProof,
 };
