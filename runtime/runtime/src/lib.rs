@@ -1269,6 +1269,10 @@ impl Runtime {
                 receipt_id = %receipt.receipt_id,
                 node_counter = ?state_update.trie.get_trie_nodes_count())
             .entered();
+            let start_time = std::time::Instant::now();
+            // let sum_calls_before = state_update.get_sum_calls();
+            // let (mem_calls, rocksdb_calls, db_calls) = state_update.get_reads();
+
             let result = self.process_receipt(
                 state_update,
                 apply_state,
@@ -1292,28 +1296,28 @@ impl Runtime {
             let elapsed = start_time.elapsed().as_millis();
 
             if elapsed >= 1 && (elapsed as u64) * 10u64.pow(12) > gas_burnt {
-                let sum_calls = state_update.get_sum_calls() - sum_calls_before;
-                let (mem_calls_new, rocksdb_calls_new, db_calls_new) = state_update.get_reads();
+                // let sum_calls = state_update.get_sum_calls() - sum_calls_before;
+                // let (mem_calls_new, rocksdb_calls_new, db_calls_new) = state_update.get_reads();
 
                 tracing::debug!(target: "store",
                     elapsed = elapsed as u64,
                     gas_burnt = gas_burnt / 10u64.pow(12),
                     receipt_id = %receipt.receipt_id,
                     receiver_id = %receipt.receiver_id,
-                    sum_calls = sum_calls,
-                    mem_calls = mem_calls_new - mem_calls,
-                    rocksdb_calls = rocksdb_calls_new - rocksdb_calls,
-                    db_calls = db_calls_new - db_calls,
+                    // sum_calls = sum_calls,
+                    // mem_calls = mem_calls_new - mem_calls,
+                    // rocksdb_calls = rocksdb_calls_new - rocksdb_calls,
+                    // db_calls = db_calls_new - db_calls,
                 );
                 let data = json!({
                     "elapsed": elapsed as u64,
                     "gas_burnt": gas_burnt / 10u64.pow(12),
                     "receipt_id": format!("{}", receipt.receipt_id),
                     "receiver_id": receipt.receiver_id,
-                    "sum_calls": sum_calls,
-                    "mem_calls": mem_calls_new - mem_calls,
-                    "rocksdb_calls": rocksdb_calls_new - rocksdb_calls,
-                    "db_calls": db_calls_new - db_calls,
+                    // "sum_calls": sum_calls,
+                    // "mem_calls": mem_calls_new - mem_calls,
+                    // "rocksdb_calls": rocksdb_calls_new - rocksdb_calls,
+                    // "db_calls": db_calls_new - db_calls,
                 });
                 receipt_log(data);
             }
