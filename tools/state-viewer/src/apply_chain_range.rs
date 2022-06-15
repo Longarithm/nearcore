@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::Instant;
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
@@ -56,12 +57,13 @@ impl ProgressReporter {
             tgas_burned.fetch_add(gas_burnt / TGAS, Ordering::Relaxed);
         }
 
-        const PRINT_PER: u64 = 100;
+        const PRINT_PER: u64 = 50;
         let prev = cnt.fetch_add(1, Ordering::Relaxed);
         if (prev + 1) % PRINT_PER == 0 {
             let prev_ts = ts.load(Ordering::Relaxed);
             let new_ts = timestamp_ms();
-            let per_second = (PRINT_PER as f64 / (new_ts - prev_ts) as f64) as f64 * 1000.0;
+            let diff = new_ts - prev_ts;
+            let per_second = (PRINT_PER as f64 / diff as f64) as f64 * 1000.0;
             ts.store(new_ts, Ordering::Relaxed);
             let secs_remaining = (all - prev) as f64 / per_second;
             let avg_gas = if non_empty_blocks.load(Ordering::Relaxed) == 0 {
@@ -72,8 +74,9 @@ impl ProgressReporter {
             };
 
             println!(
-                "Processed {} blocks, {:.4} blocks per second ({} skipped), {:.2} secs remaining {} empty blocks {:.2} avg gas per non-empty block",
+                "Processed {} blocks, {} ms passed, {:.4} blocks per second ({} skipped), {:.2} secs remaining {} empty blocks {:.2} avg gas per non-empty block",
                 prev + 1,
+                diff,
                 per_second,
                 skipped.load(Ordering::Relaxed),
                 secs_remaining,
@@ -275,6 +278,27 @@ fn apply_block_from_range(
             .unwrap()
     };
 
+    {
+        let tries = runtime_adapter.get_tries();
+        let caches = tries.0.caches.write().unwrap();
+        let shard_uid = ShardUId { version: 1, shard_id: shard_id as u32 };
+        let cache = caches.get(&shard_uid).unwrap();
+        let ops: Vec<_> = apply_result
+            .trie_changes
+            .trie_changes
+            .insertions
+            .iter()
+            .map(|trie_change| {
+                (
+                    trie_change.trie_node_or_value_hash,
+                    encode_value_with_rc(&trie_change.trie_node_or_value, trie_change.rc as i64),
+                )
+            })
+            .collect();
+        let op_refs: Vec<_> = ops.iter().map(|(hash, value)| (hash.clone(), Some(value))).collect();
+        cache.update_cache(op_refs);
+    }
+
     let (outcome_root, _) = ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
     let chunk_extra = ChunkExtra::new(
         &apply_result.new_root,
@@ -385,6 +409,8 @@ pub fn apply_chain_range(
         );
     };
 
+    let start_time = Instant::now();
+
     if sequential {
         range.into_iter().for_each(|height| {
             let _span = tracing::debug_span!(
@@ -406,6 +432,16 @@ pub fn apply_chain_range(
             process_height(height)
         });
     }
+
+    eprintln!("elapsed: {}s", start_time.elapsed().as_secs());
+    let tries = runtime_adapter.get_tries();
+    let caches = tries.0.caches.write().unwrap();
+    let shard_uid = ShardUId { version: 1, shard_id: shard_id as u32 };
+    let cache = caches.get(&shard_uid).unwrap().0.lock().unwrap();
+    eprintln!(
+        "max_size={} hits={} misses={} evictions={}",
+        cache.max_size, cache.hits, cache.misses, cache.evictions
+    );
 
     println!(
         "No differences found after applying chunks in the range {}..={} for shard_id {}",
