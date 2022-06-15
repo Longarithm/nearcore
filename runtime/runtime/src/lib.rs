@@ -10,6 +10,7 @@ use tracing::debug;
 use near_chain_configs::Genesis;
 pub use near_crypto;
 use near_crypto::PublicKey;
+use near_o11y::receipt_log;
 pub use near_primitives;
 use near_primitives::contract::ContractCode;
 use near_primitives::profile::ProfileData;

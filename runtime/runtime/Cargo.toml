@@ -32,6 +32,7 @@ near-metrics = { path = "../../core/metrics" }
 near-vm-logic = { path = "../../runtime/near-vm-logic" }
 near-vm-runner = { path = "../../runtime/near-vm-runner" }
 near-vm-errors = { path = "../../runtime/near-vm-errors" }
+near-o11y = { path = "../../core/o11y" }
 
 [features]
 default = []
