@@ -11,6 +11,7 @@ use std::{fmt, io};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use once_cell::sync::Lazy;
 
 pub use columns::DBCol;
 pub use db::{
@@ -40,7 +41,8 @@ pub use crate::trie::iterator::TrieIterator;
 pub use crate::trie::update::{TrieUpdate, TrieUpdateIterator, TrieUpdateValuePtr};
 pub use crate::trie::{
     estimator, split_state, ApplyStatePartResult, KeyForStateChanges, PartialStorage, ShardTries,
-    Trie, TrieCache, TrieCachingStorage, TrieChanges, TrieStorage, WrappedTrieChanges,
+    Trie, TrieCache, TrieCacheFactory, TrieCachingStorage, TrieChanges, TrieStorage,
+    WrappedTrieChanges,
 };
 
 mod columns;
@@ -51,7 +53,7 @@ pub mod migrations;
 pub mod test_utils;
 mod trie;
 
-pub use crate::config::{get_store_path, store_path_exists, StoreConfig, StoreOpener, STORE_PATH};
+pub use crate::config::{StoreConfig, StoreOpener};
 
 #[derive(Clone)]
 pub struct Store {
@@ -62,6 +64,26 @@ pub struct Store {
 }
 
 impl Store {
+    /// Initialises a new opener with given home directory and store config.
+    pub fn opener<'a>(home_dir: &std::path::Path, config: &'a StoreConfig) -> StoreOpener<'a> {
+        StoreOpener::new(home_dir, config)
+    }
+
+    /// Initialises an opener for a new temporary test store.
+    ///
+    /// As per the name, this is meant for tests only.  The created store will
+    /// use test configuration (which may differ slightly from default config).
+    /// The function **panics** if a temporary directory cannot be created.
+    ///
+    /// Note that the caller must hold the temporary directory returned as first
+    /// element of the tuple while the store is open.
+    pub fn test_opener() -> (tempfile::TempDir, StoreOpener<'static>) {
+        static CONFIG: Lazy<StoreConfig> = Lazy::new(StoreConfig::test_config);
+        let dir = tempfile::tempdir().unwrap();
+        let opener = Self::opener(dir.path(), &CONFIG);
+        (dir, opener)
+    }
+
     pub(crate) fn new(storage: Arc<dyn Database>) -> Store {
         Store {
             storage,
@@ -161,8 +183,9 @@ impl Store {
         self.storage.write(transaction).map_err(io::Error::from)
     }
 
-    pub fn get_rocksdb(&self) -> Option<&RocksDB> {
-        self.storage.as_rocksdb()
+    /// If the storage is backed by disk, flushes any in-memory data to disk.
+    pub fn flush(&self) -> io::Result<()> {
+        self.storage.flush().map_err(io::Error::from)
     }
 
     pub fn get_store_statistics(&self) -> Option<StoreStatistics> {
@@ -252,7 +275,7 @@ impl StoreUpdate {
     /// of auxilary code like migrations which wants to hack on the database
     /// directly.
     pub fn set_raw_bytes(&mut self, column: DBCol, key: &[u8], value: &[u8]) {
-        self.transaction.insert(column, key.to_vec(), value.to_vec())
+        self.transaction.set(column, key.to_vec(), value.to_vec())
     }
 
     /// Deletes the given key from the database.
@@ -567,5 +590,64 @@ mod tests {
     fn test_no_cache_disabled() {
         #[cfg(feature = "no_cache")]
         panic!("no cache is enabled");
+    }
+
+    /// Asserts that elements in the vector are sorted.
+    fn assert_sorted(want_count: usize, keys: Vec<Box<[u8]>>) {
+        assert_eq!(want_count, keys.len());
+        for (pos, pair) in keys.windows(2).enumerate() {
+            let (fst, snd) = (&pair[0], &pair[1]);
+            assert!(fst <= snd, "{fst:?} > {snd:?} at {pos}");
+        }
+    }
+
+    /// Checks that keys are sorted when iterating.
+    fn test_iter_order_impl(store: crate::Store, count: usize) {
+        use rand::Rng;
+
+        // An arbitrary non-rc non-insert-only column we can write data into.
+        const COLUMN: crate::DBCol = crate::DBCol::Peers;
+        assert!(!COLUMN.is_rc());
+        assert!(!COLUMN.is_insert_only());
+
+        // Fill column with random keys.  We're inserting three sets of keys.
+        // One set prefixed by "foo", second by "bar" and last by "baz".  Each
+        // set is `count` keys (for total of `3*count` keys).
+        let mut rng: rand::rngs::StdRng = rand::SeedableRng::seed_from_u64(0x3243f6a8885a308d);
+        let mut update = store.store_update();
+        let mut buf = [0u8; 20];
+        for prefix in [b"foo", b"bar", b"baz"] {
+            buf[..prefix.len()].clone_from_slice(prefix);
+            for _ in 0..count {
+                rng.fill(&mut buf[prefix.len()..]);
+                update.set(COLUMN, &buf, &buf);
+            }
+        }
+        update.commit().unwrap();
+
+        // Check that full scan produces keys in proper order.
+        let keys: Vec<Box<[u8]>> = store.iter(COLUMN).map(|(key, _)| key).collect();
+        assert_sorted(3 * count, keys);
+
+        let keys: Vec<Box<[u8]>> = store.iter_raw_bytes(COLUMN).map(|(key, _)| key).collect();
+        assert_sorted(3 * count, keys);
+
+        // Check that prefix scan produces keys in proper order.
+        let keys: Vec<Box<[u8]>> = store.iter_prefix(COLUMN, b"baz").map(|(key, _)| key).collect();
+        for (pos, key) in keys.iter().enumerate() {
+            assert_eq!(b"baz", &key[0..3], "Expected ‘baz’ prefix but got {key:?} at {pos}");
+        }
+        assert_sorted(count, keys);
+    }
+
+    #[test]
+    fn rocksdb_iter_order() {
+        let (_tmp_dir, opener) = crate::Store::test_opener();
+        test_iter_order_impl(opener.open(), 10_000);
+    }
+
+    #[test]
+    fn testdb_iter_order() {
+        test_iter_order_impl(crate::test_utils::create_test_store(), 10_000);
     }
 }

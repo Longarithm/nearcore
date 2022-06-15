@@ -64,13 +64,32 @@ pub struct DefaultSubscriberGuard<S> {
     writer_guard: tracing_appender::non_blocking::WorkerGuard,
 }
 
+// Doesn't define WARN and ERROR, because the highest verbosity of spans is INFO.
+#[derive(Copy, Clone, Debug, clap::ArgEnum)]
+pub enum OpenTelemetryLevel {
+    OFF,
+    INFO,
+    DEBUG,
+    TRACE,
+}
+
+impl Default for OpenTelemetryLevel {
+    fn default() -> Self {
+        OpenTelemetryLevel::OFF
+    }
+}
+
 /// Configures exporter of span and trace data.
 // Currently empty, but more fields will be added in the future.
 #[derive(Debug, Default, Parser)]
-pub struct OpenTelemetryConfig {
-    #[clap(long)]
+pub struct Options {
     /// Enables export of span data using opentelemetry exporters.
-    opentelemetry: bool,
+    #[clap(long, arg_enum, default_value = "off")]
+    opentelemetry: OpenTelemetryLevel,
+
+    /// Whether the log needs to be colored.
+    #[clap(long, arg_enum, default_value = "auto")]
+    color: ColorOutput,
 }
 
 impl<S: tracing::Subscriber + Send + Sync> DefaultSubscriberGuard<S> {
@@ -110,6 +129,12 @@ pub enum ColorOutput {
     Auto,
 }
 
+impl Default for ColorOutput {
+    fn default() -> Self {
+        ColorOutput::Auto
+    }
+}
+
 fn is_terminal() -> bool {
     // Crate `atty` provides a platform-independent way of checking whether the output is a tty.
     atty::is(atty::Stream::Stderr)
@@ -135,10 +160,12 @@ where
     layer
 }
 
-// Constructs an OpenTelemetryConfig which sends span data to an external collector.
-// OpenTelemetryConfig is currently empty, but more configuration will be added to it later.
-fn make_opentelemetry_layer<S>(
-    config: &OpenTelemetryConfig,
+/// Constructs an OpenTelemetryConfig which sends span data to an external collector.
+//
+// NB: this function is `async` because `install_batch(Tokio)` requires a tokio context to
+// register timers and channels and whatnot.
+async fn make_opentelemetry_layer<S>(
+    config: &Options,
 ) -> Filtered<OpenTelemetryLayer<S, Tracer>, LevelFilter, S>
 where
     S: tracing::Subscriber + for<'span> LookupSpan<'span>,
@@ -156,9 +183,18 @@ where
         )
         .install_batch(opentelemetry::runtime::Tokio)
         .unwrap();
-    let filter = if config.opentelemetry { LevelFilter::DEBUG } else { LevelFilter::OFF };
+    let filter = get_opentelemetry_filter(config);
     let layer = tracing_opentelemetry::layer().with_tracer(tracer).with_filter(filter);
     layer
+}
+
+fn get_opentelemetry_filter(config: &Options) -> LevelFilter {
+    match config.opentelemetry {
+        OpenTelemetryLevel::OFF => LevelFilter::OFF,
+        OpenTelemetryLevel::INFO => LevelFilter::INFO,
+        OpenTelemetryLevel::DEBUG => LevelFilter::DEBUG,
+        OpenTelemetryLevel::TRACE => LevelFilter::TRACE,
+    }
 }
 
 /// Run the code with a default subscriber set to the option appropriate for the NEAR code.
@@ -172,19 +208,20 @@ where
 /// ```rust
 /// let runtime = tokio::runtime::Runtime::new().unwrap();
 /// let filter = near_o11y::EnvFilterBuilder::from_env().finish().unwrap();
-/// let _subscriber = runtime.block_on(async {near_o11y::default_subscriber(filter, &near_o11y::ColorOutput::Auto, &near_o11y::OpenTelemetryConfig::default()).await.global() });
+/// let _subscriber = runtime.block_on(async {
+///     near_o11y::default_subscriber(filter, &Default::default()).await.global()
+/// });
 /// ```
 pub async fn default_subscriber(
     env_filter: EnvFilter,
-    color_output: &ColorOutput,
-    opentelemetry_config: &OpenTelemetryConfig,
+    options: &Options,
 ) -> DefaultSubscriberGuard<impl tracing::Subscriber + Send + Sync> {
     // Do not lock the `stderr` here to allow for things like `dbg!()` work during development.
     let stderr = std::io::stderr();
     let lined_stderr = std::io::LineWriter::new(stderr);
     let (writer, writer_guard) = tracing_appender::non_blocking(lined_stderr);
 
-    let ansi = match color_output {
+    let ansi = match options.color {
         ColorOutput::Always => true,
         ColorOutput::Never => false,
         ColorOutput::Auto => std::env::var_os("NO_COLOR").is_none() && is_terminal(),
@@ -196,7 +233,7 @@ pub async fn default_subscriber(
 
     let subscriber = tracing_subscriber::registry();
     let subscriber = subscriber.with(log_layer);
-    let subscriber = subscriber.with(make_opentelemetry_layer(opentelemetry_config));
+    let subscriber = subscriber.with(make_opentelemetry_layer(options).await);
 
     DefaultSubscriberGuard {
         subscriber: Some(subscriber),

@@ -18,15 +18,13 @@ use near_network::routing::start_routing_table_actor;
 use near_network::test_utils::NetworkRecipient;
 use near_network::PeerManagerActor;
 use near_o11y::tracing::{error, info};
-use near_o11y::{ColorOutput, OpenTelemetryConfig};
 use near_primitives::hash::CryptoHash;
-use near_primitives::network::PeerId;
 use nearcore::config;
 use nearcore::config::NearConfig;
 
 pub fn start_with_config(config: NearConfig, qps_limit: u32) -> anyhow::Result<Arc<Network>> {
     config.network_config.verify().context("start_with_config")?;
-    let node_id = PeerId::new(config.network_config.public_key.clone());
+    let node_id = config.network_config.node_id();
     let store = create_test_store();
 
     let network_adapter = Arc::new(NetworkRecipient::default());
@@ -137,13 +135,7 @@ fn main() {
         .add_directive(near_o11y::tracing::Level::INFO.into());
     let runtime = tokio::runtime::Runtime::new().unwrap();
     let _subscriber = runtime.block_on(async {
-        near_o11y::default_subscriber(
-            env_filter,
-            &ColorOutput::Auto,
-            &OpenTelemetryConfig::default(),
-        )
-        .await
-        .global();
+        near_o11y::default_subscriber(env_filter, &Default::default()).await.global();
     });
     let orig_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
