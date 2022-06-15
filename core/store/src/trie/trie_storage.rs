@@ -35,14 +35,14 @@ impl SafeTrieCache {
         latency_us: u128,
         action_type: u8,
     ) {
+        println!("update_lat {}", latency_us);
         let latency_us = std::cmp::min(10_000, latency_us);
         self.sum_calls += latency_us as u64;
 
-        let monitoring_data = self.monitoring_data.entry(action_type.clone()).or_insert((
-            FastDistribution::new(0, 10_000),
-            None,
-            0,
-        ));
+        let monitoring_data = self
+            .monitoring_data
+            .entry(action_type.clone())
+            .or_insert_with(|| (FastDistribution::new(0, 10_000), None, 0));
 
         if monitoring_data.1.is_none() {
             monitoring_data.1 = Some(current_time);
