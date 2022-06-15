@@ -21,7 +21,7 @@ use near_primitives::transaction::{
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, ShardId};
-use near_store::{get, DBCol, Store};
+use near_store::{encode_value_with_rc, get, DBCol, Store};
 use nearcore::NightshadeRuntime;
 
 fn timestamp() -> u64 {
