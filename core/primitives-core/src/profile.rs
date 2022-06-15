@@ -127,6 +127,21 @@ impl ProfileData {
         }
         action_gas
     }
+
+    pub fn storage_gas(&self) -> u64 {
+        let cost_1 = Cost::ExtCost { ext_cost_kind: ExtCosts::storage_write_base }.index();
+        let cost_2 = Cost::ExtCost { ext_cost_kind: ExtCosts::touching_trie_node }.index();
+        let cost_indices = (cost_1..=cost_2).into_iter().chain(
+            vec![Cost::ExtCost { ext_cost_kind: ExtCosts::read_cached_trie_node }.index()]
+                .into_iter(),
+        );
+
+        let mut result = 0;
+        for i in cost_indices {
+            result += self.data[i];
+        }
+        result
+    }
 }
 
 impl fmt::Debug for ProfileData {

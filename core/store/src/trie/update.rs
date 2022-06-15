@@ -177,6 +177,38 @@ impl TrieUpdate {
             storage.set_mode(state);
         }
     }
+
+    pub fn set_action_type(&self, action: u8) {
+        if let Some(storage) = self.trie.storage.as_caching_storage() {
+            storage.action_type.set(action);
+        }
+    }
+
+    pub fn get_sum_calls(&self) -> u64 {
+        if let Some(storage) = self.trie.storage.as_caching_storage() {
+            storage.get_sum_calls()
+        } else {
+            0
+        }
+    }
+
+    pub fn get_reads(&self) -> (u64, u64, u64) {
+        if let Some(storage) = self.trie.storage.as_caching_storage() {
+            (
+                storage.mem_read_nodes.get(),
+                storage.rocksdb_read_nodes.get(),
+                storage.db_read_nodes.get(),
+            )
+        } else {
+            (0, 0, 0)
+        }
+    }
+
+    pub fn update_storage_cost(&self, cost: u64) {
+        if let Some(storage) = self.trie.storage.as_caching_storage() {
+            storage.update_storage_cost(cost);
+        }
+    }
 }
 
 struct MergeIter<'a> {

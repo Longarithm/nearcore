@@ -8,6 +8,7 @@ use crate::db::refcount::decode_value_with_rc;
 use crate::trie::POISONED_LOCK_ERR;
 use crate::{DBCol, StorageError, Store};
 use lru::LruCache;
+use near_primitives::math::FastDistribution;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::types::{TrieCacheMode, TrieNodesCount};
 use std::cell::{Cell, RefCell};
@@ -15,23 +16,91 @@ use std::io::ErrorKind;
 
 /// Wrapper over LruCache which doesn't hold too large elements.
 #[derive(Clone)]
-pub struct TrieCache(Arc<Mutex<LruCache<CryptoHash, Arc<[u8]>>>>);
+// pub struct TrieCache(Arc<Mutex<LruCache<CryptoHash, Arc<[u8]>>>>);
+pub struct TrieCache(Arc<Mutex<SafeTrieCache>>);
+
+pub struct SafeTrieCache {
+    pub shard_id: u32,
+    pub cache: LruCache<CryptoHash, Arc<[u8]>>,
+    pub monitoring_data: HashMap<u8, (FastDistribution, Option<std::time::Instant>, u64)>,
+    pub sum_calls: u64,
+}
+
+impl SafeTrieCache {
+    pub fn update_latency_retrieve_and_print_if_needed(
+        &mut self,
+        current_time: std::time::Instant,
+        latency_us: u128,
+        action_type: u8,
+    ) {
+        let latency_us = std::cmp::min(10_000, latency_us);
+        self.sum_calls += latency_us as u64;
+
+        let monitoring_data = self
+            .monitoring_data
+            .entry(action_type.clone())
+            .or_insert_with(|| (FastDistribution::new(0, 10_000), None, 0));
+
+        if monitoring_data.1.is_none() {
+            monitoring_data.1 = Some(current_time);
+        }
+        let seconds_elapsed = monitoring_data.1.unwrap().elapsed().as_secs();
+
+        let _ = monitoring_data.0.add(latency_us as i32);
+
+        let total = monitoring_data.0.total_count();
+        if seconds_elapsed > 30 {
+            println!(
+                "total retrieve: {} sum: {} storage ggas: {} shard: {:?} cap: {} action type: {} elapsed: {} latency: {:?}",
+                total,
+                monitoring_data.0.sum(),
+                monitoring_data.2 / 10u64.pow(9),
+                self.shard_id,
+                self.cache.len(),
+                action_type,
+                seconds_elapsed,
+                monitoring_data.0.get_distribution(&vec![1., 5., 10., 50., 90., 95., 99.])
+            );
+            monitoring_data.0.clear();
+            monitoring_data.1 = Some(current_time);
+            monitoring_data.2 = 0;
+        }
+    }
+
+    pub fn update_storage_cost(&mut self, cost: u64, action_type: u8) {
+        let monitoring_data = self.monitoring_data.entry(action_type.clone()).or_insert((
+            FastDistribution::new(0, 10_000),
+            None,
+            0,
+        ));
+        monitoring_data.2 += cost;
+    }
+}
 
 impl TrieCache {
     pub fn new() -> Self {
-        Self::with_capacity(TRIE_DEFAULT_SHARD_CACHE_SIZE)
+        Self::with_capacity(TRIE_DEFAULT_SHARD_CACHE_SIZE, 0)
     }
 
-    pub fn with_capacity(cap: usize) -> Self {
-        Self(Arc::new(Mutex::new(LruCache::new(cap))))
+    pub fn new_with_id(shard_id: u32) -> Self {
+        Self::with_capacity(TRIE_DEFAULT_SHARD_CACHE_SIZE, shard_id)
+    }
+
+    pub fn with_capacity(cap: usize, shard_id: u32) -> Self {
+        Self(Arc::new(Mutex::new(SafeTrieCache {
+            shard_id,
+            cache: LruCache::new(cap),
+            monitoring_data: HashMap::default(),
+            sum_calls: 0,
+        })))
     }
 
     pub fn get(&self, key: &CryptoHash) -> Option<Arc<[u8]>> {
-        self.0.lock().expect(POISONED_LOCK_ERR).get(key).cloned()
+        self.0.lock().expect(POISONED_LOCK_ERR).cache.get(key).cloned()
     }
 
     pub fn clear(&self) {
-        self.0.lock().expect(POISONED_LOCK_ERR).clear()
+        self.0.lock().expect(POISONED_LOCK_ERR).cache.clear()
     }
 
     pub fn update_cache(&self, ops: Vec<(CryptoHash, Option<&Vec<u8>>)>) {
@@ -40,13 +109,13 @@ impl TrieCache {
             if let Some(value_rc) = opt_value_rc {
                 if let (Some(value), _rc) = decode_value_with_rc(&value_rc) {
                     if value.len() < TRIE_LIMIT_CACHED_VALUE_SIZE {
-                        guard.put(hash, value.into());
+                        guard.cache.put(hash, value.into());
                     }
                 } else {
-                    guard.pop(&hash);
+                    guard.cache.pop(&hash);
                 }
             } else {
-                guard.pop(&hash);
+                guard.cache.pop(&hash);
             }
         }
     }
@@ -54,7 +123,7 @@ impl TrieCache {
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         let guard = self.0.lock().expect(POISONED_LOCK_ERR);
-        guard.len()
+        guard.cache.len()
     }
 }
 
@@ -179,6 +248,8 @@ pub struct TrieCachingStorage {
     pub(crate) db_read_nodes: Cell<u64>,
     /// Counts trie nodes retrieved from the chunk cache.
     pub(crate) mem_read_nodes: Cell<u64>,
+    pub(crate) rocksdb_read_nodes: Cell<u64>,
+    pub(crate) action_type: Cell<u8>,
 }
 
 impl TrieCachingStorage {
@@ -191,6 +262,8 @@ impl TrieCachingStorage {
             chunk_cache: RefCell::new(Default::default()),
             db_read_nodes: Cell::new(0),
             mem_read_nodes: Cell::new(0),
+            rocksdb_read_nodes: Cell::new(0),
+            action_type: Cell::new(0),
         }
     }
 
@@ -223,26 +296,59 @@ impl TrieCachingStorage {
         self.mem_read_nodes.set(self.mem_read_nodes.get() + 1);
     }
 
+    fn inc_rocksdb_read_nodes(&self) {
+        self.rocksdb_read_nodes.set(self.rocksdb_read_nodes.get() + 1);
+    }
+
     /// Set cache mode.
     pub fn set_mode(&self, state: TrieCacheMode) {
         self.cache_mode.set(state);
+    }
+
+    fn update_latency_get_and_print_if_needed(
+        &self,
+        current_time: std::time::Instant,
+        latency_us: u128,
+    ) {
+        let mut guard = self.shard_cache.0.lock().unwrap();
+        guard.update_latency_retrieve_and_print_if_needed(
+            current_time,
+            latency_us,
+            self.action_type.get(),
+        );
+    }
+
+    pub fn update_storage_cost(&self, cost: u64) {
+        let mut guard = self.shard_cache.0.lock().unwrap();
+        guard.update_storage_cost(cost, self.action_type.get());
+    }
+
+    pub fn get_sum_calls(&self) -> u64 {
+        let mut guard = self.shard_cache.0.lock().unwrap();
+        guard.sum_calls
     }
 }
 
 impl TrieStorage for TrieCachingStorage {
     fn retrieve_raw_bytes(&self, hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError> {
+        let start_time = std::time::Instant::now();
         // Try to get value from chunk cache containing nodes with cheaper access. We can do it for any `TrieCacheMode`,
         // because we charge for reading nodes only when `CachingChunk` mode is enabled anyway.
         if let Some(val) = self.chunk_cache.borrow_mut().get(hash) {
             self.inc_mem_read_nodes();
+            self.update_latency_get_and_print_if_needed(
+                start_time,
+                start_time.elapsed().as_micros(),
+            );
             return Ok(val.clone());
         }
 
         // Try to get value from shard cache containing most recently touched nodes.
         let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
-        let val = match guard.get(hash) {
+        let val = match guard.cache.get(hash) {
             Some(val) => val.clone(),
             None => {
+                self.inc_rocksdb_read_nodes();
                 // If value is not present in cache, get it from the storage.
                 let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
                 let val = self
@@ -259,7 +365,7 @@ impl TrieStorage for TrieCachingStorage {
                 // is always a value hash, so for each key there could be only one value, and it is impossible to have
                 // **different** values for the given key in shard and chunk caches.
                 if val.len() < TRIE_LIMIT_CACHED_VALUE_SIZE {
-                    guard.put(*hash, val.clone());
+                    guard.cache.put(*hash, val.clone());
                 }
 
                 val
@@ -280,7 +386,11 @@ impl TrieStorage for TrieCachingStorage {
         if let TrieCacheMode::CachingChunk = self.cache_mode.borrow().get() {
             self.chunk_cache.borrow_mut().insert(*hash, val.clone());
         };
-
+        guard.update_latency_retrieve_and_print_if_needed(
+            start_time,
+            start_time.elapsed().as_micros(),
+            self.action_type.get(),
+        );
         Ok(val)
     }
 
