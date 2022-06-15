@@ -234,12 +234,8 @@ impl NightshadeRuntime {
             None,
             None,
             Some(runtime_config_store),
-<<<<<<< HEAD
             gc_num_epochs_to_keep.unwrap_or(DEFAULT_GC_NUM_EPOCHS_TO_KEEP),
-=======
-            DEFAULT_GC_NUM_EPOCHS_TO_KEEP,
             Default::default(),
->>>>>>> fc16eb25b (feat: trie cache factory to allow variable cache sizes (#7022))
         )
     }
 
