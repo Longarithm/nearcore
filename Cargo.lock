@@ -3124,10 +3124,12 @@ version = "0.0.0"
 dependencies = [
  "atty",
  "backtrace",
+ "chrono",
  "clap 3.1.18",
  "once_cell",
  "opentelemetry",
  "opentelemetry-jaeger",
+ "serde_json",
  "thiserror",
  "tokio",
  "tracing",
