@@ -1171,6 +1171,7 @@ impl Runtime {
         epoch_info_provider: &dyn EpochInfoProvider,
         states_to_patch: Option<Vec<StateRecord>>,
     ) -> Result<ApplyResult, RuntimeError> {
+        println!("apply {}", apply_state.block_index);
         let _span = tracing::debug_span!(
             target: "runtime",
             "apply",

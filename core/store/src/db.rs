@@ -292,6 +292,7 @@ pub(crate) trait Database: Sync + Send {
 
 impl Database for RocksDB {
     fn get(&self, col: DBCol, key: &[u8]) -> Result<Option<Vec<u8>>, DBError> {
+        println!("rocksdb::get");
         let start_time = std::time::Instant::now();
         let timer =
             metrics::DATABASE_OP_LATENCY_HIST.with_label_values(&["get", col.into()]).start_timer();
@@ -693,7 +694,7 @@ impl RocksDB {
             let seconds_elapsed = latency_get.1.unwrap().elapsed().as_secs();
 
             let _ = latency_get.0.add(latency_us as i32);
-
+            println!("update_latency_get {}", latency_us);
             let slow_calls = latency_get.0.total_count();
             if seconds_elapsed > 30 {
                 println!(
