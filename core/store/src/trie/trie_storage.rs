@@ -11,11 +11,21 @@ use lru::LruCache;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::types::{TrieCacheMode, TrieNodesCount};
 use std::cell::{Cell, RefCell};
+use std::cmp::max;
 use std::io::ErrorKind;
 
 /// Wrapper over LruCache which doesn't hold too large elements.
 #[derive(Clone)]
-pub struct TrieCache(Arc<Mutex<LruCache<CryptoHash, Arc<[u8]>>>>);
+pub struct TrieCache(pub Arc<Mutex<SafeTrieCache>>);
+// pub struct TrieCache(Arc<Mutex<LruCache<CryptoHash, Arc<[u8]>>>>);
+
+pub struct SafeTrieCache {
+    pub cache: LruCache<CryptoHash, Arc<[u8]>>,
+    pub hits: u64,
+    pub misses: u64,
+    pub evictions: u64,
+    pub max_size: u64,
+}
 
 impl TrieCache {
     pub fn new() -> Self {
@@ -23,15 +33,21 @@ impl TrieCache {
     }
 
     pub fn with_capacity(cap: usize) -> Self {
-        Self(Arc::new(Mutex::new(LruCache::new(cap))))
+        Self(Arc::new(Mutex::new(SafeTrieCache {
+            cache: LruCache::new(cap),
+            hits: 0,
+            misses: 0,
+            evictions: 0,
+            max_size: 0,
+        })))
     }
 
     pub fn get(&self, key: &CryptoHash) -> Option<Arc<[u8]>> {
-        self.0.lock().expect(POISONED_LOCK_ERR).get(key).cloned()
+        self.0.lock().expect(POISONED_LOCK_ERR).cache.get(key).cloned()
     }
 
     pub fn clear(&self) {
-        self.0.lock().expect(POISONED_LOCK_ERR).clear()
+        self.0.lock().expect(POISONED_LOCK_ERR).cache.clear()
     }
 
     pub fn update_cache(&self, ops: Vec<(CryptoHash, Option<&Vec<u8>>)>) {
@@ -40,13 +56,13 @@ impl TrieCache {
             if let Some(value_rc) = opt_value_rc {
                 if let (Some(value), _rc) = decode_value_with_rc(&value_rc) {
                     if value.len() < TRIE_LIMIT_CACHED_VALUE_SIZE {
-                        guard.put(hash, value.into());
+                        guard.cache.put(hash, value.into());
                     }
                 } else {
-                    guard.pop(&hash);
+                    guard.cache.pop(&hash);
                 }
             } else {
-                guard.pop(&hash);
+                guard.cache.pop(&hash);
             }
         }
     }
@@ -54,7 +70,12 @@ impl TrieCache {
     #[cfg(test)]
     pub(crate) fn len(&self) -> usize {
         let guard = self.0.lock().expect(POISONED_LOCK_ERR);
-        guard.len()
+        guard.cache.len()
+    }
+
+    pub fn inc_hits(&self) {
+        let mut guard = self.0.lock().expect(POISONED_LOCK_ERR);
+        guard.hits += 1;
     }
 }
 
@@ -234,15 +255,21 @@ impl TrieStorage for TrieCachingStorage {
         // Try to get value from chunk cache containing nodes with cheaper access. We can do it for any `TrieCacheMode`,
         // because we charge for reading nodes only when `CachingChunk` mode is enabled anyway.
         if let Some(val) = self.chunk_cache.borrow_mut().get(hash) {
+            self.shard_cache.inc_hits();
             self.inc_mem_read_nodes();
             return Ok(val.clone());
         }
 
         // Try to get value from shard cache containing most recently touched nodes.
         let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
-        let val = match guard.get(hash) {
-            Some(val) => val.clone(),
+        let mut is_hit = false;
+        let val = match guard.cache.get(hash) {
+            Some(val) => {
+                is_hit = true;
+                val.clone()
+            }
             None => {
+                is_hit = false;
                 // If value is not present in cache, get it from the storage.
                 let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
                 let val = self
@@ -259,12 +286,22 @@ impl TrieStorage for TrieCachingStorage {
                 // is always a value hash, so for each key there could be only one value, and it is impossible to have
                 // **different** values for the given key in shard and chunk caches.
                 if val.len() < TRIE_LIMIT_CACHED_VALUE_SIZE {
-                    guard.put(*hash, val.clone());
+                    if guard.cache.cap() == guard.cache.len() {
+                        guard.evictions += 1;
+                    }
+                    guard.max_size = max(guard.max_size, guard.cache.len() as u64);
+                    guard.cache.put(*hash, val.clone());
                 }
 
                 val
             }
         };
+
+        if is_hit {
+            guard.hits += 1;
+        } else {
+            guard.misses += 1;
+        }
 
         // Because node is not present in chunk cache, increment the nodes counter and optionally insert it into the
         // chunk cache.
