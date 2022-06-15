@@ -37,7 +37,7 @@ impl TrieCacheFactory {
     /// Create new cache for the given shard uid.
     pub fn create_cache(&self, shard_uid: &ShardUId) -> TrieCache {
         match self.capacities.get(shard_uid) {
-            Some(capacity) => TrieCache::with_capacity(*capacity),
+            Some(capacity) => TrieCache::with_capacity(*capacity, shard_uid.shard_id),
             None => TrieCache::new(),
         }
     }
