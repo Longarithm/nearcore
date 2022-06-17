@@ -13,13 +13,14 @@ use near_chain_configs::Genesis;
 use near_primitives::borsh::maybestd::sync::Arc;
 use near_primitives::hash::CryptoHash;
 use near_primitives::receipt::DelayedReceiptIndices;
+use near_primitives::shard_layout::ShardUId;
 use near_primitives::transaction::{
     Action, ExecutionOutcomeWithId, ExecutionOutcomeWithIdAndProof,
 };
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, ShardId};
-use near_store::{get, DBCol, Store};
+use near_store::{encode_value_with_rc, get, DBCol, Store};
 use nearcore::NightshadeRuntime;
 
 fn timestamp_ms() -> u64 {
@@ -269,6 +270,27 @@ fn apply_block_from_range(
             )
             .unwrap()
     };
+
+    {
+        let tries = runtime_adapter.get_tries();
+        let caches = tries.0.caches.write().unwrap();
+        let shard_uid = ShardUId { version: 1, shard_id: shard_id as u32 };
+        let cache = caches.get(&shard_uid).unwrap();
+        let ops: Vec<_> = apply_result
+            .trie_changes
+            .trie_changes
+            .insertions
+            .iter()
+            .map(|trie_change| {
+                (
+                    trie_change.trie_node_or_value_hash,
+                    encode_value_with_rc(&trie_change.trie_node_or_value, trie_change.rc as i64),
+                )
+            })
+            .collect();
+        let op_refs: Vec<_> = ops.iter().map(|(hash, value)| (hash.clone(), Some(value))).collect();
+        cache.update_cache(op_refs);
+    }
 
     let (outcome_root, _) = ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
     let chunk_extra = ChunkExtra::new(
