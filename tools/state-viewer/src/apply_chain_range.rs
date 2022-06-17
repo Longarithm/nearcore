@@ -1,9 +1,13 @@
+use clap::lazy_static::lazy_static;
+use std::fs;
 use std::fs::File;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use serde_json::json;
 
 use near_chain::chain::collect_receipts_from_response;
 use near_chain::migrations::check_if_block_is_first_with_chunk_of_version;
@@ -23,6 +27,33 @@ use near_primitives::types::{BlockHeight, ShardId};
 use near_store::{encode_value_with_rc, get, DBCol, Store};
 use nearcore::NightshadeRuntime;
 
+pub struct Logger {
+    folder: PathBuf,
+}
+
+impl Logger {
+    pub fn new(folder: &str) -> Self {
+        return Self { folder: Path::new(folder).to_path_buf() };
+    }
+
+    pub fn write(&mut self, value: &[serde_json::Value]) {
+        let name = "times.json";
+        let file = self.folder.join(name);
+        File::create(file.clone());
+        let mut file = fs::OpenOptions::new().write(true).append(true).open(file).unwrap();
+        file.write(value.to_string().as_bytes()).unwrap();
+        file.write(b"\n").unwrap();
+    }
+}
+
+lazy_static! {
+    static ref LOGGER: Mutex<Logger> = Mutex::new(Logger::new("/tmp/"));
+}
+
+pub fn custom_log(value: &[serde_json::Value]) {
+    LOGGER.lock().unwrap().write(value);
+}
+
 fn timestamp_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
@@ -40,12 +71,30 @@ struct ProgressReporter {
     non_empty_blocks: AtomicU64,
     // Total gas burned (in TGas)
     tgas_burned: AtomicU64,
+
+    prev_block_ts: AtomicU64,
+    block_times: Mutex<Vec<serde_json::Value>>,
 }
 
 impl ProgressReporter {
-    pub fn inc_and_report_progress(&self, gas_burnt: u64) {
-        let ProgressReporter { cnt, ts, all, skipped, empty_blocks, non_empty_blocks, tgas_burned } =
-            self;
+    pub fn inc_and_report_progress(&self, height: BlockHeight, gas_burnt: u64) {
+        let ProgressReporter {
+            cnt,
+            ts,
+            all,
+            skipped,
+            empty_blocks,
+            non_empty_blocks,
+            tgas_burned,
+            prev_block_ts,
+            block_times,
+        } = self;
+
+        let new_block_ts = timestamp_ms();
+        let diff = new_block_ts - prev_block_ts;
+        prev_block_ts.store(new_block_ts, Ordering::Relaxed);
+        block_times.lock().unwrap().push(json!({"height": height, "ms": diff}));
+
         if gas_burnt == 0 {
             empty_blocks.fetch_add(1, Ordering::Relaxed);
         } else {
@@ -53,7 +102,7 @@ impl ProgressReporter {
             tgas_burned.fetch_add(gas_burnt / TGAS, Ordering::Relaxed);
         }
 
-        const PRINT_PER: u64 = 100;
+        const PRINT_PER: u64 = 50;
         let prev = cnt.fetch_add(1, Ordering::Relaxed);
         if (prev + 1) % PRINT_PER == 0 {
             let prev_ts = ts.load(Ordering::Relaxed);
@@ -130,7 +179,7 @@ fn apply_block_from_range(
         Ok(block_hash) => block_hash,
         Err(_) => {
             // Skipping block because it's not available in ChainStore.
-            progress_reporter.inc_and_report_progress(0);
+            progress_reporter.inc_and_report_progress(height, 0);
             return;
         }
     };
@@ -151,7 +200,7 @@ fn apply_block_from_range(
         if verbose_output {
             println!("Skipping the genesis block #{}.", height);
         }
-        progress_reporter.inc_and_report_progress(0);
+        progress_reporter.inc_and_report_progress(height, 0);
         return;
     } else if block.chunks()[shard_id as usize].height_included() == height {
         chunk_present = true;
@@ -181,7 +230,7 @@ fn apply_block_from_range(
                         chunk_present
                     ),
                 );
-                progress_reporter.inc_and_report_progress(0);
+                progress_reporter.inc_and_report_progress(height, 0);
                 return;
             }
         };
@@ -341,7 +390,7 @@ fn apply_block_from_range(
             apply_result.trie_changes.state_changes().len(),
         ),
     );
-    progress_reporter.inc_and_report_progress(apply_result.total_gas_burnt);
+    progress_reporter.inc_and_report_progress(height, apply_result.total_gas_burnt);
 }
 
 pub fn apply_chain_range(
@@ -388,6 +437,8 @@ pub fn apply_chain_range(
         empty_blocks: AtomicU64::new(0),
         non_empty_blocks: AtomicU64::new(0),
         tgas_burned: AtomicU64::new(0),
+        prev_block_ts: AtomicU64::new(timestamp_ms()),
+        block_times: Mutex::new(vec![]),
     };
     let process_height = |height| {
         apply_block_from_range(
@@ -425,6 +476,7 @@ pub fn apply_chain_range(
         });
     }
 
+    custom_log(&progress_reporter.block_times.lock().unwrap());
     println!(
         "No differences found after applying chunks in the range {}..={} for shard_id {}",
         start_height, end_height, shard_id
