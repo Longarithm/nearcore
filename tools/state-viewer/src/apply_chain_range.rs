@@ -477,6 +477,12 @@ pub fn apply_chain_range(
     }
 
     custom_log(&progress_reporter.block_times.lock().unwrap());
+    let tries = runtime_adapter.get_tries();
+    let caches = tries.0.caches.write().unwrap();
+    let shard_uid = ShardUId { version: 1, shard_id: shard_id as u32 };
+    let cache = caches.get(&shard_uid).unwrap().0.lock().unwrap();
+    eprintln!("len={}", cache.len());
+
     println!(
         "No differences found after applying chunks in the range {}..={} for shard_id {}",
         start_height, end_height, shard_id

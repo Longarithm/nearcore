@@ -15,7 +15,7 @@ use std::io::ErrorKind;
 
 /// Wrapper over LruCache which doesn't hold too large elements.
 #[derive(Clone)]
-pub struct TrieCache(Arc<Mutex<LruCache<CryptoHash, Arc<[u8]>>>>);
+pub struct TrieCache(pub Arc<Mutex<LruCache<CryptoHash, Arc<[u8]>>>>);
 
 impl TrieCache {
     pub fn new() -> Self {
