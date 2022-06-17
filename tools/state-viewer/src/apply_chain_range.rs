@@ -36,7 +36,7 @@ impl Logger {
         return Self { folder: Path::new(folder).to_path_buf() };
     }
 
-    pub fn write(&mut self, value: &[serde_json::Value]) {
+    pub fn write(&mut self, value: &[String]) {
         let name = "times.json";
         let file = self.folder.join(name);
         File::create(file.clone());
@@ -50,7 +50,7 @@ lazy_static! {
     static ref LOGGER: Mutex<Logger> = Mutex::new(Logger::new("/tmp/"));
 }
 
-pub fn custom_log(value: &[serde_json::Value]) {
+pub fn custom_log(value: &[String]) {
     LOGGER.lock().unwrap().write(value);
 }
 
