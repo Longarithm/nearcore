@@ -41,7 +41,7 @@ impl Logger {
         let file = self.folder.join(name);
         File::create(file.clone());
         let mut file = fs::OpenOptions::new().write(true).append(true).open(file).unwrap();
-        file.write(value.to_string().as_bytes()).unwrap();
+        file.write(value.join("\n").as_bytes()).unwrap();
         file.write(b"\n").unwrap();
     }
 }
@@ -73,7 +73,7 @@ struct ProgressReporter {
     tgas_burned: AtomicU64,
 
     prev_block_ts: AtomicU64,
-    block_times: Mutex<Vec<serde_json::Value>>,
+    block_times: Mutex<Vec<String>>,
 }
 
 impl ProgressReporter {
@@ -93,7 +93,7 @@ impl ProgressReporter {
         let new_block_ts = timestamp_ms();
         let diff = new_block_ts - prev_block_ts.load(Ordering::Relaxed);
         prev_block_ts.store(new_block_ts, Ordering::Relaxed);
-        block_times.lock().unwrap().push(json!({"height": height, "ms": diff}));
+        block_times.lock().unwrap().push(json!({"height": height, "ms": diff}).to_string());
 
         if gas_burnt == 0 {
             empty_blocks.fetch_add(1, Ordering::Relaxed);
