@@ -91,7 +91,7 @@ impl ProgressReporter {
         } = self;
 
         let new_block_ts = timestamp_ms();
-        let diff = new_block_ts - prev_block_ts;
+        let diff = new_block_ts - prev_block_ts.load(Ordering::Relaxed);
         prev_block_ts.store(new_block_ts, Ordering::Relaxed);
         block_times.lock().unwrap().push(json!({"height": height, "ms": diff}));
 
