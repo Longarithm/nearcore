@@ -5,6 +5,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::Instant;
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde_json::json;
@@ -454,6 +455,8 @@ pub fn apply_chain_range(
         );
     };
 
+    let start_time = Instant::now();
+
     if sequential {
         range.into_iter().for_each(|height| {
             let _span = tracing::debug_span!(
@@ -476,12 +479,17 @@ pub fn apply_chain_range(
         });
     }
 
+    eprintln!("elapsed: {}s", start_time.elapsed().as_secs());
+
     custom_log(&progress_reporter.block_times.lock().unwrap());
     let tries = runtime_adapter.get_tries();
     let caches = tries.0.caches.write().unwrap();
     let shard_uid = ShardUId { version: 1, shard_id: shard_id as u32 };
     let cache = caches.get(&shard_uid).unwrap().0.lock().unwrap();
-    eprintln!("len={}", cache.len());
+    eprintln!(
+        "max_size={} hits={} misses={} evictions={}",
+        cache.max_size, cache.hits, cache.misses, cache.evictions
+    );
 
     println!(
         "No differences found after applying chunks in the range {}..={} for shard_id {}",
