@@ -48,11 +48,7 @@ members = [
     "tools/indexer/example",
     "tools/mock_node",
     "tools/restaked",
-<<<<<<< HEAD
-    "tools/restored-receipts-verifier",
     "tools/rocksdb-state-player",
-=======
->>>>>>> master
     "tools/rpctypegen/core",
     "tools/rpctypegen/macro",
     "tools/state-viewer",
