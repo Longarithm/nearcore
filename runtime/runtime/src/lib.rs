@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
+use near_primitives::sandbox_state_patch::SandboxStatePatch;
 use tracing::debug;
 
 use near_chain_configs::Genesis;
@@ -11,7 +12,6 @@ pub use near_crypto;
 use near_crypto::PublicKey;
 use near_o11y::storage_log;
 pub use near_primitives;
-#[cfg(feature = "sandbox")]
 use near_primitives::contract::ContractCode;
 use near_primitives::profile::ProfileData;
 pub use near_primitives::runtime::apply_state::ApplyState;
@@ -49,7 +49,6 @@ use near_store::{
     set_account, set_postponed_receipt, set_received_data, PartialStorage, ShardTries,
     StorageError, Trie, TrieChanges, TrieUpdate,
 };
-#[cfg(feature = "sandbox")]
 use near_store::{set_access_key, set_code};
 use near_vm_logic::types::PromiseResult;
 use near_vm_logic::ReturnData;
@@ -410,8 +409,6 @@ impl Runtime {
                     stake,
                     &apply_state.prev_block_hash,
                     epoch_info_provider,
-                    #[cfg(feature = "protocol_feature_chunk_only_producers")]
-                    false,
                 )?;
             }
             Action::AddKey(add_key) => {
@@ -445,18 +442,6 @@ impl Runtime {
                     account_id,
                     delete_account,
                     apply_state.current_protocol_version,
-                )?;
-            }
-            #[cfg(feature = "protocol_feature_chunk_only_producers")]
-            Action::StakeChunkOnly(stake) => {
-                action_stake(
-                    account.as_mut().expect(EXPECT_ACCOUNT_EXISTS),
-                    &mut result,
-                    account_id,
-                    stake,
-                    &apply_state.prev_block_hash,
-                    epoch_info_provider,
-                    true,
                 )?;
             }
         };
@@ -1168,7 +1153,7 @@ impl Runtime {
         incoming_receipts: &[Receipt],
         transactions: &[SignedTransaction],
         epoch_info_provider: &dyn EpochInfoProvider,
-        states_to_patch: Option<Vec<StateRecord>>,
+        state_patch: Option<SandboxStatePatch>,
     ) -> Result<ApplyResult, RuntimeError> {
         let _span = tracing::debug_span!(
             target: "runtime",
@@ -1176,7 +1161,7 @@ impl Runtime {
             num_transactions = transactions.len())
         .entered();
 
-        if states_to_patch.is_some() && !cfg!(feature = "sandbox") {
+        if state_patch.is_some() && !cfg!(feature = "sandbox") {
             panic!("Can only patch state in sandbox mode");
         }
 
@@ -1372,9 +1357,8 @@ impl Runtime {
 
         state_update.commit(StateChangeCause::UpdatedDelayedReceipts);
 
-        #[cfg(feature = "sandbox")]
-        if let Some(patch) = states_to_patch {
-            self.apply_state_patches(&mut state_update, patch);
+        if let Some(patch) = state_patch {
+            self.apply_state_patch(&mut state_update, patch);
         }
 
         let (trie_changes, state_changes) = state_update.finalize()?;
@@ -1427,13 +1411,8 @@ impl Runtime {
         Ok(())
     }
 
-    #[cfg(feature = "sandbox")]
-    fn apply_state_patches(
-        &self,
-        state_update: &mut TrieUpdate,
-        states_to_patch: Vec<StateRecord>,
-    ) {
-        for record in states_to_patch {
+    fn apply_state_patch(&self, state_update: &mut TrieUpdate, state_patch: SandboxStatePatch) {
+        for record in state_patch.into_records() {
             match record {
                 StateRecord::Account { account_id, account } => {
                     set_account(state_update, account_id, &account);

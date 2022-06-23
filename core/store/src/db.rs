@@ -8,42 +8,21 @@ use near_primitives::version::DbVersion;
 use once_cell::sync::Lazy;
 use rocksdb::checkpoint::Checkpoint;
 use rocksdb::{
-    BlockBasedOptions, Cache, ColumnFamily, ColumnFamilyDescriptor, Direction, Env, IteratorMode,
-    Options, ReadOptions, WriteBatch, DB,
+    BlockBasedOptions, Cache, ColumnFamily, Direction, Env, IteratorMode, Options, ReadOptions,
+    WriteBatch, DB,
 };
 use serde_json::json;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::io;
 use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::sync::{Condvar, Mutex, RwLock};
-use std::{cmp, fmt};
+
+use strum::IntoEnumIterator;
 use tracing::{error, info, warn};
 
 pub(crate) mod refcount;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DBError(String);
-
-impl fmt::Display for DBError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(&self.0, f)
-    }
-}
-
-impl std::error::Error for DBError {}
-
-impl From<rocksdb::Error> for DBError {
-    fn from(err: rocksdb::Error) -> Self {
-        DBError(err.into_string())
-    }
-}
-
-impl From<DBError> for io::Error {
-    fn from(err: DBError) -> io::Error {
-        io::Error::new(io::ErrorKind::Other, err)
-    }
-}
 
 pub const VERSION_KEY: &[u8; 7] = b"VERSION";
 
@@ -132,6 +111,14 @@ pub struct RocksDB {
 unsafe impl Send for RocksDB {}
 unsafe impl Sync for RocksDB {}
 
+fn other_error(msg: String) -> io::Error {
+    io::Error::new(io::ErrorKind::Other, msg)
+}
+
+fn into_other(error: rocksdb::Error) -> io::Error {
+    io::Error::new(io::ErrorKind::Other, error.into_string())
+}
+
 fn col_name(col: DBCol) -> String {
     format!("col{}", col as usize)
 }
@@ -152,62 +139,45 @@ fn col_name(col: DBCol) -> String {
 /// Returns error if NOFILE limit could not be read or set.  In practice the
 /// only thing that can happen is hard limit being too low such that soft limit
 /// cannot be increased to required value.
-fn ensure_max_open_files_limit(max_open_files: u32) -> Result<(), DBError> {
+fn ensure_max_open_files_limit(max_open_files: u32) -> Result<(), String> {
     let required = max_open_files as u64 + 1000;
     let (soft, hard) = rlimit::Resource::NOFILE.get().map_err(|err| {
-        DBError(format!("Unable to get limit for the number of open files (NOFILE): {err}"))
+        format!("Unable to get limit for the number of open files (NOFILE): {err}")
     })?;
     if required <= soft {
         Ok(())
     } else if required <= hard {
         rlimit::Resource::NOFILE.set(required, hard).map_err(|err| {
-            DBError(format!(
+            format!(
                 "Unable to change limit for the number of open files (NOFILE) \
                  from ({soft}, {hard}) to ({required}, {hard}) (for configured \
                  max_open_files={max_open_files}): {err}"
-            ))
+            )
         })
     } else {
-        Err(DBError(format!(
+        Err(format!(
             "Hard limit for the number of open files (NOFILE) is too low \
              ({hard}).  At least {required} is required (for configured \
              max_open_files={max_open_files}).  Set ‘ulimit -Hn’ accordingly \
              and restart the node."
-        )))
+        ))
     }
+}
+
+#[derive(Clone, Copy)]
+pub enum Mode {
+    ReadOnly,
+    ReadWrite,
 }
 
 impl RocksDB {
     /// Opens the database either in read only or in read/write mode depending
-    /// on the read_only parameter specified in the store_config.
-    pub fn open(
-        path: &Path,
-        store_config: &StoreConfig,
-        read_only: bool,
-    ) -> Result<RocksDB, DBError> {
-        use strum::IntoEnumIterator;
+    /// on the `mode` parameter specified in the store_config.
+    pub fn open(path: &Path, store_config: &StoreConfig, mode: Mode) -> io::Result<RocksDB> {
+        ensure_max_open_files_limit(store_config.max_open_files).map_err(other_error)?;
+        let (db, db_opt) = Self::open_db(path, store_config, mode)?;
+        let cf_handles = Self::get_cf_handles(&db);
 
-        ensure_max_open_files_limit(store_config.max_open_files)?;
-
-        let (db, db_opt) = if read_only {
-            Self::open_read_only(path, store_config)
-        } else {
-            Self::open_read_write(path, store_config)
-        }?;
-
-        let mut cf_handles = enum_map::EnumMap::default();
-        for col in DBCol::iter() {
-            let ptr = db
-                .cf_handle(&col_name(col))
-                .map_or(std::ptr::null(), |cf| cf as *const ColumnFamily);
-            cf_handles[col] = std::ptr::NonNull::new(ptr as *mut ColumnFamily);
-        }
-        let cf_handles = cf_handles.map(|col, ptr| {
-            ptr.unwrap_or_else(|| {
-                let name: &str = col.into();
-                panic!("Missing cf handle for {name}");
-            })
-        });
         Ok(Self {
             db,
             db_opt,
@@ -221,32 +191,24 @@ impl RocksDB {
         })
     }
 
-    /// Opens a read only database.
-    fn open_read_only(path: &Path, store_config: &StoreConfig) -> Result<(DB, Options), DBError> {
-        use strum::IntoEnumIterator;
-        let options = rocksdb_options(store_config);
-        let cf_with_opts =
-            DBCol::iter().map(|col| (col_name(col), rocksdb_column_options(col, store_config)));
-        let db = DB::open_cf_with_opts_for_read_only(&options, path, cf_with_opts, false)?;
-        Ok((db, options))
-    }
-
-    /// Opens the database in read/write mode.
-    fn open_read_write(path: &Path, store_config: &StoreConfig) -> Result<(DB, Options), DBError> {
-        use strum::IntoEnumIterator;
-        let mut options = rocksdb_options(store_config);
-        if store_config.enable_statistics {
-            options = enable_statistics(options);
-        }
+    /// Opens the database with all column families configured.
+    fn open_db(path: &Path, store_config: &StoreConfig, mode: Mode) -> io::Result<(DB, Options)> {
+        let options = rocksdb_options(store_config, mode);
         let cf_descriptors = DBCol::iter()
             .map(|col| {
-                ColumnFamilyDescriptor::new(
+                rocksdb::ColumnFamilyDescriptor::new(
                     col_name(col),
                     rocksdb_column_options(col, store_config),
                 )
             })
             .collect::<Vec<_>>();
-        let db = DB::open_cf_descriptors(&options, path, cf_descriptors)?;
+        let db = match mode {
+            Mode::ReadOnly => {
+                DB::open_cf_descriptors_read_only(&options, path, cf_descriptors, false)
+            }
+            Mode::ReadWrite => DB::open_cf_descriptors(&options, path, cf_descriptors),
+        }
+        .map_err(into_other)?;
         if cfg!(feature = "single_thread_rocksdb") {
             // These have to be set after open db
             let mut env = Env::default().unwrap();
@@ -259,6 +221,22 @@ impl RocksDB {
         Ok((db, options))
     }
 
+    /// Returns mapping from [`DBCol`] to cf handle used with RocksDB calls.
+    fn get_cf_handles(db: &DB) -> enum_map::EnumMap<DBCol, std::ptr::NonNull<ColumnFamily>> {
+        let mut cf_handles = enum_map::EnumMap::default();
+        for col in DBCol::iter() {
+            let ptr = db
+                .cf_handle(&col_name(col))
+                .map_or(std::ptr::null(), |cf| cf as *const ColumnFamily);
+            cf_handles[col] = std::ptr::NonNull::new(ptr as *mut ColumnFamily);
+        }
+        cf_handles.map(|col, ptr| {
+            ptr.unwrap_or_else(|| {
+                panic!("Missing cf handle for {}", col.variant_name());
+            })
+        })
+    }
+
     /// Returns column family handler to use with RocsDB for given column.
     fn cf_handle(&self, col: DBCol) -> &ColumnFamily {
         let ptr = self.cf_handles[col];
@@ -268,14 +246,17 @@ impl RocksDB {
 }
 
 pub struct TestDB {
-    db: RwLock<enum_map::EnumMap<DBCol, HashMap<Vec<u8>, Vec<u8>>>>,
+    // In order to ensure determinism when iterating over column's results
+    // a BTreeMap is used since it is an ordered map. A HashMap would
+    // give the aforementioned guarantee, and therefore is discarded.
+    db: RwLock<enum_map::EnumMap<DBCol, BTreeMap<Vec<u8>, Vec<u8>>>>,
 }
 
 pub(crate) trait Database: Sync + Send {
     fn transaction(&self) -> DBTransaction {
         DBTransaction { ops: Vec::new() }
     }
-    fn get(&self, col: DBCol, key: &[u8]) -> Result<Option<Vec<u8>>, DBError>;
+    fn get(&self, col: DBCol, key: &[u8]) -> io::Result<Option<Vec<u8>>>;
     fn iter<'a>(&'a self, column: DBCol) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a>;
     fn iter_raw_bytes<'a>(
         &'a self,
@@ -286,24 +267,21 @@ pub(crate) trait Database: Sync + Send {
         col: DBCol,
         key_prefix: &'a [u8],
     ) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a>;
-    fn write(&self, batch: DBTransaction) -> Result<(), DBError>;
-    fn as_rocksdb(&self) -> Option<&RocksDB> {
-        None
-    }
-    fn get_store_statistics(&self) -> Option<StoreStatistics> {
-        None
-    }
+    fn write(&self, batch: DBTransaction) -> io::Result<()>;
+    fn flush(&self) -> io::Result<()>;
+    fn get_store_statistics(&self) -> Option<StoreStatistics>;
 }
 
 impl Database for RocksDB {
-    fn get(&self, col: DBCol, key: &[u8]) -> Result<Option<Vec<u8>>, DBError> {
+    fn get(&self, col: DBCol, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
         let timer =
             metrics::DATABASE_OP_LATENCY_HIST.with_label_values(&["get", col.into()]).start_timer();
 
         let start_time = std::time::Instant::now();
         let read_options = rocksdb_read_options();
-        let result = self.db.get_cf_opt(self.cf_handle(col), key, &read_options)?;
-        let result = Ok(RocksDB::get_with_rc_logic(col, result));
+        let result =
+            self.db.get_cf_opt(self.cf_handle(col), key, &read_options).map_err(into_other)?;
+        let result = Ok(refcount::get_with_rc_logic(col, result));
         match col {
             DBCol::State => {
                 self.update_latency_get_and_print_if_needed(
@@ -337,7 +315,7 @@ impl Database for RocksDB {
         let read_options = rocksdb_read_options();
         let cf_handle = self.cf_handle(col);
         let iterator = self.db.iterator_cf_opt(cf_handle, read_options, IteratorMode::Start);
-        RocksDB::iter_with_rc_logic(col, iterator)
+        refcount::iter_with_rc_logic(col, iterator)
     }
 
     fn iter_prefix<'a>(
@@ -360,10 +338,10 @@ impl Database for RocksDB {
                 IteratorMode::From(key_prefix, Direction::Forward),
             )
             .take_while(move |(key, _value)| key.starts_with(key_prefix));
-        RocksDB::iter_with_rc_logic(col, iterator)
+        refcount::iter_with_rc_logic(col, iterator)
     }
 
-    fn write(&self, transaction: DBTransaction) -> Result<(), DBError> {
+    fn write(&self, transaction: DBTransaction) -> io::Result<()> {
         if let Err(check) = self.pre_write_check() {
             if check.is_io() {
                 warn!("unable to verify remaing disk space: {:?}, continueing write without verifying (this may result in unrecoverable data loss if disk space is exceeded", check)
@@ -381,7 +359,7 @@ impl Database for RocksDB {
                 DBOp::Insert { col, key, value } => {
                     if cfg!(debug_assertions) {
                         if let Ok(Some(old_value)) = self.get(col, &key) {
-                            assert_no_ovewrite(col, &key, &value, &*old_value)
+                            assert_no_overwrite(col, &key, &value, &*old_value)
                         }
                     }
                     batch.put_cf(self.cf_handle(col), key, value);
@@ -405,11 +383,11 @@ impl Database for RocksDB {
                 }
             }
         }
-        Ok(self.db.write(batch)?)
+        self.db.write(batch).map_err(into_other)
     }
 
-    fn as_rocksdb(&self) -> Option<&RocksDB> {
-        Some(self)
+    fn flush(&self) -> io::Result<()> {
+        self.db.flush().map_err(into_other)
     }
 
     fn get_store_statistics(&self) -> Option<StoreStatistics> {
@@ -428,14 +406,14 @@ impl Database for RocksDB {
 }
 
 impl Database for TestDB {
-    fn get(&self, col: DBCol, key: &[u8]) -> Result<Option<Vec<u8>>, DBError> {
+    fn get(&self, col: DBCol, key: &[u8]) -> io::Result<Option<Vec<u8>>> {
         let result = self.db.read().unwrap()[col].get(key).cloned();
-        Ok(RocksDB::get_with_rc_logic(col, result))
+        Ok(refcount::get_with_rc_logic(col, result))
     }
 
     fn iter<'a>(&'a self, col: DBCol) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
         let iterator = self.iter_raw_bytes(col);
-        RocksDB::iter_with_rc_logic(col, iterator)
+        refcount::iter_with_rc_logic(col, iterator)
     }
 
     fn iter_raw_bytes<'a>(
@@ -454,13 +432,15 @@ impl Database for TestDB {
         col: DBCol,
         key_prefix: &'a [u8],
     ) -> Box<dyn Iterator<Item = (Box<[u8]>, Box<[u8]>)> + 'a> {
-        RocksDB::iter_with_rc_logic(
-            col,
-            self.iter(col).filter(move |(key, _value)| key.starts_with(key_prefix)),
-        )
+        let iterator = self.db.read().unwrap()[col]
+            .range(key_prefix.to_vec()..)
+            .take_while(move |(k, _)| k.starts_with(&key_prefix))
+            .map(|(k, v)| (k.clone().into_boxed_slice(), v.clone().into_boxed_slice()))
+            .collect::<Vec<_>>();
+        refcount::iter_with_rc_logic(col, iterator.into_iter())
     }
 
-    fn write(&self, transaction: DBTransaction) -> Result<(), DBError> {
+    fn write(&self, transaction: DBTransaction) -> io::Result<()> {
         let mut db = self.db.write().unwrap();
         for op in transaction.ops {
             match op {
@@ -470,7 +450,7 @@ impl Database for TestDB {
                 DBOp::Insert { col, key, value } => {
                     if cfg!(debug_assertions) {
                         if let Some(old_value) = db[col].get(&key) {
-                            assert_no_ovewrite(col, &key, &value, &*old_value)
+                            assert_no_overwrite(col, &key, &value, &*old_value)
                         }
                     }
                     db[col].insert(key, value);
@@ -492,9 +472,17 @@ impl Database for TestDB {
         }
         Ok(())
     }
+
+    fn flush(&self) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn get_store_statistics(&self) -> Option<StoreStatistics> {
+        None
+    }
 }
 
-fn assert_no_ovewrite(col: DBCol, key: &[u8], value: &[u8], old_value: &[u8]) {
+fn assert_no_overwrite(col: DBCol, key: &[u8], value: &[u8], old_value: &[u8]) {
     assert_eq!(
         value, old_value,
         "\
@@ -529,18 +517,20 @@ fn set_compression_options(opts: &mut Options) {
 }
 
 /// DB level options
-fn rocksdb_options(store_config: &StoreConfig) -> Options {
+fn rocksdb_options(store_config: &StoreConfig, mode: Mode) -> Options {
+    let read_write = matches!(mode, Mode::ReadWrite);
     let mut opts = Options::default();
 
     set_compression_options(&mut opts);
     opts.create_missing_column_families(true);
-    opts.create_if_missing(true);
+    opts.create_if_missing(read_write);
     opts.set_use_fsync(false);
     opts.set_max_open_files(store_config.max_open_files.try_into().unwrap_or(i32::MAX));
     opts.set_keep_log_file_num(1);
     opts.set_bytes_per_sync(bytesize::MIB);
     opts.set_write_buffer_size(256 * bytesize::MIB as usize);
     opts.set_max_bytes_for_level_base(256 * bytesize::MIB);
+
     if cfg!(feature = "single_thread_rocksdb") {
         opts.set_disable_auto_compactions(true);
         opts.set_max_background_jobs(0);
@@ -550,21 +540,20 @@ fn rocksdb_options(store_config: &StoreConfig) -> Options {
         opts.set_level_zero_file_num_compaction_trigger(-1);
         opts.set_level_zero_stop_writes_trigger(100000000);
     } else {
-        opts.increase_parallelism(cmp::max(1, num_cpus::get() as i32 / 2));
+        opts.increase_parallelism(std::cmp::max(1, num_cpus::get() as i32 / 2));
         opts.set_max_total_wal_size(bytesize::GIB);
     }
 
-    opts
-}
-
-pub fn enable_statistics(mut opts: Options) -> Options {
-    // Rust API doesn't permit choosing stats level. The default stats level is
-    // `kExceptDetailedTimers`, which is described as:
-    // "Collects all stats except time inside mutex lock AND time spent on compression."
-    opts.enable_statistics();
-    // Disabling dumping stats to files because the stats are exported to Prometheus.
-    opts.set_stats_persist_period_sec(0);
-    opts.set_stats_dump_period_sec(0);
+    if read_write && store_config.enable_statistics {
+        // Rust API doesn't permit choosing stats level. The default stats level
+        // is `kExceptDetailedTimers`, which is described as: "Collects all
+        // stats except time inside mutex lock AND time spent on compression."
+        opts.enable_statistics();
+        // Disabling dumping stats to files because the stats are exported to
+        // Prometheus.
+        opts.set_stats_persist_period_sec(0);
+        opts.set_stats_dump_period_sec(0);
+    }
 
     opts
 }
@@ -640,18 +629,18 @@ impl RocksDB {
     }
 
     /// Returns version of the database state on disk.
-    pub fn get_version(path: &Path) -> Result<DbVersion, DBError> {
-        let value = RocksDB::open(path, &StoreConfig::default(), true)?
+    pub fn get_version(path: &Path) -> io::Result<DbVersion> {
+        let value = RocksDB::open(path, &StoreConfig::default(), Mode::ReadOnly)?
             .get(DBCol::DbVersion, VERSION_KEY)?
             .ok_or_else(|| {
-                DBError(
+                other_error(
                     "Failed to read database version; \
                      it’s not a neard database or database is corrupted."
                         .into(),
                 )
             })?;
         serde_json::from_slice(&value).map_err(|_err| {
-            DBError(format!(
+            other_error(format!(
                 "Failed to parse database version: {value:?}; \
                  it’s not a neard database or database is corrupted."
             ))
@@ -682,13 +671,8 @@ impl RocksDB {
     }
 
     /// Creates a Checkpoint object that can be used to actually create a checkpoint on disk.
-    pub fn checkpoint(&self) -> Result<Checkpoint, DBError> {
-        Checkpoint::new(&self.db).map_err(DBError::from)
-    }
-
-    /// Synchronously flush all Memtables to SST files on disk
-    pub fn flush(&self) -> Result<(), DBError> {
-        self.db.flush().map_err(DBError::from)
+    pub fn checkpoint(&self) -> io::Result<Checkpoint> {
+        Checkpoint::new(&self.db).map_err(into_other)
     }
 
     fn update_latency_get_and_print_if_needed(
@@ -736,7 +720,7 @@ fn available_space(path: &Path) -> io::Result<bytesize::ByteSize> {
 #[derive(Debug, thiserror::Error)]
 pub enum PreWriteCheckErr {
     #[error("error checking filesystem: {0}")]
-    IO(#[from] std::io::Error),
+    IO(#[from] io::Error),
     #[error("low disk memory ({0} available)")]
     LowDiskSpace(bytesize::ByteSize),
 }
@@ -840,8 +824,10 @@ fn parse_statistics(statistics: &str) -> Result<StoreStatistics, Box<dyn std::er
 #[cfg(test)]
 mod tests {
     use crate::db::StatsValue::{Count, Percentile, Sum};
-    use crate::db::{parse_statistics, rocksdb_read_options, DBError, Database, RocksDB};
-    use crate::{DBCol, StoreConfig, StoreOpener, StoreStatistics};
+    use crate::db::{parse_statistics, rocksdb_read_options, Database, RocksDB};
+    use crate::{DBCol, Store, StoreConfig, StoreStatistics};
+
+    use super::{into_other, Mode};
 
     impl RocksDB {
         #[cfg(not(feature = "single_thread_rocksdb"))]
@@ -857,24 +843,25 @@ mod tests {
             &self,
             col: DBCol,
             key: &[u8],
-        ) -> Result<Option<Vec<u8>>, DBError> {
-            let read_options = rocksdb_read_options();
-            let result = self.db.get_cf_opt(self.cf_handle(col), key, &read_options)?;
-            Ok(result)
+        ) -> std::io::Result<Option<Vec<u8>>> {
+            self.db
+                .get_cf_opt(self.cf_handle(col), key, &rocksdb_read_options())
+                .map_err(into_other)
         }
     }
 
     #[test]
     fn test_prewrite_check() {
-        let tmp_dir = tempfile::Builder::new().prefix("_test_prewrite_check").tempdir().unwrap();
-        let store = RocksDB::open(tmp_dir.path(), &StoreConfig::default(), false).unwrap();
+        let tmp_dir = tempfile::Builder::new().prefix("prewrite_check").tempdir().unwrap();
+        let store =
+            RocksDB::open(tmp_dir.path(), &StoreConfig::test_config(), Mode::ReadWrite).unwrap();
         store.pre_write_check().unwrap()
     }
 
     #[test]
     fn test_clear_column() {
-        let tmp_dir = tempfile::Builder::new().prefix("_test_clear_column").tempdir().unwrap();
-        let store = StoreOpener::with_default_config().home(tmp_dir.path()).open();
+        let (_tmp_dir, opener) = Store::test_opener();
+        let store = opener.open();
         assert_eq!(store.get(DBCol::State, &[1]).unwrap(), None);
         {
             let mut store_update = store.store_update();
@@ -894,8 +881,8 @@ mod tests {
 
     #[test]
     fn rocksdb_merge_sanity() {
-        let tmp_dir = tempfile::Builder::new().prefix("_test_snapshot_sanity").tempdir().unwrap();
-        let store = StoreOpener::with_default_config().home(tmp_dir.path()).open();
+        let (_tmp_dir, opener) = Store::test_opener();
+        let store = opener.open();
         let ptr = (&*store.storage) as *const (dyn Database + 'static);
         let rocksdb = unsafe { &*(ptr as *const RocksDB) };
         assert_eq!(store.get(DBCol::State, &[1]).unwrap(), None);

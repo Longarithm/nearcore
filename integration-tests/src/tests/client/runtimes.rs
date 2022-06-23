@@ -93,7 +93,7 @@ fn test_cap_max_gas_price() {
     genesis.config.max_gas_price = 1_000_000;
     genesis.config.protocol_version = ProtocolFeature::CapMaxGasPrice.protocol_version();
     genesis.config.epoch_length = epoch_length;
-    let chain_genesis = ChainGenesis::from(&genesis);
+    let chain_genesis = ChainGenesis::new(&genesis);
     let mut env = TestEnv::builder(chain_genesis)
         .runtime_adapters(create_nightshade_runtimes(&genesis, 1))
         .build();
@@ -103,7 +103,7 @@ fn test_cap_max_gas_price() {
         env.process_block(0, block, Provenance::PRODUCED);
     }
 
-    let last_block = env.clients[0].chain.get_block_by_height(epoch_length - 1).unwrap().clone();
+    let last_block = env.clients[0].chain.get_block_by_height(epoch_length - 1).unwrap();
     let protocol_version = env.clients[0]
         .runtime_adapter
         .get_epoch_protocol_version(last_block.header().epoch_id())

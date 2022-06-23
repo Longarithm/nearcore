@@ -68,6 +68,9 @@ pub struct EpochManager {
     epoch_validators_ordered: SyncLruCache<EpochId, Arc<[(ValidatorStake, bool)]>>,
     /// Unique validators ordered by `block_producer_settlement`.
     epoch_validators_ordered_unique: SyncLruCache<EpochId, Arc<[(ValidatorStake, bool)]>>,
+
+    /// Unique chunk producers.
+    epoch_chunk_producers_unique: SyncLruCache<EpochId, Arc<[ValidatorStake]>>,
     /// Aggregator that keeps statistics about the current epoch.  It’s data are
     /// synced up to the last final block.  The information are updated by
     /// [`Self::update_epoch_info_aggregator_upto_final`] method.  To get
@@ -122,6 +125,7 @@ impl EpochManager {
             epoch_id_to_start: SyncLruCache::new(EPOCH_CACHE_SIZE),
             epoch_validators_ordered: SyncLruCache::new(EPOCH_CACHE_SIZE),
             epoch_validators_ordered_unique: SyncLruCache::new(EPOCH_CACHE_SIZE),
+            epoch_chunk_producers_unique: SyncLruCache::new(EPOCH_CACHE_SIZE),
             epoch_info_aggregator,
             #[cfg(test)]
             epoch_info_aggregator_loop_counter: Default::default(),
@@ -181,13 +185,13 @@ impl EpochManager {
         self.save_epoch_info(
             &mut store_update,
             epoch_id,
-            source_epoch_manager.get_epoch_info(epoch_id)?.clone(),
+            source_epoch_manager.get_epoch_info(epoch_id)?,
         )?;
         // save next epoch info too
         self.save_epoch_info(
             &mut store_update,
             next_epoch_id,
-            source_epoch_manager.get_epoch_info(next_epoch_id)?.clone(),
+            source_epoch_manager.get_epoch_info(next_epoch_id)?,
         )?;
         // save next next epoch info if the block is the last block
         if source_epoch_manager.is_next_block_epoch_start(block_hash)? {
@@ -196,7 +200,7 @@ impl EpochManager {
             self.save_epoch_info(
                 &mut store_update,
                 &next_next_epoch_id,
-                source_epoch_manager.get_epoch_info(&next_next_epoch_id)?.clone(),
+                source_epoch_manager.get_epoch_info(&next_next_epoch_id)?,
             )?;
         }
 
@@ -345,9 +349,9 @@ impl EpochManager {
         last_block_info: &BlockInfo,
         last_block_hash: &CryptoHash,
     ) -> Result<EpochSummary, EpochError> {
-        let epoch_info = self.get_epoch_info(last_block_info.epoch_id())?.clone();
+        let epoch_info = self.get_epoch_info(last_block_info.epoch_id())?;
         let next_epoch_id = self.get_next_epoch_id(last_block_hash)?;
-        let next_epoch_info = self.get_epoch_info(&next_epoch_id)?.clone();
+        let next_epoch_info = self.get_epoch_info(&next_epoch_id)?;
 
         let EpochInfoAggregator {
             block_tracker: block_validator_tracker,
@@ -461,7 +465,7 @@ impl EpochManager {
         let validator_stake =
             epoch_info.validators_iter().map(|r| r.account_and_stake()).collect::<HashMap<_, _>>();
         let next_epoch_id = self.get_next_epoch_id_from_info(block_info)?;
-        let next_epoch_info = self.get_epoch_info(&next_epoch_id)?.clone();
+        let next_epoch_info = self.get_epoch_info(&next_epoch_id)?;
         self.save_epoch_validator_info(store_update, block_info.epoch_id(), &epoch_summary)?;
 
         let EpochSummary {
@@ -540,7 +544,7 @@ impl EpochManager {
                 // This is genesis block, we special case as new epoch.
                 assert_eq!(block_info.proposals_iter().len(), 0);
                 let pre_genesis_epoch_id = EpochId::default();
-                let genesis_epoch_info = self.get_epoch_info(&pre_genesis_epoch_id)?.clone();
+                let genesis_epoch_info = self.get_epoch_info(&pre_genesis_epoch_id)?;
                 self.save_block_info(&mut store_update, Arc::new(block_info))?;
                 self.save_epoch_info(
                     &mut store_update,
@@ -567,7 +571,7 @@ impl EpochManager {
                     *block_info.epoch_id_mut() = prev_block_info.epoch_id().clone();
                     *block_info.epoch_first_block_mut() = *prev_block_info.epoch_first_block();
                 }
-                let epoch_info = self.get_epoch_info(block_info.epoch_id())?.clone();
+                let epoch_info = self.get_epoch_info(block_info.epoch_id())?;
 
                 // Keep `slashed` from previous block if they are still in the epoch info stake change
                 // (e.g. we need to keep track that they are still slashed, because when we compute
@@ -691,6 +695,24 @@ impl EpochManager {
         })
     }
 
+    /// Returns settlement of all chunk producers in the current epoch.
+    pub fn get_all_chunk_producers(
+        &self,
+        epoch_id: &EpochId,
+    ) -> Result<Arc<[ValidatorStake]>, EpochError> {
+        self.epoch_chunk_producers_unique.get_or_try_put(epoch_id.clone(), |epoch_id| {
+            let mut producers: HashSet<u64> = HashSet::default();
+
+            // Collect unique chunk producers.
+            let epoch_info = self.get_epoch_info(epoch_id)?;
+            for chunk_producers in epoch_info.chunk_producers_settlement() {
+                producers.extend(chunk_producers);
+            }
+
+            Ok(producers.iter().map(|producer_id| epoch_info.get_validator(*producer_id)).collect())
+        })
+    }
+
     /// get_heuristic_block_approvers_ordered: block producers for epoch
     /// get_all_block_producers_ordered: block producers for epoch, slashing info
     /// get_all_block_approvers_ordered: block producers for epoch, slashing info, sometimes block producers for next epoch
@@ -762,7 +784,7 @@ impl EpochManager {
         height: BlockHeight,
         shard_id: ShardId,
     ) -> Result<ValidatorStake, EpochError> {
-        let epoch_info = self.get_epoch_info(epoch_id)?.clone();
+        let epoch_info = self.get_epoch_info(epoch_id)?;
         let validator_id = Self::chunk_producer_from_info(&epoch_info, height, shard_id);
         Ok(epoch_info.get_validator(validator_id))
     }
@@ -852,7 +874,6 @@ impl EpochManager {
     }
 
     /// Returns true if next block after given block hash is in the new epoch.
-    #[allow(clippy::wrong_self_convention)]
     pub fn is_next_block_epoch_start(&self, parent_hash: &CryptoHash) -> Result<bool, EpochError> {
         let block_info = self.get_block_info(parent_hash)?;
         self.is_next_block_in_next_epoch(&block_info)
@@ -1005,7 +1026,7 @@ impl EpochManager {
             ValidatorInfoIdentifier::EpochId(ref id) => id.clone(),
             ValidatorInfoIdentifier::BlockHash(ref b) => self.get_epoch_id(b)?,
         };
-        let cur_epoch_info = self.get_epoch_info(&epoch_id)?.clone();
+        let cur_epoch_info = self.get_epoch_info(&epoch_id)?;
         let epoch_height = cur_epoch_info.epoch_height();
         let epoch_start_height = self.get_epoch_start_from_epoch_id(&epoch_id)?;
         let mut validator_to_shard = (0..cur_epoch_info.validators_len())
@@ -1497,7 +1518,7 @@ impl EpochManager {
         }
 
         let epoch_id = self.get_block_info(block_hash)?.epoch_id().clone();
-        let epoch_info = self.get_epoch_info(&epoch_id)?.clone();
+        let epoch_info = self.get_epoch_info(&epoch_id)?;
 
         let mut aggregator = EpochInfoAggregator::new(epoch_id.clone(), *block_hash);
         let mut cur_hash = *block_hash;
@@ -1547,7 +1568,7 @@ impl EpochManager {
         &self,
         block_hash: CryptoHash,
     ) -> Result<Option<BlockHeight>, EpochError> {
-        let cur_epoch_info = self.get_epoch_info_from_hash(&block_hash)?.clone();
+        let cur_epoch_info = self.get_epoch_info_from_hash(&block_hash)?;
         let next_epoch_id = self.get_next_epoch_id(&block_hash)?;
         let next_epoch_info = self.get_epoch_info(&next_epoch_id)?;
         if cur_epoch_info.protocol_version() != next_epoch_info.protocol_version() {
