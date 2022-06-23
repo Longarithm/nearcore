@@ -104,7 +104,7 @@ pub(crate) fn flat_state(
                 store_update.commit().unwrap();
                 store_update = store.store_update();
             }
-            store_update.set(DBCol::ColFlatState, &key, &value_ser)
+            store_update.set(DBCol::FlatState, &key, &value_ser)
         }
     }
     tracing::info!("committing changes!");

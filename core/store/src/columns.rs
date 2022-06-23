@@ -234,9 +234,7 @@ pub enum DBCol {
     /// - *Column type*: StateChangesForSplitStates
     StateChangesForSplitStates = 49,
 
-    ColFlatState = 50,
-    StateNode = 51,
-    StateValue = 52,
+    FlatState = 50,
 }
 
 impl DBCol {
@@ -404,9 +402,7 @@ impl fmt::Display for DBCol {
             Self::EpochValidatorInfo => "epoch validator info",
             Self::HeaderHashesByHeight => "header hashes indexed by their height",
             Self::StateChangesForSplitStates => "state changes indexed by block hash and shard id",
-            Self::ColFlatState => "flat state",
-            Self::StateNode => "state node",
-            Self::StateValue => "state value",
+            Self::FlatState => "flat state",
         };
         write!(f, "{}", desc)
     }

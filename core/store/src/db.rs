@@ -270,6 +270,9 @@ pub(crate) trait Database: Sync + Send {
     fn write(&self, batch: DBTransaction) -> io::Result<()>;
     fn flush(&self) -> io::Result<()>;
     fn get_store_statistics(&self) -> Option<StoreStatistics>;
+    fn as_rocksdb(&self) -> Option<&RocksDB> {
+        None
+    }
 }
 
 impl Database for RocksDB {
@@ -402,6 +405,10 @@ impl Database for RocksDB {
             }
         }
         None
+    }
+
+    fn as_rocksdb(&self) -> Option<&RocksDB> {
+        Some(self)
     }
 }
 
