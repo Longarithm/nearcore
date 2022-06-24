@@ -32,7 +32,7 @@ use near_primitives::trie_key::{trie_key_parsers, TrieKey};
 use near_primitives::types::{AccountId, CompiledContractCache, StateRoot};
 
 pub use crate::db::refcount::decode_value_with_rc;
-use crate::db::refcount::encode_value_with_rc;
+pub use crate::db::refcount::encode_value_with_rc;
 use crate::db::{
     DBOp, DBTransaction, Database, RocksDB, StoreStatistics, GENESIS_JSON_HASH_KEY,
     GENESIS_STATE_ROOTS_KEY,

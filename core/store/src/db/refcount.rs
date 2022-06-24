@@ -90,7 +90,7 @@ pub fn decode_value_with_rc(bytes: &[u8]) -> (Option<&[u8]>, i64) {
 /// - rc = 0 ⇒ an empty vector,
 /// - rc < 0 ⇒ reference count encoded in little endian,
 /// - rc > 0 ⇒ data followed by the reference count encoded in little endian.
-pub(crate) fn encode_value_with_rc(data: &[u8], rc: i64) -> Vec<u8> {
+pub fn encode_value_with_rc(data: &[u8], rc: i64) -> Vec<u8> {
     if rc == 0 {
         return vec![];
     }
