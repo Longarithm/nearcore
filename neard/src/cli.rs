@@ -63,6 +63,7 @@ impl NeardCmd {
         } else {
             GenesisValidationMode::Full
         };
+        let use_flat = neard_cmd.opts.use_flat;
 
         match neard_cmd.subcmd {
             NeardSubCommand::Init(cmd) => cmd.run(&home_dir),
@@ -71,7 +72,7 @@ impl NeardCmd {
 
             NeardSubCommand::StateViewer(cmd) => {
                 let mode = if cmd.readwrite { Mode::ReadWrite } else { Mode::ReadOnly };
-                cmd.subcmd.run(&home_dir, genesis_validation, mode);
+                cmd.subcmd.run(&home_dir, genesis_validation, mode, use_flat);
             }
 
             NeardSubCommand::RecompressStorage(cmd) => {
@@ -134,6 +135,8 @@ struct NeardOpts {
     /// Enables export of span data using opentelemetry protocol.
     #[clap(flatten)]
     o11y: near_o11y::Options,
+    #[clap(long)]
+    use_flat: bool,
 }
 
 impl NeardOpts {

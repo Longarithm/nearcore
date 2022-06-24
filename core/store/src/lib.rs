@@ -59,6 +59,7 @@ pub use crate::config::{StoreConfig, StoreOpener};
 pub struct Store {
     storage: Arc<dyn Database>,
     pub flat_storage: Arc<RwLock<HashMap<Vec<u8>, Option<(u32, CryptoHash)>>>>,
+    pub use_flat: bool,
 
     // for storage_[set|get]
     pub latency_read: Arc<AtomicRefCell<(FastDistribution, Option<std::time::Instant>, u64)>>,
@@ -91,6 +92,7 @@ impl Store {
         Store {
             storage,
             flat_storage: Arc::new(RwLock::new(HashMap::new())),
+            use_flat: true,
             latency_read: Arc::new(AtomicRefCell::new((FastDistribution::new(0, 10_000), None, 0))),
             latency_write: Arc::new(AtomicRefCell::new((
                 FastDistribution::new(0, 10_000),

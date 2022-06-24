@@ -73,12 +73,20 @@ pub enum StateViewerSubCommand {
 }
 
 impl StateViewerSubCommand {
-    pub fn run(self, home_dir: &Path, genesis_validation: GenesisValidationMode, mode: Mode) {
+    pub fn run(
+        self,
+        home_dir: &Path,
+        genesis_validation: GenesisValidationMode,
+        mode: Mode,
+        use_flat: bool,
+    ) {
         let near_config = load_config(home_dir, genesis_validation)
             .unwrap_or_else(|e| panic!("Error loading config: {:#}", e));
         let store_opener =
             near_store::Store::opener(home_dir, &near_config.config.store).mode(mode);
-        let store = store_opener.open();
+        let mut store = store_opener.open();
+        store.use_flat = use_flat;
+
         match self {
             StateViewerSubCommand::Peers => peers(store),
             StateViewerSubCommand::State => state(home_dir, near_config, store),

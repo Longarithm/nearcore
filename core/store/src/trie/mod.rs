@@ -691,8 +691,8 @@ impl Trie {
     ) -> Result<Option<(u32, CryptoHash)>, StorageError> {
         storage_log(json!({"method": "trie_get_ref", "key": key}));
         // let _span = tracing::debug_span!(target: "runtime", "get_ref").entered();
-        if use_flat {
-            if let Some(storage) = self.storage.as_caching_storage() {
+        if let Some(storage) = self.storage.as_caching_storage() {
+            if use_flat && storage.store.use_flat {
                 // let _span = tracing::debug_span!(target: "runtime", "get_ref").entered();
 
                 // fake lookup to rollback costs

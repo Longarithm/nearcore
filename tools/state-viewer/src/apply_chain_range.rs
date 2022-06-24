@@ -432,12 +432,12 @@ pub fn apply_chain_range(
         tgas_burned: AtomicU64::new(0),
     };
     let process_height = |height| {
-        if 2 * height == start_height + end_height {
-            let rocksdb = store.get_rocksdb().unwrap();
-            if let Ok(mut counter) = rocksdb.latency_get.try_borrow_mut() {
-                counter.0.clear();
-            }
-        }
+        // if 2 * height == start_height + end_height {
+        //     let rocksdb = store.get_rocksdb().unwrap();
+        //     if let Ok(mut counter) = rocksdb.latency_get.try_borrow_mut() {
+        //         counter.0.clear();
+        //     }
+        // }
         apply_block_from_range(
             height,
             shard_id,
