@@ -412,8 +412,12 @@ impl StoreUpdate {
         if change.trie_key.is_delayed() {
             return;
         }
+        match &change.trie_key {
+            TrieKey::Account { .. } => info!("FLAT CHANGE: {:?}", change),
+            _ => {}
+        }
         let key = change.trie_key.to_vec();
-        let last_change = change
+        let last_change = changes
             .changes
             .last()
             .expect("Committed entry should have at least one change")
