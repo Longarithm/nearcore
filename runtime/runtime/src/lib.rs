@@ -1177,9 +1177,9 @@ impl Runtime {
                 let key = item.0.clone();
                 let trie_value = item.1.clone();
 
-                let trie_record = StateRecord::from_raw_key_value(key.clone(), trie_value).unwrap();
+                let trie_record = StateRecord::from_raw_key_value(key.clone(), trie_value);
                 match &trie_record {
-                    StateRecord::Account { .. } => {
+                    Some(StateRecord::Account { .. }) => {
                         let flat_value =
                             match initial_state.flat_state.as_ref().unwrap().get_ref(&key).unwrap()
                             {
@@ -1195,7 +1195,7 @@ impl Runtime {
                             flat_value.unwrap().unwrap(),
                         )
                         .unwrap();
-                        info!("TRIE: {:?} FLAT: {:?}", trie_record, flat_record);
+                        info!("TRIE: {:?} FLAT: {:?}", trie_record.unwrap(), flat_record);
                     }
                     _ => {}
                 }
