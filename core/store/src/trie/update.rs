@@ -182,15 +182,7 @@ impl TrieUpdate {
     pub fn finalize(self) -> Result<(TrieChanges, Vec<RawStateChangesWithTrieKey>), StorageError> {
         assert!(self.prospective.is_empty(), "Finalize cannot be called with uncommitted changes.");
         let TrieUpdate { trie, root, committed, .. } = self;
-        let mut state_changes: Vec<RawStateChangesWithTrieKey> =
-            Vec::with_capacity(committed.len());
-        for change in state_changes.iter() {
-            match change.trie_key {
-                TrieKey::Account { .. } => info!("TRIE CHANGE: {:?}", change),
-                _ => {}
-            }
-        }
-
+        let mut state_changes = Vec::with_capacity(committed.len());
         let trie_changes = trie.update(
             &root,
             committed.into_iter().map(|(k, changes_with_trie_key)| {
@@ -204,6 +196,23 @@ impl TrieUpdate {
                 (k, data)
             }),
         )?;
+        for change in state_changes.iter() {
+            match change.trie_key {
+                TrieKey::Account { .. } => {
+                    for changes in change.changes {
+                        match changes.data {
+                            Some(data) => info!(
+                                "TRIE CHANGE: {:?}",
+                                StateRecord::from_raw_key_value(change.trie_key.to_vec(), data)
+                            ),
+                            None => info!("TRIE CHANGE: {:?} -", change.trie_key),
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
         Ok((trie_changes, state_changes))
     }
 

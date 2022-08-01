@@ -22,6 +22,7 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::receipt::{DelayedReceiptIndices, Receipt, ReceivedData};
 use near_primitives::serialize::to_base;
 pub use near_primitives::shard_layout::ShardUId;
+use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::{trie_key_parsers, TrieKey};
 use near_primitives::types::{
     AccountId, CompiledContractCache, RawStateChangesWithTrieKey, StateRoot,
@@ -48,6 +49,7 @@ pub mod test_utils;
 mod trie;
 
 pub use crate::config::{Mode, StoreConfig, StoreOpener};
+use crate::DBCol::State;
 
 #[derive(Clone)]
 pub struct Store {
@@ -413,7 +415,17 @@ impl StoreUpdate {
             return;
         }
         match &change.trie_key {
-            TrieKey::Account { .. } => info!("FLAT CHANGE: {:?}", change),
+            TrieKey::Account { .. } => {
+                for changes in change.changes {
+                    match changes.data {
+                        Some(data) => info!(
+                            "FLAT CHANGE: {:?}",
+                            StateRecord::from_raw_key_value(change.trie_key.to_vec(), data)
+                        ),
+                        None => info!("FLAT CHANGE: {:?} -", change.trie_key),
+                    }
+                }
+            }
             _ => {}
         }
         let key = change.trie_key.to_vec();
