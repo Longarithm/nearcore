@@ -199,11 +199,14 @@ impl TrieUpdate {
         for change in state_changes.iter() {
             match change.trie_key {
                 TrieKey::Account { .. } => {
-                    for changes in change.changes {
-                        match changes.data {
+                    for changes in &change.changes {
+                        match &changes.data {
                             Some(data) => info!(
                                 "TRIE CHANGE: {:?}",
-                                StateRecord::from_raw_key_value(change.trie_key.to_vec(), data)
+                                StateRecord::from_raw_key_value(
+                                    change.trie_key.to_vec(),
+                                    data.clone()
+                                )
                             ),
                             None => info!("TRIE CHANGE: {:?} -", change.trie_key),
                         }
