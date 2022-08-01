@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use near_primitives::sandbox_state_patch::SandboxStatePatch;
-use tracing::debug;
+use tracing::{debug, info};
 
 use near_chain_configs::Genesis;
 pub use near_crypto;
@@ -17,6 +17,7 @@ use near_primitives::runtime::fees::RuntimeFeesConfig;
 use near_primitives::runtime::get_insufficient_storage_stake;
 use near_primitives::runtime::migration_data::{MigrationData, MigrationFlags};
 use near_primitives::transaction::ExecutionMetadata;
+use near_primitives::types::ValueRef;
 use near_primitives::version::{
     is_implicit_account_creation_enabled, ProtocolFeature, ProtocolVersion,
 };
@@ -1167,6 +1168,37 @@ impl Runtime {
         let flat_state = trie.retrieve_flat_state();
         let initial_state = TrieUpdate::new_with_flat_state(trie.clone(), flat_state.clone(), root);
         let mut state_update = TrieUpdate::new_with_flat_state(trie.clone(), flat_state, root);
+
+        let trie_iterator = trie.iter(&root).unwrap();
+        info!("iterate items...");
+        let _ = trie_iterator
+            .map(|item| {
+                let item = item.unwrap();
+                let key = item.0.clone();
+                let trie_value = item.1.clone();
+
+                let trie_record = StateRecord::from_raw_key_value(key.clone(), trie_value).unwrap();
+                match &trie_record {
+                    StateRecord::Account { .. } => {
+                        let flat_value = match initial_state.flat_state.unwrap().get_ref(&key)? {
+                            Some(ValueRef { hash, .. }) => initial_state
+                                .trie
+                                .storage
+                                .retrieve_raw_bytes(&hash)
+                                .map(|bytes| Some(bytes.to_vec())),
+                            None => Ok(None),
+                        };
+                        let flat_record = StateRecord::from_raw_key_value(
+                            key.clone(),
+                            flat_value.unwrap().unwrap(),
+                        )
+                        .unwrap();
+                        info!("TRIE: {:?} FLAT: {:?}", trie_record, flat_record);
+                    }
+                    _ => {}
+                }
+            })
+            .count();
 
         let mut stats = ApplyStats::default();
 

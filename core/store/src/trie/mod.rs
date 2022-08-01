@@ -10,7 +10,7 @@ use near_primitives::challenge::PartialState;
 use near_primitives::contract::ContractCode;
 use near_primitives::hash::{hash, CryptoHash};
 pub use near_primitives::shard_layout::ShardUId;
-use near_primitives::types::{StateRoot, StateRootNode};
+use near_primitives::types::{StateRoot, StateRootNode, ValueRef};
 
 use crate::trie::insert_delete::NodesStorage;
 use crate::trie::iterator::TrieIterator;
@@ -404,7 +404,7 @@ impl RawTrieNodeWithSize {
 }
 
 pub struct Trie {
-    pub(crate) storage: Box<dyn TrieStorage>,
+    pub storage: Box<dyn TrieStorage>,
 }
 
 #[derive(Clone)]
@@ -448,11 +448,6 @@ pub struct TrieRefcountChange {
     /// Reference count difference which will be added to the total refcount if it corresponds to
     /// insertion and subtracted from it in the case of deletion.
     rc: std::num::NonZeroU32,
-}
-
-pub struct ValueRef {
-    pub length: u32,
-    pub hash: CryptoHash,
 }
 
 ///
