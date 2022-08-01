@@ -101,8 +101,11 @@ pub(crate) fn check_balance(
                 .map_err(|_| RuntimeError::UnexpectedIntegerOverflow)
         })
     };
+    info!("total balance in");
     let initial_accounts_balance = total_accounts_balance(initial_state)?;
+    info!("final balance in");
     let final_accounts_balance = total_accounts_balance(final_state)?;
+    info!("balance out");
     // Receipts
     let receipt_cost = |receipt: &Receipt| -> Result<Balance, IntegerOverflowError> {
         Ok(match &receipt.receipt {
