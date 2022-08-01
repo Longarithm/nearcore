@@ -1180,14 +1180,15 @@ impl Runtime {
                 let trie_record = StateRecord::from_raw_key_value(key.clone(), trie_value).unwrap();
                 match &trie_record {
                     StateRecord::Account { .. } => {
-                        let flat_value = match initial_state.flat_state.unwrap().get_ref(&key)? {
-                            Some(ValueRef { hash, .. }) => initial_state
-                                .trie
-                                .storage
-                                .retrieve_raw_bytes(&hash)
-                                .map(|bytes| Some(bytes.to_vec())),
-                            None => Ok(None),
-                        };
+                        let flat_value =
+                            match initial_state.flat_state.unwrap().get_ref(&key).unwrap() {
+                                Some(ValueRef { hash, .. }) => initial_state
+                                    .trie
+                                    .storage
+                                    .retrieve_raw_bytes(&hash)
+                                    .map(|bytes| Some(bytes.to_vec())),
+                                None => Ok(None),
+                            };
                         let flat_record = StateRecord::from_raw_key_value(
                             key.clone(),
                             flat_value.unwrap().unwrap(),
