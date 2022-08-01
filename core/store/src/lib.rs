@@ -417,7 +417,7 @@ impl StoreUpdate {
             _ => {}
         }
         let key = change.trie_key.to_vec();
-        let last_change = changes
+        let last_change = change
             .changes
             .last()
             .expect("Committed entry should have at least one change")
