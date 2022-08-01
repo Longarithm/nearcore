@@ -1181,7 +1181,8 @@ impl Runtime {
                 match &trie_record {
                     StateRecord::Account { .. } => {
                         let flat_value =
-                            match initial_state.flat_state.unwrap().get_ref(&key).unwrap() {
+                            match initial_state.flat_state.as_ref().unwrap().get_ref(&key).unwrap()
+                            {
                                 Some(ValueRef { hash, .. }) => initial_state
                                     .trie
                                     .storage
