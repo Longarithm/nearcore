@@ -233,7 +233,10 @@ pub enum DBCol {
     /// - *Rows*: BlockShardId (BlockHash || ShardId) - 40 bytes
     /// - *Column type*: StateChangesForSplitStates
     StateChangesForSplitStates = 49,
-    /// test
+    /// State changes made by a chunk, used for splitting states
+    /// - *Rows*: serialized TrieKey (Vec<u8>)
+    /// - *Column type*: ValueRef
+    #[cfg(feature = "protocol_feature_flat_state")]
     FlatState = 50,
 }
 
@@ -407,6 +410,7 @@ impl fmt::Display for DBCol {
             Self::EpochValidatorInfo => "epoch validator info",
             Self::HeaderHashesByHeight => "header hashes indexed by their height",
             Self::StateChangesForSplitStates => "state changes indexed by block hash and shard id",
+            #[cfg(feature = "protocol_feature_flat_state")]
             Self::FlatState => "flat state",
         };
         write!(f, "{}", desc)

@@ -440,9 +440,14 @@ impl StoreUpdate {
                 let mut value_ser = [0u8; 36];
                 value_ser[0..4].copy_from_slice(&(value.len() as u32).to_le_bytes());
                 value_ser[4..36].copy_from_slice(&hash(&value).0);
+                #[cfg(feature = "protocol_feature_flat_state")]
                 self.set(DBCol::FlatState, &key, &value_ser)
             }
-            None => self.delete(DBCol::FlatState, &key),
+            None =>
+            {
+                #[cfg(feature = "protocol_feature_flat_state")]
+                self.delete(DBCol::FlatState, &key)
+            }
         }
     }
 }

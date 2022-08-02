@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::intrinsics::unreachable;
 use std::io::{Cursor, Read};
 
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -422,12 +423,18 @@ impl FlatState {
         Ok(Some(ValueRef { length: value_length, hash: value_hash }))
     }
 
-    pub fn get_ref(&self, key: &[u8]) -> Result<Option<ValueRef>, StorageError> {
-        let result = self
+    fn get_raw_ref(&self, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
+        #[cfg(feature = "protocol_feature_flat_state")]
+        return self
             .store
             .get(DBCol::FlatState, key)
-            .map_err(|_| StorageError::StorageInternalError)?;
-        match result {
+            .map_err(|_| StorageError::StorageInternalError);
+        #[cfg(not(feature = "protocol_feature_flat_state"))]
+        unreachable!();
+    }
+
+    pub fn get_ref(&self, key: &[u8]) -> Result<Option<ValueRef>, StorageError> {
+        match self.get_raw_ref(key)? {
             Some(bytes) => {
                 FlatState::decode_ref(&bytes).map_err(|_| StorageError::StorageInternalError)
             }

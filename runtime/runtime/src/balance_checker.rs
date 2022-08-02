@@ -46,13 +46,6 @@ pub(crate) fn check_balance(
             })
             .collect::<Result<Vec<Receipt>, StorageError>>()
     };
-    info!(
-        "{} {} {} {}",
-        initial_delayed_receipt_indices.first_index,
-        final_delayed_receipt_indices.first_index,
-        initial_delayed_receipt_indices.next_available_index,
-        final_delayed_receipt_indices.next_available_index
-    );
     // Previously delayed receipts that were processed this time.
     let processed_delayed_receipts = get_delayed_receipts(
         initial_delayed_receipt_indices.first_index,
@@ -101,11 +94,8 @@ pub(crate) fn check_balance(
                 .map_err(|_| RuntimeError::UnexpectedIntegerOverflow)
         })
     };
-    info!("total balance in");
     let initial_accounts_balance = total_accounts_balance(initial_state)?;
-    info!("final balance in");
     let final_accounts_balance = total_accounts_balance(final_state)?;
-    info!("balance out");
     // Receipts
     let receipt_cost = |receipt: &Receipt| -> Result<Balance, IntegerOverflowError> {
         Ok(match &receipt.receipt {
@@ -181,13 +171,6 @@ pub(crate) fn check_balance(
     let final_postponed_receipts_balance = total_postponed_receipts_cost(final_state)?;
     // Sum it up
 
-    info!(
-        "{} {} {} {}",
-        incoming_receipts.len(),
-        processed_delayed_receipts.len(),
-        outgoing_receipts.len(),
-        new_delayed_receipts.len()
-    );
     let initial_balance = safe_add_balance_apply!(
         incoming_validator_rewards,
         initial_accounts_balance,

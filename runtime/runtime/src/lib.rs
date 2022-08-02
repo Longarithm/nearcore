@@ -1159,10 +1159,6 @@ impl Runtime {
             "apply",
             num_transactions = transactions.len())
         .entered();
-        info!(
-            "CHAIN: {} -> {} | {}",
-            apply_state.prev_block_hash, apply_state.block_hash, apply_state.block_index
-        );
 
         if state_patch.is_some() && !cfg!(feature = "sandbox") {
             panic!("Can only patch state in sandbox mode");
@@ -1172,39 +1168,6 @@ impl Runtime {
         let flat_state = trie.retrieve_flat_state();
         let initial_state = TrieUpdate::new_with_flat_state(trie.clone(), flat_state.clone(), root);
         let mut state_update = TrieUpdate::new_with_flat_state(trie.clone(), flat_state, root);
-
-        let trie_iterator = trie.iter(&root).unwrap();
-        info!("iterate items...");
-        let _ = trie_iterator
-            .map(|item| {
-                let item = item.unwrap();
-                let key = item.0.clone();
-                let trie_value = item.1.clone();
-
-                let trie_record = StateRecord::from_raw_key_value(key.clone(), trie_value);
-                match &trie_record {
-                    Some(StateRecord::Account { .. }) => {
-                        let flat_value =
-                            match initial_state.flat_state.as_ref().unwrap().get_ref(&key).unwrap()
-                            {
-                                Some(ValueRef { hash, .. }) => initial_state
-                                    .trie
-                                    .storage
-                                    .retrieve_raw_bytes(&hash)
-                                    .map(|bytes| Some(bytes.to_vec())),
-                                None => Ok(None),
-                            };
-                        let flat_record = StateRecord::from_raw_key_value(
-                            key.clone(),
-                            flat_value.unwrap().unwrap(),
-                        )
-                        .unwrap();
-                        info!("TRIE: {:?} FLAT: {:?}", trie_record.unwrap(), flat_record);
-                    }
-                    _ => {}
-                }
-            })
-            .count();
 
         let mut stats = ApplyStats::default();
 
