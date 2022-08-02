@@ -49,7 +49,6 @@ pub mod test_utils;
 mod trie;
 
 pub use crate::config::{Mode, StoreConfig, StoreOpener};
-use crate::DBCol::State;
 
 #[derive(Clone)]
 pub struct Store {

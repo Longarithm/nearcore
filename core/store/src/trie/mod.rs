@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::intrinsics::unreachable;
 use std::io::{Cursor, Read};
 
 use borsh::{BorshDeserialize, BorshSerialize};
