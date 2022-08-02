@@ -1159,6 +1159,10 @@ impl Runtime {
             "apply",
             num_transactions = transactions.len())
         .entered();
+        info!(
+            "CHAIN: {} -> {} | {}",
+            apply_state.prev_block_hash, apply_state.block_hash, apply_state.block_index
+        );
 
         if state_patch.is_some() && !cfg!(feature = "sandbox") {
             panic!("Can only patch state in sandbox mode");
