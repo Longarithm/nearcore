@@ -413,20 +413,6 @@ impl StoreUpdate {
         if change.trie_key.is_delayed() {
             return;
         }
-        match &change.trie_key {
-            TrieKey::Account { .. } => {
-                for changes in &change.changes {
-                    match &changes.data {
-                        Some(data) => info!(
-                            "FLAT CHANGE: {:?}",
-                            StateRecord::from_raw_key_value(change.trie_key.to_vec(), data.clone())
-                        ),
-                        None => info!("FLAT CHANGE: {:?} -", change.trie_key),
-                    }
-                }
-            }
-            _ => {}
-        }
         let key = change.trie_key.to_vec();
         let last_change = change
             .changes
