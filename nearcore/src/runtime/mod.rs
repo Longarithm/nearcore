@@ -2959,6 +2959,20 @@ mod test {
         );
         info!("3");
 
+        let block_hash = env.head.prev_block_hash.clone();
+        let trie = env.runtime.get_trie_for_shard(0, &block_hash).unwrap();
+        let trie_iterator = trie.iter(&block_hash).unwrap();
+        let _ = trie_iterator
+            .map(|item| {
+                let item = item.unwrap();
+                let sr = StateRecord::from_raw_key_value(item.0, item.1).unwrap();
+                match &sr {
+                    StateRecord::Account { .. } => info!("{:?}", sr),
+                    _ => {}
+                }
+            })
+            .count();
+
         env.step(vec![vec![], vec![]], vec![true, true], ChallengesResult::default());
         assert!(env.runtime.cares_about_shard(
             Some(&validators[0]),
@@ -2967,6 +2981,20 @@ mod test {
             true
         ));
         info!("4");
+
+        let block_hash = env.head.prev_block_hash.clone();
+        let trie = env.runtime.get_trie_for_shard(0, &block_hash).unwrap();
+        let trie_iterator = trie.iter(&block_hash).unwrap();
+        let _ = trie_iterator
+            .map(|item| {
+                let item = item.unwrap();
+                let sr = StateRecord::from_raw_key_value(item.0, item.1).unwrap();
+                match &sr {
+                    StateRecord::Account { .. } => info!("{:?}", sr),
+                    _ => {}
+                }
+            })
+            .count();
 
         // which validator is selected to shard 1 sole validator seat depends on which validator
         // selection algorithm is used
