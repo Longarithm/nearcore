@@ -2098,7 +2098,7 @@ mod test {
     struct TestEnv {
         pub runtime: NightshadeRuntime,
         pub head: Tip,
-        state_roots: Vec<StateRoot>,
+        pub state_roots: Vec<StateRoot>,
         pub last_receipts: HashMap<ShardId, Vec<Receipt>>,
         pub last_shard_proposals: HashMap<ShardId, Vec<ValidatorStake>>,
         pub last_proposals: Vec<ValidatorStake>,
@@ -2931,7 +2931,7 @@ mod test {
 
         let block_hash = env.head.prev_block_hash.clone();
         let trie = env.runtime.get_trie_for_shard(0, &block_hash).unwrap();
-        let trie_iterator = trie.iter(&block_hash).unwrap();
+        let trie_iterator = trie.iter(&env.state_roots[0]).unwrap();
         let _ = trie_iterator
             .map(|item| {
                 let item = item.unwrap();
@@ -2965,7 +2965,7 @@ mod test {
 
         let block_hash = env.head.prev_block_hash.clone();
         let trie = env.runtime.get_trie_for_shard(0, &block_hash).unwrap();
-        let trie_iterator = trie.iter(&block_hash).unwrap();
+        let trie_iterator = trie.iter(&env.state_roots[0]).unwrap();
         let _ = trie_iterator
             .map(|item| {
                 let item = item.unwrap();
@@ -2988,7 +2988,7 @@ mod test {
 
         let block_hash = env.head.prev_block_hash.clone();
         let trie = env.runtime.get_trie_for_shard(0, &block_hash).unwrap();
-        let trie_iterator = trie.iter(&block_hash).unwrap();
+        let trie_iterator = trie.iter(&env.state_roots[0]).unwrap();
         let _ = trie_iterator
             .map(|item| {
                 let item = item.unwrap();
