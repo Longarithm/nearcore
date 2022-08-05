@@ -13,6 +13,7 @@ use super::{Trie, TrieIterator};
 use near_primitives::state::ValueRef;
 use near_primitives::trie_key::TrieKey;
 use std::rc::Rc;
+use tracing::info;
 
 /// Key-value update. Contains a TrieKey and a value.
 pub struct TrieKeyValueUpdate {
@@ -65,6 +66,7 @@ impl TrieUpdate {
     }
 
     pub fn get(&self, key: &TrieKey) -> Result<Option<Vec<u8>>, StorageError> {
+        let trie_key = key.clone();
         let key = key.to_vec();
         if let Some(key_value) = self.prospective.get(&key) {
             return Ok(key_value.value.as_ref().map(<Vec<u8>>::clone));
@@ -74,6 +76,7 @@ impl TrieUpdate {
             }
         }
 
+        info!("trie get {:?}", trie_key);
         self.trie.get(&self.root, &key)
     }
 

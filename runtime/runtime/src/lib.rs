@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use near_primitives::sandbox_state_patch::SandboxStatePatch;
-use tracing::debug;
+use tracing::{debug, info};
 
 use near_chain_configs::Genesis;
 pub use near_crypto;
@@ -974,6 +974,7 @@ impl Runtime {
         stats: &mut ApplyStats,
     ) -> Result<(), RuntimeError> {
         for (account_id, max_of_stakes) in &validator_accounts_update.stake_info {
+            info!("read {}", account_id);
             if let Some(mut account) = get_account(state_update, account_id)? {
                 if let Some(reward) = validator_accounts_update.validator_rewards.get(account_id) {
                     debug!(target: "runtime", "account {} adding reward {} to stake {}", account_id, reward, account.locked());
