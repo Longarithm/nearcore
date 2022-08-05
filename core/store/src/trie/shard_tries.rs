@@ -11,6 +11,7 @@ use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{
     NumShards, RawStateChange, RawStateChangesWithTrieKey, StateChangeCause, StateRoot,
 };
+use tracing::info;
 
 use crate::flat_state::FlatState;
 use crate::trie::trie_storage::{TrieCache, TrieCachingStorage};
@@ -301,6 +302,7 @@ impl WrappedTrieChanges {
                 "Resharding changes must never be finalized."
             );
 
+            info!("write to {:?}", change_with_trie_key.trie_key);
             #[cfg(feature = "protocol_feature_flat_state")]
             store_update.apply_change_to_flat_state(&change_with_trie_key);
 
