@@ -2916,12 +2916,15 @@ mod test {
         let validators = (0..num_nodes)
             .map(|i| AccountId::try_from(format!("test{}", i + 1)).unwrap())
             .collect::<Vec<_>>();
+
+        info!("0");
         let mut env = TestEnv::new_with_tracking(
             vec![validators.clone(), vec![validators[0].clone()]],
             2,
             TrackedConfig::Accounts(vec![validators[1].clone()]),
             true,
         );
+        info!("1");
         let block_producers: Vec<_> = validators
             .iter()
             .map(|id| InMemoryValidatorSigner::from_seed(id.clone(), KeyType::ED25519, id.as_ref()))
@@ -2931,12 +2934,16 @@ mod test {
             KeyType::ED25519,
             validators[1].as_ref(),
         );
+        info!("2");
+
         let staking_transaction = stake(1, &signer, &block_producers[1], 0);
         env.step(
             vec![vec![staking_transaction], vec![]],
             vec![true, true],
             ChallengesResult::default(),
         );
+        info!("3");
+
         env.step(vec![vec![], vec![]], vec![true, true], ChallengesResult::default());
         assert!(env.runtime.cares_about_shard(
             Some(&validators[0]),
@@ -2944,6 +2951,8 @@ mod test {
             0,
             true
         ));
+        info!("4");
+
         // which validator is selected to shard 1 sole validator seat depends on which validator
         // selection algorithm is used
         assert!(
