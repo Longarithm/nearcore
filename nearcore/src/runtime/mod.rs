@@ -2924,6 +2924,21 @@ mod test {
             TrackedConfig::Accounts(vec![validators[1].clone()]),
             true,
         );
+
+        let block_hash = env.head.prev_block_hash.clone();
+        let trie = env.runtime.get_trie_for_shard(0, &block_hash).unwrap();
+        let trie_iterator = trie.iter(&block_hash).unwrap();
+        trie_iterator
+            .map(|item| {
+                let item = item.unwrap();
+                let sr = StateRecord::from_raw_key_value(item.0, item.1).unwrap();
+                match &sr {
+                    StateRecord::Account { .. } => info!("{:?}", sr),
+                    _ => {}
+                }
+            })
+            .collect();
+
         info!("1");
         let block_producers: Vec<_> = validators
             .iter()
