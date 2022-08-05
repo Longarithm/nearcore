@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use borsh::BorshSerialize;
+use tracing::info;
 
 use near_chain_configs::Genesis;
 use near_crypto::PublicKey;
@@ -95,6 +96,7 @@ impl GenesisStateApplier {
         let (trie_changes, mut state_changes) =
             state_update.finalize().expect("Genesis state update failed");
 
+        info!("GENESIS APPLY: {:?}", state_changes);
         #[cfg(feature = "protocol_feature_flat_state")]
         let (mut store_update, new_state_root) = tries.apply_all(&trie_changes, shard_uid);
         #[cfg(not(feature = "protocol_feature_flat_state"))]
@@ -255,6 +257,8 @@ impl GenesisStateApplier {
         genesis: &Genesis,
         shard_account_ids: HashSet<AccountId>,
     ) -> StateRoot {
+        info!("GENESIS APPLY START");
+
         let mut current_state_root = MerkleHash::default();
         let mut delayed_receipts_indices = DelayedReceiptIndices::default();
         let shard_uid =

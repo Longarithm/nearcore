@@ -185,6 +185,8 @@ impl NightshadeRuntime {
             genesis_config.shard_layout.num_shards(),
             genesis_config.num_block_producer_seats_per_shard.len() as NumShards,
         );
+        info!("GENESIS INIT");
+
         let state_roots =
             Self::initialize_genesis_state_if_needed(store.clone(), home_dir, genesis);
         let trie_cache_factory = TrieCacheFactory::new(
@@ -280,6 +282,8 @@ impl NightshadeRuntime {
     }
 
     fn genesis_state_from_records(store: Store, genesis: &Genesis) -> Vec<StateRoot> {
+        info!("GENESIS STATE FROM RECORDS START");
+
         if !genesis.records.as_ref().is_empty() {
             info!(target: "runtime", "Genesis state has {} records, computing state roots", genesis.records.0.len());
         } else {
