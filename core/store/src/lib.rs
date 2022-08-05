@@ -7,6 +7,7 @@ use std::{fmt, io};
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use once_cell::sync::Lazy;
+use tracing::info;
 
 pub use columns::DBCol;
 pub use db::{
@@ -414,6 +415,7 @@ impl StoreUpdate {
 
     #[cfg(feature = "protocol_feature_flat_state")]
     pub fn apply_change_to_flat_state(&mut self, change: &RawStateChangesWithTrieKey) {
+        info!("inner write to {:?}", change.trie_key);
         let key = change.trie_key.to_vec();
         if is_delayed_receipt_key(&key) {
             return;
