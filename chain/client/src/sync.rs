@@ -1682,6 +1682,7 @@ mod test {
             let _ = env.clients[1]
                 .process_block_test(MaybeValidated::from(blocks[i].clone()), Provenance::NONE);
         }
+        thread::sleep(Duration::seconds(5));
         block_sync.block_sync(&mut env.clients[1].chain, &peer_infos).unwrap();
         let requested_block_hashes = collect_hashes_from_network_adapter(network_adapter);
         assert!(requested_block_hashes.is_empty(), "{:?}", requested_block_hashes);
