@@ -108,7 +108,7 @@ pub struct Options {
     color: ColorOutput,
 
     /// Enable JSON output of IO events, written to a file.
-    #[clap(long, default_value = "/home/ubuntu/io_trace.log")]
+    #[clap(long, default_value = "Some(/home/ubuntu/io_trace.log)")]
     record_io_trace: Option<PathBuf>,
 }
 
