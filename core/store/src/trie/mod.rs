@@ -673,23 +673,13 @@ impl Trie {
             Some(flat_state) if !is_delayed => {
                 let orig_key = key.to_vec();
                 let flat_value_ref = flat_state.get_ref(root, &key);
-                let flat_value = self
-                    .storage
-                    .retrieve_raw_bytes(
-                        &flat_value_ref.as_ref().unwrap().unwrap().hash.as_ref().clone(),
-                    )
-                    .unwrap()
-                    .to_vec();
+                let flat_hash = flat_value_ref.clone().unwrap().unwrap().hash.clone();
+                let flat_value = self.storage.retrieve_raw_bytes(&flat_hash).unwrap().to_vec();
 
                 let key = NibbleSlice::new(key);
                 let true_value_ref = self.lookup(root, key);
-                let true_value = self
-                    .storage
-                    .retrieve_raw_bytes(
-                        &true_value_ref.as_ref().unwrap().unwrap().hash.as_ref().clone(),
-                    )
-                    .unwrap()
-                    .to_vec();
+                let true_hash = true_value_ref.clone().unwrap().unwrap().hash.clone();
+                let true_value = self.storage.retrieve_raw_bytes(&true_hash).unwrap().to_vec();
 
                 if flat_value != true_value {
                     let flat_sr = StateRecord::from_raw_key_value(orig_key.clone(), flat_value);
