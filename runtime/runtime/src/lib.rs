@@ -1250,8 +1250,8 @@ impl Runtime {
          -> Result<_, RuntimeError> {
             near_o11y::io_trace!(
                 storage_op = "process_begin",
-                receipt = format!("{}", receipt.receipt_id),
-                receiver_id = format!("{}", receipt.receiver_id),
+                receipt = format!("{}", receipt.receipt_id).as_str(),
+                receiver_id = format!("{}", receipt.receiver_id).as_str(),
             );
             let _span = tracing::debug_span!(
                 target: "runtime",
