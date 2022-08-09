@@ -4,13 +4,14 @@ use std::io::{Cursor, Read};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{LittleEndian, ReadBytesExt};
+use tracing::info;
 
 use near_primitives::challenge::PartialState;
 use near_primitives::contract::ContractCode;
 use near_primitives::hash::{hash, CryptoHash};
 pub use near_primitives::shard_layout::ShardUId;
 use near_primitives::state::ValueRef;
-use near_primitives::state_record::is_delayed_receipt_key;
+use near_primitives::state_record::{is_delayed_receipt_key, StateRecord};
 use near_primitives::types::{StateRoot, StateRootNode};
 
 use crate::flat_state::FlatState;
@@ -669,7 +670,33 @@ impl Trie {
     pub fn get_ref(&self, root: &CryptoHash, key: &[u8]) -> Result<Option<ValueRef>, StorageError> {
         let is_delayed = is_delayed_receipt_key(key);
         match &self.flat_state {
-            Some(flat_state) if !is_delayed => flat_state.get_ref(root, &key),
+            Some(flat_state) if !is_delayed => {
+                let orig_key = key.to_vec();
+                let flat_value_ref = flat_state.get_ref(root, &key);
+                let key = NibbleSlice::new(key);
+                let true_value_ref = self.lookup(root, key);
+                if flat_value_ref != true_value_ref {
+                    let flat_value = self
+                        .storage
+                        .retrieve_raw_bytes(&flat_value_ref.unwrap().unwrap().hash)
+                        .unwrap()
+                        .to_vec();
+                    let flat_sr = StateRecord::from_raw_key_value(orig_key.clone(), flat_value);
+                    let true_value = self
+                        .storage
+                        .retrieve_raw_bytes(&true_value_ref.unwrap().unwrap().hash)
+                        .unwrap()
+                        .to_vec();
+                    let flat_sr = StateRecord::from_raw_key_value(orig_key.clone(), flat_value);
+
+                    info!(
+                        "INEQUAL: TRIE: {:?} FLAT: {:?}",
+                        true_value_ref.unwrap().unwrap(),
+                        flat_value.unwrap().unwrap()
+                    );
+                }
+                true_value_ref
+            }
             _ => {
                 let key = NibbleSlice::new(key);
                 self.lookup(root, key)
