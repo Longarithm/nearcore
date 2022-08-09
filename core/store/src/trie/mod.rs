@@ -673,21 +673,24 @@ impl Trie {
             Some(flat_state) if !is_delayed => {
                 let orig_key = key.to_vec();
                 let flat_value_ref = flat_state.get_ref(root, &key);
+                let flat_value = self
+                    .storage
+                    .retrieve_raw_bytes(&flat_value_ref.unwrap().unwrap().hash)
+                    .unwrap()
+                    .to_vec();
+
                 let key = NibbleSlice::new(key);
                 let true_value_ref = self.lookup(root, key);
-                if flat_value_ref.unwrap() != true_value_ref.unwrap() {
-                    let flat_value = self
-                        .storage
-                        .retrieve_raw_bytes(&flat_value_ref.unwrap().unwrap().hash)
-                        .unwrap()
-                        .to_vec();
+                let true_value = self
+                    .storage
+                    .retrieve_raw_bytes(&true_value_ref.unwrap().unwrap().hash)
+                    .unwrap()
+                    .to_vec();
+
+                if flat_value != true_value {
                     let flat_sr = StateRecord::from_raw_key_value(orig_key.clone(), flat_value);
-                    let true_value = self
-                        .storage
-                        .retrieve_raw_bytes(&true_value_ref.unwrap().unwrap().hash)
-                        .unwrap()
-                        .to_vec();
                     let true_sr = StateRecord::from_raw_key_value(orig_key.clone(), true_value);
+
                     match &flat_sr {
                         Some(StateRecord::Account { .. }) => {
                             info!("INEQUAL: TRIE: {:?} FLAT: {:?}", flat_sr, true_sr);
