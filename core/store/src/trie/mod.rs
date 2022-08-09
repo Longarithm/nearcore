@@ -676,7 +676,7 @@ impl Trie {
                 let flat_value = self
                     .storage
                     .retrieve_raw_bytes(
-                        &flat_value_ref.as_ref().unwrap().unwrap().as_ref().hash.clone(),
+                        &flat_value_ref.as_ref().unwrap().unwrap().hash.as_ref().clone(),
                     )
                     .unwrap()
                     .to_vec();
@@ -686,7 +686,7 @@ impl Trie {
                 let true_value = self
                     .storage
                     .retrieve_raw_bytes(
-                        &true_value_ref.as_ref().unwrap().unwrap().as_ref().hash.clone(),
+                        &true_value_ref.as_ref().unwrap().unwrap().hash.as_ref().clone(),
                     )
                     .unwrap()
                     .to_vec();
