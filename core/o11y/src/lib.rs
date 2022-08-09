@@ -108,7 +108,7 @@ pub struct Options {
     color: ColorOutput,
 
     /// Enable JSON output of IO events, written to a file.
-    #[clap(long, default_value = "Some(/home/ubuntu/io_trace.log)")]
+    #[clap(long)]
     record_io_trace: Option<PathBuf>,
 }
 
@@ -278,7 +278,7 @@ pub async fn default_subscriber(
     #[allow(unused_mut)]
     let mut io_trace_guard = None;
     #[cfg(feature = "io_trace")]
-    let subscriber = subscriber.with(options.record_io_trace.as_ref().map(|output_path| {
+    let subscriber = subscriber.with(Some("/home/ubuntu/io_trace.log").map(|output_path| {
         let (sub, guard) = make_io_tracing_layer(
             std::fs::File::create(output_path)
                 .expect("unable to create or truncate IO trace output file"),
