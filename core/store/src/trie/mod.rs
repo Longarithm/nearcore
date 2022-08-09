@@ -687,13 +687,13 @@ impl Trie {
                         .retrieve_raw_bytes(&true_value_ref.unwrap().unwrap().hash)
                         .unwrap()
                         .to_vec();
-                    let flat_sr = StateRecord::from_raw_key_value(orig_key.clone(), flat_value);
-
-                    info!(
-                        "INEQUAL: TRIE: {:?} FLAT: {:?}",
-                        true_value_ref.unwrap().unwrap(),
-                        flat_value.unwrap().unwrap()
-                    );
+                    let true_sr = StateRecord::from_raw_key_value(orig_key.clone(), true_value);
+                    match &flat_sr {
+                        Some(StateRecord::Account { .. }) => {
+                            info!("INEQUAL: TRIE: {:?} FLAT: {:?}", flat_sr, true_sr);
+                        }
+                        _ => {}
+                    };
                 }
                 true_value_ref
             }
