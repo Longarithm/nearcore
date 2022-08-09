@@ -683,7 +683,7 @@ impl Trie {
                 let true_value_ref = self.lookup(root, key);
                 let true_value = self
                     .storage
-                    .retrieve_raw_bytes(&true_value_ref.unwrap().unwrap().hash)
+                    .retrieve_raw_bytes(&true_value_ref.unwrap().unwrap().hash.clone())
                     .unwrap()
                     .to_vec();
 
