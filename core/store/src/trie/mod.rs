@@ -675,7 +675,7 @@ impl Trie {
                 let flat_value_ref = flat_state.get_ref(root, &key);
                 let key = NibbleSlice::new(key);
                 let true_value_ref = self.lookup(root, key);
-                if flat_value_ref != true_value_ref {
+                if flat_value_ref.unwrap() != true_value_ref.unwrap() {
                     let flat_value = self
                         .storage
                         .retrieve_raw_bytes(&flat_value_ref.unwrap().unwrap().hash)
