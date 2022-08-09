@@ -675,7 +675,7 @@ impl Trie {
                 let flat_value_ref = flat_state.get_ref(root, &key);
                 let flat_value = self
                     .storage
-                    .retrieve_raw_bytes(&flat_value_ref.unwrap().unwrap().hash)
+                    .retrieve_raw_bytes(&flat_value_ref.as_ref().unwrap().unwrap().hash)
                     .unwrap()
                     .to_vec();
 
@@ -683,7 +683,7 @@ impl Trie {
                 let true_value_ref = self.lookup(root, key);
                 let true_value = self
                     .storage
-                    .retrieve_raw_bytes(&true_value_ref.unwrap().unwrap().hash.clone())
+                    .retrieve_raw_bytes(&true_value_ref.as_ref().unwrap().unwrap().hash)
                     .unwrap()
                     .to_vec();
 
