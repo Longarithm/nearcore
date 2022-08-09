@@ -4,6 +4,8 @@ use std::io::{Cursor, Read};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::{LittleEndian, ReadBytesExt};
+use near_o11y::storage_log;
+use serde_json::json;
 
 use near_primitives::challenge::PartialState;
 use near_primitives::contract::ContractCode;
@@ -637,6 +639,9 @@ impl Trie {
                     if key.starts_with(&existing_key) {
                         hash = child;
                         key = key.mid(existing_key.len());
+                        storage_log(
+                            json!({"method": "trie_step", "node": "extension", "len": existing_key.len()}),
+                        );
                     } else {
                         return Ok(None);
                     }
@@ -657,6 +662,9 @@ impl Trie {
                             Some(x) => {
                                 hash = x;
                                 key = key.mid(1);
+                                storage_log(
+                                    json!({"method": "trie_step", "node": "branch", "len": 1}),
+                                );
                             }
                             None => return Ok(None),
                         }

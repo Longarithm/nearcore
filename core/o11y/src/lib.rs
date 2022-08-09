@@ -2,11 +2,15 @@
 
 pub use {backtrace, tracing, tracing_appender, tracing_subscriber};
 
+use clap::lazy_static::lazy_static;
 use clap::Parser;
 use once_cell::sync::OnceCell;
 use opentelemetry::sdk::trace::{self, IdGenerator, Sampler, Tracer};
 use std::borrow::Cow;
+use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tracing::level_filters::LevelFilter;
 use tracing_appender::non_blocking::NonBlocking;
 use tracing_opentelemetry::OpenTelemetryLayer;
@@ -454,4 +458,34 @@ macro_rules! log_assert {
             }
         }
     };
+}
+
+pub struct StorageLogger {
+    file: File,
+}
+
+impl StorageLogger {
+    pub fn new(file: &str) -> Self {
+        return Self { file: File::create(file).unwrap() };
+    }
+
+    pub fn write(&mut self, value: serde_json::Value) {
+        self.file.write(value.to_string().as_bytes()).unwrap();
+        self.file.write(b"\n").unwrap();
+    }
+}
+
+lazy_static! {
+    static ref STORAGE_LOGGER: Mutex<StorageLogger> =
+        Mutex::new(StorageLogger::new("/tmp/storage.log"));
+    static ref TRIE_CHANGES_LOGGER: Mutex<StorageLogger> =
+        Mutex::new(StorageLogger::new("/tmp/trie_changes.log"));
+}
+
+pub fn storage_log(value: serde_json::Value) {
+    STORAGE_LOGGER.lock().unwrap().write(value);
+}
+
+pub fn trie_changes_log(value: serde_json::Value) {
+    TRIE_CHANGES_LOGGER.lock().unwrap().write(value);
 }
