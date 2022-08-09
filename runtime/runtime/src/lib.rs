@@ -1248,6 +1248,11 @@ impl Runtime {
                                    state_update: &mut TrieUpdate,
                                    total_gas_burnt: &mut Gas|
          -> Result<_, RuntimeError> {
+            near_o11y::io_trace!(
+                storage_op = "process_begin",
+                "receipt": format!("{}", receipt.receipt_id),
+                "receiver_id": format!("{}", receipt.receiver_id),
+            );
             let _span = tracing::debug_span!(
                 target: "runtime",
                 "process_receipt",
@@ -1268,6 +1273,7 @@ impl Runtime {
                 epoch_info_provider,
             );
             tracing::debug!(target: "runtime", node_counter = ?state_update.trie.get_trie_nodes_count());
+            near_o11y::io_trace!(storage_op = "process_end");
             if let Some(outcome_with_id) = result? {
                 *total_gas_burnt =
                     safe_add_gas(*total_gas_burnt, outcome_with_id.outcome.gas_burnt)?;

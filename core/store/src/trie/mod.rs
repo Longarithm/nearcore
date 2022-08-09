@@ -637,6 +637,12 @@ impl Trie {
                     if key.starts_with(&existing_key) {
                         hash = child;
                         key = key.mid(existing_key.len());
+
+                        near_o11y::io_trace!(
+                            storage_op = "trie_step",
+                            node = "extension",
+                            len = existing_key.len(),
+                        );
                     } else {
                         return Ok(None);
                     }
@@ -657,6 +663,11 @@ impl Trie {
                             Some(x) => {
                                 hash = x;
                                 key = key.mid(1);
+                                near_o11y::io_trace!(
+                                    storage_op = "trie_step",
+                                    node = "branch",
+                                    len = 1,
+                                );
                             }
                             None => return Ok(None),
                         }
