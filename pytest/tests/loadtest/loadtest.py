@@ -56,12 +56,12 @@ if __name__ == '__main__':
                                  rpc_infos=[(args.host, "3030")])
 
     # First - 'reset' the counters in the contract.
-    for y in accounts:
-        my_account.send_call_contract_raw_tx(
-            contract_id=y,
-            method_name="reset_increment_many",
-            args=f'{{"how_many": 400}}'.encode("utf-8"),
-            deposit=0)
+    # for y in accounts:
+    #     my_account.send_call_contract_raw_tx(
+    #         contract_id=y,
+    #         method_name="reset_increment_many",
+    #         args=f'{{"how_many": 400}}'.encode("utf-8"),
+    #         deposit=0)
 
     results = []
 
@@ -80,7 +80,7 @@ if __name__ == '__main__':
             result = my_account.send_call_contract_raw_tx(
                 contract_id=y,
                 method_name=method_name,
-                args=f'{{"how_many": {min(400 + i, 400)}}}'.encode("utf-8"),
+                args=f'{{"how_many": {1}}}'.encode("utf-8"),
                 deposit=0)
             results.append(result)
 
