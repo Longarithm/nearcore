@@ -80,7 +80,7 @@ if __name__ == '__main__':
             result = my_account.send_call_contract_raw_tx(
                 contract_id=y,
                 method_name=method_name,
-                args=f'{{"how_many": {1}}}'.encode("utf-8"),
+                args=f'{{"how_many": {3}}}'.encode("utf-8"),
                 deposit=0)
             results.append(result)
 
