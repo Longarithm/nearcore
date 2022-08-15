@@ -2041,7 +2041,7 @@ impl Chain {
         let new_final_head = self.chain_store().final_head()?;
 
         // Hack 2: apply deletions from final blocks if we see an update
-        if old_final_head.height < new_final_head.height {
+        if old_final_head.height > new_final_head.height {
             let tries = self.runtime_adapter.get_tries();
             match tries.tail() {
                 None => {
