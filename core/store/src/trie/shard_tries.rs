@@ -1,3 +1,4 @@
+use std::borrow::BorrowMut;
 use std::io;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
@@ -66,6 +67,7 @@ struct ShardTriesInner {
     caches: RwLock<HashMap<ShardUId, TrieCache>>,
     /// Cache for readers.
     view_caches: RwLock<HashMap<ShardUId, TrieCache>>,
+    tail: RwLock<Option<CryptoHash>>,
 }
 
 #[derive(Clone)]
@@ -80,6 +82,7 @@ impl ShardTries {
             trie_cache_factory,
             caches: RwLock::new(caches),
             view_caches: RwLock::new(view_caches),
+            tail: RwLock::new(None),
         }))
     }
 
@@ -291,6 +294,14 @@ impl ShardTries {
                 None => store_update.delete(DBCol::FlatState, &key),
             }
         }
+    }
+
+    pub fn tail(&self) -> Option<CryptoHash> {
+        self.0.tail.read().expect(POISONED_LOCK_ERR).clone()
+    }
+
+    pub fn set_tail(&self, new_tail: &CryptoHash) {
+        let _ = self.0.tail.write().expect(POISONED_LOCK_ERR).insert(new_tail.clone());
     }
 }
 

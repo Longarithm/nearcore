@@ -48,7 +48,7 @@ use near_primitives::views::{
     FinalExecutionOutcomeWithReceiptView, FinalExecutionStatus, LightClientBlockView,
     SignedTransactionView,
 };
-use near_store::{DBCol, ShardTries, StoreUpdate};
+use near_store::{DBCol, ShardTries, StoreUpdate, TrieChanges};
 
 use crate::block_processing_utils::{
     BlockPreprocessInfo, BlockProcessingArtifact, BlocksInProcessing, DoneApplyChunkCallback,
@@ -74,7 +74,7 @@ use actix::Message;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use delay_detector::DelayDetector;
 use near_primitives::shard_layout::{
-    account_id_to_shard_id, account_id_to_shard_uid, ShardLayout, ShardUId,
+    account_id_to_shard_id, account_id_to_shard_uid, get_block_shard_uid, ShardLayout, ShardUId,
 };
 use once_cell::sync::OnceCell;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -2033,9 +2033,60 @@ impl Chain {
         let mut chain_update = self.chain_update();
         let provenance = block_preprocess_info.provenance.clone();
         let block_start_processing_time = block_preprocess_info.block_start_processing_time.clone();
+        let old_final_head = chain_update.chain_store().final_head()?;
         let new_head =
             chain_update.postprocess_block(me, &block, block_preprocess_info, apply_results)?;
         chain_update.commit()?;
+
+        let new_final_head = self.chain_store().final_head()?;
+        if old_final_head.height < new_final_head.height {
+            let tries = self.runtime_adapter.get_tries();
+            match tries.tail() {
+                None => {
+                    tries.set_tail(&new_final_head.last_block_hash);
+                    // do nothing
+                }
+                Some(tail) => {
+                    // assume that tail is final
+                    let mut shard_cache_tail = tail;
+                    loop {
+                        let shard_layout = self
+                            .runtime_adapter
+                            .get_shard_layout_from_prev_block(&shard_cache_tail)?;
+                        shard_cache_tail =
+                            self.chain_store().get_next_block_hash(&shard_cache_tail)?;
+                        let shard_uids = shard_layout.get_shard_uids();
+                        let mut temporary_store_update =
+                            self.chain_update().chain_store_update.store().store_update();
+                        for shard_uid in shard_uids {
+                            let trie_changes: Option<TrieChanges> = self.store().store().get_ser(
+                                DBCol::TrieChanges,
+                                &get_block_shard_uid(&block_hash, &shard_uid),
+                            )?;
+                            match trie_changes {
+                                Some(trie_changes) => {
+                                    tries.apply_deletions(
+                                        &trie_changes,
+                                        shard_uid,
+                                        &mut temporary_store_update,
+                                    );
+                                }
+                                _ => {}
+                            };
+                        }
+                        // shard tries are set correctly in store update, if at least one deletion was applied
+                        temporary_store_update.update_cache()?;
+                        tries.set_tail(&shard_cache_tail);
+
+                        if self.chain_store().get_block_height(&shard_cache_tail)?
+                            >= new_final_head.height
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
         self.pending_state_patch = None;
 
