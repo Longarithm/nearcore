@@ -169,19 +169,6 @@ impl ClientActor {
             rng_seed,
         )?;
 
-        client.chain
-        thread::spawn(move || loop {
-            let store = runtime.get_store();
-            let tries = runtime.get_tries();
-            let final_block = runtime.get_bl
-            {
-                let mut counter = foo.counter.write().unwrap();
-                *counter += 1;
-                println!("Counter: {} a", *counter);
-            }
-            thread::sleep(Duration::from_millis(1000));
-        });
-
         let now = Utc::now();
         Ok(ClientActor {
             adv,
