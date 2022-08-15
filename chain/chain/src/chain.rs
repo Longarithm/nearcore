@@ -2039,6 +2039,8 @@ impl Chain {
         chain_update.commit()?;
 
         let new_final_head = self.chain_store().final_head()?;
+
+        // Hack 2: apply deletions from final blocks if we see an update
         if old_final_head.height < new_final_head.height {
             let tries = self.runtime_adapter.get_tries();
             match tries.tail() {
@@ -4682,12 +4684,6 @@ impl<'a> ChainUpdate<'a> {
                         apply_result.total_balance_burnt,
                     ),
                 );
-                // Hack: apply deletions right now
-                {
-                    let mut temporary_store_update = self.chain_store_update.store().store_update();
-                    apply_result.trie_changes.deletions_into(&mut temporary_store_update);
-                    temporary_store_update.update_cache()?;
-                }
                 self.chain_store_update.save_trie_changes(apply_result.trie_changes);
                 self.chain_store_update.save_outgoing_receipt(
                     &block_hash,
@@ -4722,12 +4718,6 @@ impl<'a> ChainUpdate<'a> {
                 *new_extra.state_root_mut() = apply_result.new_root;
 
                 self.chain_store_update.save_chunk_extra(&block_hash, &shard_uid, new_extra);
-                // Hack: apply deletions right now
-                {
-                    let mut temporary_store_update = self.chain_store_update.store().store_update();
-                    apply_result.trie_changes.deletions_into(&mut temporary_store_update);
-                    temporary_store_update.update_cache()?;
-                }
                 self.chain_store_update.save_trie_changes(apply_result.trie_changes);
 
                 if let Some(apply_results_or_state_changes) = apply_split_result_or_state_changes {
