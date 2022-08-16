@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use near_primitives::hash::CryptoHash;
@@ -9,19 +9,29 @@ use crate::trie::POISONED_LOCK_ERR;
 use crate::{metrics, DBCol, StorageError, Store};
 use lru::LruCache;
 use near_primitives::shard_layout::ShardUId;
-use near_primitives::types::{TrieCacheMode, TrieNodesCount};
+use near_primitives::types::{ShardId, TrieCacheMode, TrieNodesCount};
 use std::cell::{Cell, RefCell};
 use std::io::ErrorKind;
 
+pub const DELETIONS_CACHE_CAPACITY: usize = 1_500_000;
+
 pub struct SyncTrieCache {
     cache: LruCache<CryptoHash, Arc<[u8]>>,
+    deletions: VecDeque<CryptoHash>,
     sum_lengths: u64,
     cap_lengths: u64,
+    shard_id: u32,
 }
 
 impl SyncTrieCache {
-    pub fn new(cap: usize) -> Self {
-        Self { cache: LruCache::new(cap), sum_lengths: 0, cap_lengths: 4_500_000_000 }
+    pub fn new(cap: usize, shard_id: u32) -> Self {
+        Self {
+            cache: LruCache::new(cap),
+            deletions: VecDeque::with_capacity(DELETIONS_CACHE_CAPACITY),
+            sum_lengths: 0,
+            cap_lengths: 4_500_000_000,
+            shard_id,
+        }
     }
 
     pub fn get(&mut self, key: &CryptoHash) -> Option<Arc<[u8]>> {
@@ -30,6 +40,7 @@ impl SyncTrieCache {
 
     pub fn clear(&mut self) {
         self.sum_lengths = 0;
+        self.deletions.clear();
         self.cache.clear();
     }
 
@@ -46,12 +57,16 @@ impl SyncTrieCache {
     }
 
     pub fn pop(&mut self, key: &CryptoHash) {
-        match self.cache.pop(key) {
-            Some(evicted_value) => {
-                self.sum_lengths -= evicted_value.len() as u64;
+        if self.deletions.len() == DELETIONS_CACHE_CAPACITY {
+            let key_to_remove = self.deletions.pop_front().expect("Deletions cannot be empty");
+            match self.cache.pop(&key_to_remove) {
+                Some(evicted_value) => {
+                    self.sum_lengths -= evicted_value.len() as u64;
+                }
+                None => {}
             }
-            None => {}
         }
+        self.deletions.push_back(key.clone());
     }
 
     pub fn len(&self) -> usize {
@@ -68,12 +83,12 @@ impl SyncTrieCache {
 pub struct TrieCache(Arc<Mutex<SyncTrieCache>>);
 
 impl TrieCache {
-    pub fn new() -> Self {
-        Self::with_capacity(TRIE_DEFAULT_SHARD_CACHE_SIZE)
+    pub fn new(shard_id: u32) -> Self {
+        Self::with_capacity(TRIE_DEFAULT_SHARD_CACHE_SIZE, shard_id)
     }
 
-    pub fn with_capacity(cap: usize) -> Self {
-        Self(Arc::new(Mutex::new(SyncTrieCache::new(cap))))
+    pub fn with_capacity(cap: usize, shard_id: u32) -> Self {
+        Self(Arc::new(Mutex::new(SyncTrieCache::new(cap, shard_id))))
     }
 
     pub fn get(&self, key: &CryptoHash) -> Option<Arc<[u8]>> {

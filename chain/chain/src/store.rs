@@ -1818,8 +1818,14 @@ impl<'a> ChainStoreUpdate<'a> {
         self.chain_store_cache_update.outcome_ids.insert((*block_hash, shard_id), outcome_ids);
     }
 
-    pub fn save_trie_changes(&mut self, trie_changes: WrappedTrieChanges) {
+    pub fn save_trie_changes(&mut self, trie_changes: WrappedTrieChanges) -> Result<(), Error> {
+        // Hack: apply deletions to shard cache
+        let mut temporary_store_update = self.store().store_update();
+        trie_changes.deletions_into(&mut temporary_store_update);
+        temporary_store_update.update_cache()?;
+
         self.trie_changes.push(trie_changes);
+        Ok(())
     }
 
     pub fn add_state_changes_for_split_states(
