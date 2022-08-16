@@ -57,16 +57,33 @@ impl SyncTrieCache {
     }
 
     pub fn pop(&mut self, key: &CryptoHash) {
-        if self.deletions.len() == DELETIONS_CACHE_CAPACITY {
-            let key_to_remove = self.deletions.pop_front().expect("Deletions cannot be empty");
-            match self.cache.pop(&key_to_remove) {
-                Some(evicted_value) => {
-                    self.sum_lengths -= evicted_value.len() as u64;
+        let shard_id_str = format!("{}", self.shard_id);
+        let labels: [&str; 1] = [&shard_id_str];
+
+        if self.cache.contains(key) {
+            // free space for given key if needed
+            if self.deletions.len() == DELETIONS_CACHE_CAPACITY {
+                let key_to_remove = self.deletions.pop_front().expect("Deletions cannot be empty");
+                match self.cache.pop(&key_to_remove) {
+                    Some(evicted_value) => {
+                        metrics::SHARD_CACHE_POP_HITS.with_label_values(&labels).inc();
+                        self.sum_lengths -= evicted_value.len() as u64;
+                    }
+                    None => {
+                        metrics::SHARD_CACHE_POP_MISSES.with_label_values(&labels).inc();
+                    }
                 }
-                None => {}
             }
+            // put key to postponed deletions cache
+            self.deletions.push_back(key.clone());
+        } else {
+            // no key in cache. should be triggered by GC
+            metrics::SHARD_CACHE_GC_POP_MISSES.with_label_values(&labels).inc();
         }
-        self.deletions.push_back(key.clone());
+
+        metrics::SHARD_CACHE_DELETIONS_SIZE
+            .with_label_values(&labels)
+            .set(self.deletions.len() as i64);
     }
 
     pub fn len(&self) -> usize {

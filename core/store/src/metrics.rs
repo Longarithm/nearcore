@@ -77,3 +77,48 @@ pub static CHUNK_CACHE_SIZE: Lazy<IntGaugeVec> = Lazy::new(|| {
     try_create_int_gauge_vec("near_chunk_cache_size", "Chunk cache size", &["shard_id", "is_view"])
         .unwrap()
 });
+
+pub static SHARD_CACHE_POP_HITS: Lazy<IntCounterVec> = Lazy::new(|| {
+    try_create_int_counter_vec("near_shard_cache_pop_hits", "Shard cache pop hits", &["shard_id"])
+        .unwrap()
+});
+pub static SHARD_CACHE_POP_MISSES: Lazy<IntCounterVec> = Lazy::new(|| {
+    try_create_int_counter_vec(
+        "near_shard_cache_pop_misses",
+        "Shard cache pop misses",
+        &["shard_id"],
+    )
+    .unwrap()
+});
+pub static SHARD_CACHE_GC_POP_MISSES: Lazy<IntCounterVec> = Lazy::new(|| {
+    try_create_int_counter_vec(
+        "near_shard_cache_gc_pop_misses",
+        "Shard cache gc pop misses",
+        &["shard_id"],
+    )
+    .unwrap()
+});
+pub static SHARD_CACHE_DELETIONS_SIZE: Lazy<IntGaugeVec> = Lazy::new(|| {
+    try_create_int_gauge_vec(
+        "near_shard_cache_deletions_size",
+        "Shard cache deletions size",
+        &["shard_id"],
+    )
+    .unwrap()
+});
+pub static APPLIED_TRIE_DELETIONS: Lazy<IntCounterVec> = Lazy::new(|| {
+    try_create_int_counter_vec(
+        "near_applied_trie_deletions",
+        "near_applied_trie_deletions",
+        &["shard_id"],
+    )
+    .unwrap()
+});
+pub static APPLIED_TRIE_INSERTIONS: Lazy<IntCounterVec> = Lazy::new(|| {
+    try_create_int_counter_vec(
+        "near_applied_trie_insertions",
+        "near_applied_trie_insertions",
+        &["shard_id"],
+    )
+    .unwrap()
+});
