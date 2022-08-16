@@ -86,7 +86,7 @@ impl TrieCache {
     }
 
     pub fn update_cache(&self, ops: Vec<(CryptoHash, Option<&Vec<u8>>)>, shard_uid: ShardUId) {
-        let shard_id_str = format!("{}", shard_uid);
+        let shard_id_str = format!("{}", shard_uid.shard_id);
         let labels: [&str; 1] = [&shard_id_str];
 
         let mut guard = self.0.lock().expect(POISONED_LOCK_ERR);
