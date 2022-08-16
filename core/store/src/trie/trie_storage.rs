@@ -101,7 +101,9 @@ impl TrieCache {
                         Some(_) => {
                             metrics::SHARD_CACHE_POPS.with_label_values(&labels).inc();
                         }
-                        _ => {}
+                        _ => {
+                            metrics::SHARD_CACHE_POP_MISSES.with_label_values(&labels).inc();
+                        }
                     };
                 }
             } else {
@@ -109,7 +111,9 @@ impl TrieCache {
                     Some(_) => {
                         metrics::SHARD_CACHE_POPS.with_label_values(&labels).inc();
                     }
-                    _ => {}
+                    _ => {
+                        metrics::SHARD_CACHE_POP_MISSES.with_label_values(&labels).inc();
+                    }
                 };
             }
         }

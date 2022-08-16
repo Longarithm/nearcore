@@ -2063,7 +2063,7 @@ impl Chain {
                         for shard_uid in shard_uids {
                             let trie_changes: Option<TrieChanges> = self.store().store().get_ser(
                                 DBCol::TrieChanges,
-                                &get_block_shard_uid(&block_hash, &shard_uid),
+                                &get_block_shard_uid(&shard_cache_tail, &shard_uid),
                             )?;
                             match trie_changes {
                                 Some(trie_changes) => {
