@@ -2079,7 +2079,7 @@ impl Chain {
                         // shard tries are set correctly in store update, if at least one deletion was applied
                         temporary_store_update.update_cache()?;
                         tries.set_tail(&shard_cache_tail);
-
+                        metrics::FINAL_BLOCK_JUMPS.inc();
                         if self.chain_store().get_block_height(&shard_cache_tail)?
                             >= new_final_head.height
                         {

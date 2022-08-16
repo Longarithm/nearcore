@@ -98,3 +98,5 @@ pub static BLOCK_MISSING_CHUNKS_DELAY: Lazy<Histogram> = Lazy::new(|| {
     )
     .unwrap()
 });
+pub static FINAL_BLOCK_JUMPS: Lazy<IntCounter> =
+    Lazy::new(|| try_create_int_counter("near_final_block_jumps", "Final block jumps").unwrap());
