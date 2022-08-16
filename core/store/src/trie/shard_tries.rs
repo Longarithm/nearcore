@@ -387,6 +387,12 @@ impl WrappedTrieChanges {
     }
 
     pub fn trie_changes_into(&mut self, store_update: &mut StoreUpdate) -> io::Result<()> {
+        let shard_id_str = format!("{}", self.shard_uid.shard_id);
+        let labels: [&str; 1] = [&shard_id_str];
+        metrics::SAVED_TRIE_DELETIONS
+            .with_label_values(&labels)
+            .set(self.trie_changes.deletions.len() as i64);
+
         store_update.set_ser(
             DBCol::TrieChanges,
             &shard_layout::get_block_shard_uid(&self.block_hash, &self.shard_uid),
