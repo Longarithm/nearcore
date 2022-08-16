@@ -13,7 +13,7 @@ use near_primitives::types::{ShardId, TrieCacheMode, TrieNodesCount};
 use std::cell::{Cell, RefCell};
 use std::io::ErrorKind;
 
-pub const DELETIONS_CACHE_CAPACITY: usize = 100; // 1_500_000; FIX ME
+pub const DELETIONS_CACHE_CAPACITY: usize = 100_000;
 
 pub struct SyncTrieCache {
     cache: LruCache<CryptoHash, Arc<[u8]>>,
