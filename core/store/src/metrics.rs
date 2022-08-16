@@ -90,3 +90,11 @@ pub static SHARD_CACHE_POP_MISSES: Lazy<IntCounterVec> = Lazy::new(|| {
     )
     .unwrap()
 });
+pub static OBSERVED_TRIE_DELETIONS: Lazy<IntGaugeVec> = Lazy::new(|| {
+    try_create_int_gauge_vec(
+        "near_observed_trie_deletions",
+        "near_observed_trie_deletions",
+        &["shard_id"],
+    )
+    .unwrap()
+});

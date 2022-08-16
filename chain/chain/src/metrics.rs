@@ -1,6 +1,7 @@
 use near_metrics::{
     exponential_buckets, try_create_histogram, try_create_histogram_vec, try_create_int_counter,
-    try_create_int_gauge, Histogram, HistogramVec, IntCounter, IntGauge,
+    try_create_int_gauge, try_create_int_gauge_vec, Histogram, HistogramVec, IntCounter, IntGauge,
+    IntGaugeVec,
 };
 use once_cell::sync::Lazy;
 
