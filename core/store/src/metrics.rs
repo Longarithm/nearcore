@@ -77,3 +77,7 @@ pub static CHUNK_CACHE_SIZE: Lazy<IntGaugeVec> = Lazy::new(|| {
     try_create_int_gauge_vec("near_chunk_cache_size", "Chunk cache size", &["shard_id", "is_view"])
         .unwrap()
 });
+
+pub static SHARD_CACHE_POPS: Lazy<IntCounterVec> = Lazy::new(|| {
+    try_create_int_counter_vec("near_shard_cache_pops", "Shard cache pops", &["shard_id"]).unwrap()
+});

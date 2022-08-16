@@ -178,7 +178,7 @@ impl ShardTries {
                 .entry(shard_uid)
                 .or_insert_with(|| self.0.trie_cache_factory.create_cache(&shard_uid))
                 .clone();
-            cache.update_cache(ops);
+            cache.update_cache(ops, shard_uid);
         }
         Ok(())
     }

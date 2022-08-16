@@ -45,12 +45,13 @@ impl SyncTrieCache {
         self.cache.put(key, value);
     }
 
-    pub fn pop(&mut self, key: &CryptoHash) {
+    pub fn pop(&mut self, key: &CryptoHash) -> Option<Arc<[u8]>> {
         match self.cache.pop(key) {
             Some(evicted_value) => {
                 self.sum_lengths -= evicted_value.len() as u64;
+                Some(evicted_value)
             }
-            None => {}
+            None => None,
         }
     }
 
@@ -84,7 +85,10 @@ impl TrieCache {
         self.0.lock().expect(POISONED_LOCK_ERR).clear()
     }
 
-    pub fn update_cache(&self, ops: Vec<(CryptoHash, Option<&Vec<u8>>)>) {
+    pub fn update_cache(&self, ops: Vec<(CryptoHash, Option<&Vec<u8>>)>, shard_uid: ShardUId) {
+        let shard_id_str = format!("{}", shard_uid);
+        let labels: [&str; 1] = [&shard_id_str];
+
         let mut guard = self.0.lock().expect(POISONED_LOCK_ERR);
         for (hash, opt_value_rc) in ops {
             if let Some(value_rc) = opt_value_rc {
@@ -93,10 +97,20 @@ impl TrieCache {
                         guard.put(hash, value.into());
                     }
                 } else {
-                    guard.pop(&hash);
+                    match guard.pop(&hash) {
+                        Some(_) => {
+                            metrics::SHARD_CACHE_POPS.with_label_values(&labels).inc();
+                        }
+                        _ => {}
+                    };
                 }
             } else {
-                guard.pop(&hash);
+                match guard.pop(&hash) {
+                    Some(_) => {
+                        metrics::SHARD_CACHE_POPS.with_label_values(&labels).inc();
+                    }
+                    _ => {}
+                };
             }
         }
     }
