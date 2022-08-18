@@ -13,13 +13,14 @@ use near_chain_configs::Genesis;
 use near_primitives::borsh::maybestd::sync::Arc;
 use near_primitives::hash::CryptoHash;
 use near_primitives::receipt::DelayedReceiptIndices;
+use near_primitives::shard_layout::get_block_shard_uid;
 use near_primitives::transaction::{
     Action, ExecutionOutcomeWithId, ExecutionOutcomeWithIdAndProof,
 };
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, ShardId};
-use near_store::{get, DBCol, Store};
+use near_store::{get, DBCol, Store, TrieChanges};
 use nearcore::NightshadeRuntime;
 
 fn timestamp_ms() -> u64 {
@@ -276,6 +277,18 @@ fn apply_block_from_range(
             .unwrap()
     };
 
+    let trie_changes: Option<TrieChanges> =
+        store.get_ser(DBCol::TrieChanges, &get_block_shard_uid(&block_hash, &shard_uid))?;
+    match trie_changes {
+        Some(trie_changes) => {
+            println!(
+                "insertions: {} deletions: {}",
+                trie_changes.insertions.len(),
+                trie_changes.deletions.len()
+            );
+        }
+        _ => {}
+    };
     let (outcome_root, _) = ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
     let chunk_extra = ChunkExtra::new(
         &apply_result.new_root,
