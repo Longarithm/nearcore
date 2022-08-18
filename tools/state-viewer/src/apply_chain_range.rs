@@ -142,6 +142,7 @@ fn apply_block_from_range(
     let mut num_tx = 0;
     let mut num_receipt = 0;
     let chunk_present: bool;
+    let mut sweatcoin = 0;
 
     let block_author = runtime_adapter
         .get_block_producer(block.header().epoch_id(), block.header().height())
@@ -201,6 +202,10 @@ fn apply_block_from_range(
             )
             .unwrap();
         let receipts = collect_receipts_from_response(&receipt_proof_response);
+        sweatcoin = receipts
+            .iter()
+            .filter(|receipt| receipt.receiver_id.as_str() == "v3.token.sweat.testnet")
+            .count();
 
         let chunk_inner = chunk.cloned_header().take_inner();
         let is_first_block_with_chunk_of_version = check_if_block_is_first_with_chunk_of_version(
@@ -282,9 +287,11 @@ fn apply_block_from_range(
     match trie_changes {
         Some(trie_changes) => {
             println!(
-                "insertions: {} deletions: {}",
+                "sweatcoin accounts: {} insertions: {} deletions: {} accounts/insertions: {}",
+                sweatcoin * 135,
                 trie_changes.insertions.len(),
-                trie_changes.deletions.len()
+                trie_changes.deletions.len(),
+                sweatcoin * 135 / trie_changes.insertions.len(),
             );
         }
         _ => {}
