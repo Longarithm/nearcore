@@ -1,33 +1,115 @@
 use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use near_primitives::hash::CryptoHash;
 
 use crate::db::refcount::decode_value_with_rc;
 use crate::trie::POISONED_LOCK_ERR;
-use crate::{DBCol, StorageError, Store};
+use crate::{metrics, DBCol, StorageError, Store};
 use lru::LruCache;
 use near_primitives::shard_layout::ShardUId;
-use near_primitives::types::{TrieCacheMode, TrieNodesCount};
+use near_primitives::types::{ShardId, TrieCacheMode, TrieNodesCount};
 use std::cell::{Cell, RefCell};
 use std::io::ErrorKind;
 
-/// Wrapper over LruCache which doesn't hold too large elements.
-#[derive(Clone)]
-pub struct TrieCache(Arc<Mutex<LruCache<CryptoHash, Arc<[u8]>>>>);
+pub const DELETIONS_CACHE_CAPACITY: usize = 100_000;
 
-impl TrieCache {
-    pub fn new() -> Self {
-        Self::with_capacity(TRIE_DEFAULT_SHARD_CACHE_SIZE)
+pub struct SyncTrieCache {
+    cache: LruCache<CryptoHash, Arc<[u8]>>,
+    deletions: VecDeque<CryptoHash>,
+    sum_lengths: u64,
+    cap_lengths: u64,
+    shard_id: u32,
+}
+
+impl SyncTrieCache {
+    pub fn new(cap: usize, shard_id: u32) -> Self {
+        Self {
+            cache: LruCache::new(cap),
+            deletions: VecDeque::with_capacity(DELETIONS_CACHE_CAPACITY),
+            sum_lengths: 0,
+            cap_lengths: 4_500_000_000,
+            shard_id,
+        }
     }
 
-    pub fn with_capacity(cap: usize) -> Self {
-        Self(Arc::new(Mutex::new(LruCache::new(cap))))
+    pub fn get(&mut self, key: &CryptoHash) -> Option<Arc<[u8]>> {
+        self.cache.get(key).cloned()
+    }
+
+    pub fn clear(&mut self) {
+        self.sum_lengths = 0;
+        self.deletions.clear();
+        self.cache.clear();
+    }
+
+    pub fn put(&mut self, key: CryptoHash, value: Arc<[u8]>) {
+        // Assume that value.len() is less than cap_lengths
+        while self.sum_lengths + value.len() as u64 > self.cap_lengths {
+            let (_, evicted_value) =
+                self.cache.pop_lru().expect("Cannot fail because cap_lengths is > 0");
+            self.sum_lengths -= evicted_value.len() as u64;
+        }
+        // Insert value
+        self.sum_lengths += value.len() as u64;
+        self.cache.put(key, value);
+    }
+
+    pub fn pop(&mut self, key: &CryptoHash) {
+        let shard_id_str = format!("{}", self.shard_id);
+        let labels: [&str; 1] = [&shard_id_str];
+
+        if self.cache.contains(key) {
+            // free space for given key if needed
+            if self.deletions.len() == DELETIONS_CACHE_CAPACITY {
+                let key_to_remove = self.deletions.pop_front().expect("Deletions cannot be empty");
+                match self.cache.pop(&key_to_remove) {
+                    Some(evicted_value) => {
+                        metrics::SHARD_CACHE_POP_HITS.with_label_values(&labels).inc();
+                        self.sum_lengths -= evicted_value.len() as u64;
+                    }
+                    None => {
+                        metrics::SHARD_CACHE_POP_MISSES.with_label_values(&labels).inc();
+                    }
+                }
+            }
+            // put key to postponed deletions cache
+            self.deletions.push_back(key.clone());
+        } else {
+            // no key in cache. should be triggered by GC
+            metrics::SHARD_CACHE_GC_POP_MISSES.with_label_values(&labels).inc();
+        }
+
+        metrics::SHARD_CACHE_DELETIONS_SIZE
+            .with_label_values(&labels)
+            .set(self.deletions.len() as i64);
+    }
+
+    pub fn len(&self) -> usize {
+        self.cache.len()
+    }
+
+    pub fn new_size(&self) -> u64 {
+        self.sum_lengths
+    }
+}
+
+/// Wrapper over LruCache which doesn't hold too large elements.
+#[derive(Clone)]
+pub struct TrieCache(Arc<Mutex<SyncTrieCache>>);
+
+impl TrieCache {
+    pub fn new(shard_id: u32) -> Self {
+        Self::with_capacity(TRIE_DEFAULT_SHARD_CACHE_SIZE, shard_id)
+    }
+
+    pub fn with_capacity(cap: usize, shard_id: u32) -> Self {
+        Self(Arc::new(Mutex::new(SyncTrieCache::new(cap, shard_id))))
     }
 
     pub fn get(&self, key: &CryptoHash) -> Option<Arc<[u8]>> {
-        self.0.lock().expect(POISONED_LOCK_ERR).get(key).cloned()
+        self.0.lock().expect(POISONED_LOCK_ERR).get(key)
     }
 
     pub fn clear(&self) {
@@ -179,10 +261,16 @@ pub struct TrieCachingStorage {
     pub(crate) db_read_nodes: Cell<u64>,
     /// Counts trie nodes retrieved from the chunk cache.
     pub(crate) mem_read_nodes: Cell<u64>,
+    is_view: bool,
 }
 
 impl TrieCachingStorage {
-    pub fn new(store: Store, shard_cache: TrieCache, shard_uid: ShardUId) -> TrieCachingStorage {
+    pub fn new(
+        store: Store,
+        shard_cache: TrieCache,
+        shard_uid: ShardUId,
+        is_view: bool,
+    ) -> TrieCachingStorage {
         TrieCachingStorage {
             store,
             shard_uid,
@@ -191,6 +279,7 @@ impl TrieCachingStorage {
             chunk_cache: RefCell::new(Default::default()),
             db_read_nodes: Cell::new(0),
             mem_read_nodes: Cell::new(0),
+            is_view,
         }
     }
 
@@ -231,21 +320,41 @@ impl TrieCachingStorage {
 
 impl TrieStorage for TrieCachingStorage {
     fn retrieve_raw_bytes(&self, hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError> {
+        let shard_id_str = format!("{}", self.shard_uid.shard_id);
+        let is_view_str = format!("{}", self.is_view as u8);
+        let labels: [&str; 2] = [&shard_id_str, &is_view_str];
+
+        {
+            metrics::CHUNK_CACHE_SIZE
+                .with_label_values(&labels)
+                .set(self.chunk_cache.borrow().len() as i64);
+            metrics::SHARD_CACHE_SIZE
+                .with_label_values(&labels)
+                .set(self.shard_cache.0.lock().expect(POISONED_LOCK_ERR).len() as i64);
+            metrics::SHARD_CACHE_NEW_SIZE
+                .with_label_values(&labels)
+                .set(self.shard_cache.0.lock().expect(POISONED_LOCK_ERR).new_size() as i64);
+        }
+
         // Try to get value from chunk cache containing nodes with cheaper access. We can do it for any `TrieCacheMode`,
         // because we charge for reading nodes only when `CachingChunk` mode is enabled anyway.
         if let Some(val) = self.chunk_cache.borrow_mut().get(hash) {
+            metrics::CHUNK_CACHE_HITS.with_label_values(&labels).inc();
             self.inc_mem_read_nodes();
             return Ok(val.clone());
         }
+        metrics::CHUNK_CACHE_MISSES.with_label_values(&labels).inc();
 
         // Try to get value from shard cache containing most recently touched nodes.
         let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
         let val = match guard.get(hash) {
             Some(val) => {
+                metrics::SHARD_CACHE_HITS.with_label_values(&labels).inc();
                 near_o11y::io_trace!(count: "shard_cache_hit");
                 val.clone()
             }
             None => {
+                metrics::SHARD_CACHE_MISSES.with_label_values(&labels).inc();
                 near_o11y::io_trace!(count: "shard_cache_miss");
                 // If value is not present in cache, get it from the storage.
                 let key = Self::get_key_from_shard_uid_and_hash(self.shard_uid, hash);
@@ -265,6 +374,7 @@ impl TrieStorage for TrieCachingStorage {
                 if val.len() < TRIE_LIMIT_CACHED_VALUE_SIZE {
                     guard.put(*hash, val.clone());
                 } else {
+                    metrics::SHARD_CACHE_TOO_LARGE.with_label_values(&labels).inc();
                     near_o11y::io_trace!(count: "shard_cache_too_large");
                 }
 
