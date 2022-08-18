@@ -287,11 +287,11 @@ fn apply_block_from_range(
     match trie_changes {
         Some(trie_changes) => {
             println!(
-                "sweatcoin accounts: {} insertions: {} deletions: {} accounts/insertions: {}",
+                "sweatcoin accounts: {} insertions: {} deletions: {} insertions/accounts: {}",
                 sweatcoin * 135,
                 trie_changes.insertions.len(),
                 trie_changes.deletions.len(),
-                ((sweatcoin * 135) as f64) / trie_changes.insertions.len(),
+                (trie_changes.insertions.len() as f64) / ((sweatcoin * 135) as f64),
             );
         }
         _ => {}
