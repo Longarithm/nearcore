@@ -278,7 +278,7 @@ fn apply_block_from_range(
     };
 
     let trie_changes: Option<TrieChanges> =
-        store.get_ser(DBCol::TrieChanges, &get_block_shard_uid(&block_hash, &shard_uid))?;
+        store.get_ser(DBCol::TrieChanges, &get_block_shard_uid(&block_hash, &shard_uid)).unwrap();
     match trie_changes {
         Some(trie_changes) => {
             println!(
