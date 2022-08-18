@@ -1818,8 +1818,14 @@ impl<'a> ChainStoreUpdate<'a> {
         self.chain_store_cache_update.outcome_ids.insert((*block_hash, shard_id), outcome_ids);
     }
 
-    pub fn save_trie_changes(&mut self, trie_changes: WrappedTrieChanges) {
+    pub fn save_trie_changes(&mut self, trie_changes: WrappedTrieChanges) -> Result<(), Error> {
+        // Hack: apply deletions to shard cache
+        let mut temporary_store_update = self.store().store_update();
+        trie_changes.deletions_into(&mut temporary_store_update);
+        temporary_store_update.update_cache()?;
+
         self.trie_changes.push(trie_changes);
+        Ok(())
     }
 
     pub fn add_state_changes_for_split_states(
@@ -2581,6 +2587,9 @@ impl<'a> ChainStoreUpdate<'a> {
 
     fn finalize(&mut self) -> Result<StoreUpdate, Error> {
         let mut store_update = self.store().store_update();
+        // let old_final_head = self.chain_store.final_head();
+        // let new_final_head = self.final_head.clone();
+
         Self::write_col_misc(&mut store_update, HEAD_KEY, &mut self.head)?;
         Self::write_col_misc(&mut store_update, TAIL_KEY, &mut self.tail)?;
         Self::write_col_misc(&mut store_update, CHUNK_TAIL_KEY, &mut self.chunk_tail)?;
@@ -2785,6 +2794,22 @@ impl<'a> ChainStoreUpdate<'a> {
                     .map_err(|err| Error::Other(err.to_string()))?;
             }
         }
+        //
+        // for shard_uid in shard_uids_to_gc {
+        //     let trie_changes = self.store().get_ser(
+        //         DBCol::TrieChanges,
+        //         &get_block_shard_uid(&block_hash, &shard_uid),
+        //     )?;
+        //     if let Some(trie_changes) = trie_changes {
+        //         tries.apply_deletions(&trie_changes, shard_uid, &mut store_update);
+        //         self.gc_col(
+        //             DBCol::TrieChanges,
+        //             &get_block_shard_uid(&block_hash, &shard_uid),
+        //         );
+        //         self.inc_gc_col_state();
+        //     }
+        // }
+        //
         for ((block_hash, shard_id), state_changes) in
             self.add_state_changes_for_split_states.drain()
         {
