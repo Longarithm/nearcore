@@ -291,7 +291,7 @@ fn apply_block_from_range(
                 sweatcoin * 135,
                 trie_changes.insertions.len(),
                 trie_changes.deletions.len(),
-                sweatcoin * 135 / trie_changes.insertions.len(),
+                ((sweatcoin * 135) as f64) / trie_changes.insertions.len(),
             );
         }
         _ => {}
