@@ -156,7 +156,6 @@ impl SyncTrieCache {
         }
     }
 
-    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.cache.len()
     }
