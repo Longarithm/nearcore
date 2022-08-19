@@ -41,6 +41,10 @@ impl<T> BoundedQueue<T> {
             None
         }
     }
+
+    pub(crate) fn len(&self) -> usize {
+        self.queue.len()
+    }
 }
 
 /// In-memory cache for trie items - nodes and values. All nodes are stored in the LRU cache with three modifications.
@@ -64,6 +68,7 @@ pub struct SyncTrieCache {
     total_size: u64,
     /// Upper bound for the total size.
     total_size_limit: u64,
+    shard_id: u32,
 }
 
 impl SyncTrieCache {
@@ -71,12 +76,14 @@ impl SyncTrieCache {
         cache_capacity: usize,
         deletions_queue_capacity: usize,
         total_size_limit: u64,
+        shard_id: u32,
     ) -> Self {
         Self {
             cache: LruCache::new(cache_capacity),
             deletions: BoundedQueue::new(deletions_queue_capacity),
             total_size: 0,
             total_size_limit,
+            shard_id,
         }
     }
 
@@ -120,20 +127,31 @@ impl SyncTrieCache {
     // Adds key to the deletions queue if it is present in cache.
     // Returns key-value pair which are popped if deletions queue is full.
     pub(crate) fn pop(&mut self, key: &CryptoHash) -> Option<(CryptoHash, Arc<[u8]>)> {
+        let shard_id_str = format!("{}", self.shard_id);
+        let labels: [&str; 1] = [&shard_id_str];
+        metrics::SHARD_CACHE_DELETIONS_SIZE
+            .with_label_values(&labels)
+            .set(self.deletions.len() as i64);
+
         // Do nothing if key was removed before.
         if self.cache.contains(key) {
             // Put key to the queue of deletions and possibly remove another key we have to delete.
             match self.deletions.put(key.clone()) {
                 Some(key_to_delete) => match self.cache.pop(&key_to_delete) {
                     Some(evicted_value) => {
+                        metrics::SHARD_CACHE_POP_HITS.with_label_values(&labels).inc();
                         self.total_size -= evicted_value.len() as u64;
                         Some((key_to_delete, evicted_value))
                     }
-                    None => None,
+                    None => {
+                        metrics::SHARD_CACHE_POP_MISSES.with_label_values(&labels).inc();
+                        None
+                    }
                 },
                 None => None,
             }
         } else {
+            metrics::SHARD_CACHE_GC_POP_MISSES.with_label_values(&labels).inc();
             None
         }
     }
@@ -149,15 +167,16 @@ impl SyncTrieCache {
 pub struct TrieCache(Arc<Mutex<SyncTrieCache>>);
 
 impl TrieCache {
-    pub fn new() -> Self {
-        Self::with_capacities(TRIE_DEFAULT_SHARD_CACHE_SIZE)
+    pub fn new(shard_id: u32) -> Self {
+        Self::with_capacities(TRIE_DEFAULT_SHARD_CACHE_SIZE, shard_id)
     }
 
-    pub fn with_capacities(cap: usize) -> Self {
+    pub fn with_capacities(cap: usize, shard_id: u32) -> Self {
         Self(Arc::new(Mutex::new(SyncTrieCache::new(
             cap,
             DEFAULT_SHARD_CACHE_DELETIONS_QUEUE_CAPACITY,
             DEFAULT_SHARD_CACHE_TOTAL_SIZE_LIMIT,
+            shard_id,
         ))))
     }
 
@@ -171,30 +190,23 @@ impl TrieCache {
 
     pub fn update_cache(&self, ops: Vec<(CryptoHash, Option<&Vec<u8>>)>, shard_uid: ShardUId) {
         let shard_id_str = format!("{}", shard_uid.shard_id);
-        let labels: [&str; 1] = [&shard_id_str];
+        let labels: [&str; 2] = [&shard_id_str, "0"];
 
         let mut guard = self.0.lock().expect(POISONED_LOCK_ERR);
+        assert_eq!(guard.shard_id, shard_uid.shard_id);
         for (hash, opt_value_rc) in ops {
             if let Some(value_rc) = opt_value_rc {
                 if let (Some(value), _rc) = decode_value_with_rc(&value_rc) {
                     if value.len() < TRIE_LIMIT_CACHED_VALUE_SIZE {
                         guard.put(hash, value.into());
+                    } else {
+                        metrics::SHARD_CACHE_TOO_LARGE.with_label_values(&labels).inc();
                     }
                 } else {
-                    match guard.pop(&hash) {
-                        Some(_) => {
-                            metrics::SHARD_CACHE_POPS.with_label_values(&labels).inc();
-                        }
-                        _ => {}
-                    };
+                    guard.pop(&hash);
                 }
             } else {
-                match guard.pop(&hash) {
-                    Some(_) => {
-                        metrics::SHARD_CACHE_POPS.with_label_values(&labels).inc();
-                    }
-                    _ => {}
-                };
+                guard.pop(&hash);
             }
         }
     }
@@ -525,7 +537,7 @@ mod trie_cache_tests {
 
     #[test]
     fn test_size_limit() {
-        let mut cache = SyncTrieCache::new(100, 100, 5);
+        let mut cache = SyncTrieCache::new(100, 100, 5, 0);
         // Add three values. Before each put, condition on total size should not be triggered.
         put_value(&mut cache, &[1, 1]);
         assert_eq!(cache.total_size, 2);
@@ -543,7 +555,7 @@ mod trie_cache_tests {
 
     #[test]
     fn test_deletions_queue() {
-        let mut cache = SyncTrieCache::new(100, 2, 100);
+        let mut cache = SyncTrieCache::new(100, 2, 100, 0);
         // Add two values to the cache.
         put_value(&mut cache, &[1]);
         put_value(&mut cache, &[1, 1]);
@@ -559,7 +571,7 @@ mod trie_cache_tests {
 
     #[test]
     fn test_cache_capacity() {
-        let mut cache = SyncTrieCache::new(2, 100, 100);
+        let mut cache = SyncTrieCache::new(2, 100, 100, 0);
         put_value(&mut cache, &[1]);
         put_value(&mut cache, &[2]);
         put_value(&mut cache, &[3]);
