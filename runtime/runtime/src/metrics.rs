@@ -31,3 +31,7 @@ pub static TRANSACTION_PROCESSED_FAILED_TOTAL: Lazy<IntCounter> = Lazy::new(|| {
     )
     .unwrap()
 });
+
+pub static SWEATCOIN_RECEIPTS: Lazy<IntCounter> = Lazy::new(|| {
+    try_create_int_counter("near_sweatcoin_receipts", "The number of swc receipts").unwrap()
+});

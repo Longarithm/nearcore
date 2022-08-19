@@ -820,6 +820,9 @@ impl Runtime {
         epoch_info_provider: &dyn EpochInfoProvider,
     ) -> Result<Option<ExecutionOutcomeWithId>, RuntimeError> {
         let account_id = &receipt.receiver_id;
+        if account_id.as_str() == "v3.token.sweat.testnet" {
+            metrics::SWEATCOIN_RECEIPTS.inc();
+        }
         match receipt.receipt {
             ReceiptEnum::Data(ref data_receipt) => {
                 // Received a new data receipt.
