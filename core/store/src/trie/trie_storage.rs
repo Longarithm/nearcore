@@ -130,9 +130,10 @@ impl TrieCacheInner {
 
         // Add value to the cache.
         self.total_size += value.len() as u64;
-        match self.cache.push(key, value) {
+        match self.cache.push(key, value.clone()) {
             Some((_, evicted_value)) => {
                 log_assert!(false, "LRU cache with shard_id = {}, is_view = {} can't be full before inserting key {}", self.shard_id, self.is_view, key);
+                self.cache.push(key, value);
                 self.total_size -= evicted_value.len() as u64;
             }
             None => {}
