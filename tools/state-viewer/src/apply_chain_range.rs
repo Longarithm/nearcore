@@ -278,12 +278,6 @@ fn apply_block_from_range(
             .unwrap()
     };
     let trie_changes = apply_result.trie_changes.trie_changes.clone();
-    println!(
-        "ht: {} del: {}, ins: {}",
-        block.header().height(),
-        trie_changes.deletions.len(),
-        trie_changes.insertions.len()
-    );
     let tries = runtime_adapter.get_tries();
     let deleted_nodes: Vec<_> = trie_changes
         .deletions
@@ -306,6 +300,13 @@ fn apply_block_from_range(
         runtime_adapter.get_tries().new_trie_update(shard_uid, *chunk_extra.state_root());
     let delayed_indices: Option<DelayedReceiptIndices> =
         get(&state_update, &TrieKey::DelayedReceiptIndices).unwrap();
+    println!(
+        "ht: {} del: {}, ins: {}, delayed: {:?}",
+        block.header().height(),
+        trie_changes.deletions.len(),
+        trie_changes.insertions.len(),
+        delayed_indices
+    );
 
     match existing_chunk_extra {
         Some(existing_chunk_extra) => {
