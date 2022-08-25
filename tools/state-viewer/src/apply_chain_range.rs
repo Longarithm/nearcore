@@ -13,13 +13,14 @@ use near_chain_configs::Genesis;
 use near_primitives::borsh::maybestd::sync::Arc;
 use near_primitives::hash::CryptoHash;
 use near_primitives::receipt::DelayedReceiptIndices;
+use near_primitives::shard_layout::get_block_shard_uid;
 use near_primitives::transaction::{
     Action, ExecutionOutcomeWithId, ExecutionOutcomeWithIdAndProof,
 };
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, ShardId};
-use near_store::{get, DBCol, Store};
+use near_store::{get, DBCol, Store, TrieChanges, WrappedTrieChanges};
 use nearcore::NightshadeRuntime;
 
 fn timestamp_ms() -> u64 {
@@ -308,6 +309,12 @@ fn apply_block_from_range(
             }
         }
     };
+
+    let trie_changes: Option<TrieChanges> =
+        store.get_ser(DBCol::TrieChanges, &get_block_shard_uid(&block_hash, &shard_uid)).unwrap();
+    if let Some(trie_changes) = trie_changes {
+        println!("del: {}, ins: {}", trie_changes.deletions.len(), trie_changes.insertions.len());
+    }
     maybe_add_to_csv(
         csv_file_mutex,
         &format!(
