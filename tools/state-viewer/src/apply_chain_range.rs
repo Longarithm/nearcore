@@ -322,6 +322,7 @@ fn apply_block_from_range(
         })
         .collect();
     let chunk_extra = chain_store.get_chunk_extra(block.header().prev_hash(), &shard_uid).unwrap();
+    let new_chunk_extra = chain_store.get_chunk_extra(&block_hash, &shard_uid).unwrap();
     let trie = runtime_adapter
         .get_trie_for_shard(shard_id, block.header().prev_hash(), chunk_extra.state_root().clone())
         .unwrap();
@@ -337,6 +338,7 @@ fn apply_block_from_range(
         }))
         .unwrap();
     println!("del: {}, ins: {}", trie_changes.deletions.len(), trie_changes.insertions.len());
+    assert_eq!(new_chunk_extra.state_root(), &trie_changes.new_root);
     maybe_add_to_csv(
         csv_file_mutex,
         &format!(
