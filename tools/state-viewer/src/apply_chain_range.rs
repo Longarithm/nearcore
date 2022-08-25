@@ -312,6 +312,7 @@ fn apply_block_from_range(
 
     let trie_changes: Option<TrieChanges> =
         store.get_ser(DBCol::TrieChanges, &get_block_shard_uid(&block_hash, &shard_uid)).unwrap();
+    println!("trie changes:");
     if let Some(trie_changes) = trie_changes {
         println!("del: {}, ins: {}", trie_changes.deletions.len(), trie_changes.insertions.len());
     }
