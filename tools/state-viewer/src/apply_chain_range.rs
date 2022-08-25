@@ -278,6 +278,19 @@ fn apply_block_from_range(
             .unwrap()
     };
     let trie_changes = apply_result.trie_changes.trie_changes.clone();
+    println!(
+        "ht: {} del: {}, ins: {}",
+        block.header().height(),
+        trie_changes.deletions.len(),
+        trie_changes.insertions.len()
+    );
+    let tries = runtime_adapter.get_tries();
+    let deleted_nodes: Vec<_> = trie_changes
+        .deletions
+        .iter()
+        .map(|trie_refcount_change| trie_refcount_change.trie_node_or_value_hash)
+        .collect();
+    tries.record_deletions(shard_uid, &deleted_nodes, block.header().height());
 
     let (outcome_root, _) = ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
     let chunk_extra = ChunkExtra::new(
@@ -312,12 +325,6 @@ fn apply_block_from_range(
         }
     };
 
-    println!(
-        "ht: {} del: {}, ins: {}",
-        block.header().height(),
-        trie_changes.deletions.len(),
-        trie_changes.insertions.len()
-    );
     maybe_add_to_csv(
         csv_file_mutex,
         &format!(

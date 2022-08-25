@@ -428,7 +428,7 @@ pub trait TrieAccess {
 pub struct TrieRefcountChange {
     /// Hash of trie_node_or_value and part of the DB key.
     /// Used for uniting with shard id to get actual DB key.
-    trie_node_or_value_hash: CryptoHash,
+    pub trie_node_or_value_hash: CryptoHash,
     /// DB value. Can be either serialized RawTrieNodeWithSize or value corresponding to
     /// some TrieKey.
     trie_node_or_value: Vec<u8>,

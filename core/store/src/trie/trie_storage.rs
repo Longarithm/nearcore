@@ -10,7 +10,7 @@ use crate::{metrics, DBCol, StorageError, Store};
 use lru::LruCache;
 use near_o11y::log_assert;
 use near_primitives::shard_layout::ShardUId;
-use near_primitives::types::{TrieCacheMode, TrieNodesCount};
+use near_primitives::types::{BlockHeight, TrieCacheMode, TrieNodesCount};
 use std::cell::{Cell, RefCell};
 use std::io::ErrorKind;
 
@@ -73,6 +73,7 @@ pub struct TrieCacheInner {
     shard_id: u32,
     /// Whether cache is used for view calls execution.
     is_view: bool,
+    pub deleted_nodes: HashMap<CryptoHash, BlockHeight>,
 }
 
 impl TrieCacheInner {
@@ -91,6 +92,7 @@ impl TrieCacheInner {
             total_size_limit,
             shard_id,
             is_view,
+            deleted_nodes: Default::default(),
         }
     }
 
@@ -233,6 +235,15 @@ impl TrieCache {
     pub(crate) fn len(&self) -> usize {
         let guard = self.0.lock().expect(POISONED_LOCK_ERR);
         guard.len()
+    }
+
+    pub fn record_deletions(&self, nodes: &[CryptoHash], block_height: BlockHeight) {
+        let mut guard = self.0.lock().expect(POISONED_LOCK_ERR);
+        for node in nodes {
+            if !guard.deleted_nodes.contains_key(node) {
+                guard.deleted_nodes.insert(node.clone(), block_height);
+            }
+        }
     }
 }
 
@@ -431,6 +442,13 @@ impl TrieStorage for TrieCachingStorage {
     fn retrieve_raw_bytes(&self, hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError> {
         let metrics_labels: [&str; 2] =
             [&format!("{}", self.shard_uid.shard_id), &format!("{}", self.is_view as u8)];
+        let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
+        match guard.deleted_nodes.get(hash) {
+            Some(height) => {
+                println!("hash {} was deleted in block {}", hash, height);
+            }
+            _ => {}
+        };
 
         metrics::CHUNK_CACHE_SIZE
             .with_label_values(&metrics_labels)
@@ -445,7 +463,6 @@ impl TrieStorage for TrieCachingStorage {
         metrics::CHUNK_CACHE_MISSES.with_label_values(&metrics_labels).inc();
 
         // Try to get value from shard cache containing most recently touched nodes.
-        let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
         metrics::SHARD_CACHE_SIZE.with_label_values(&metrics_labels).set(guard.len() as i64);
         metrics::SHARD_CACHE_CURRENT_TOTAL_SIZE
             .with_label_values(&metrics_labels)

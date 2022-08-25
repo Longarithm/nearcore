@@ -9,7 +9,7 @@ use near_primitives::shard_layout;
 use near_primitives::shard_layout::{ShardUId, ShardVersion};
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{
-    NumShards, RawStateChange, RawStateChangesWithTrieKey, StateChangeCause, StateRoot,
+    BlockHeight, NumShards, RawStateChange, RawStateChangesWithTrieKey, StateChangeCause, StateRoot,
 };
 
 #[cfg(feature = "protocol_feature_flat_state")]
@@ -67,7 +67,7 @@ struct ShardTriesInner {
     store: Store,
     trie_cache_factory: TrieCacheFactory,
     /// Cache reserved for client actor to use
-    caches: RwLock<HashMap<ShardUId, TrieCache>>,
+    pub caches: RwLock<HashMap<ShardUId, TrieCache>>,
     /// Cache for readers.
     view_caches: RwLock<HashMap<ShardUId, TrieCache>>,
 }
@@ -85,6 +85,24 @@ impl ShardTries {
             caches: RwLock::new(caches),
             view_caches: RwLock::new(view_caches),
         }))
+    }
+
+    pub fn record_deletions(
+        &self,
+        shard_uid: ShardUId,
+        nodes: &[CryptoHash],
+        block_height: BlockHeight,
+    ) {
+        let cache = {
+            self.0
+                .caches
+                .write()
+                .expect(POISONED_LOCK_ERR)
+                .entry(shard_uid)
+                .or_insert_with(|| self.0.trie_cache_factory.create_cache(&shard_uid, false))
+                .clone()
+        };
+        cache.record_deletions(nodes, block_height);
     }
 
     pub fn test(store: Store, num_shards: NumShards) -> Self {
