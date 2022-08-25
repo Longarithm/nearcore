@@ -13,6 +13,7 @@ use near_primitives::shard_layout::ShardUId;
 use near_primitives::types::{BlockHeight, TrieCacheMode, TrieNodesCount};
 use std::cell::{Cell, RefCell};
 use std::io::ErrorKind;
+use std::str::FromStr;
 
 pub(crate) struct BoundedQueue<T> {
     queue: VecDeque<T>,
@@ -444,7 +445,7 @@ impl TrieStorage for TrieCachingStorage {
             [&format!("{}", self.shard_uid.shard_id), &format!("{}", self.is_view as u8)];
         let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
         let banned_hashes: Vec<CryptoHash> =
-            vec!["4inFLgHhbhcTkGgXJTy5rH9a5z31G3S2BZZuUgPSf2Ee".as_bytes().try_into().unwrap()];
+            vec![CryptoHash::from_str("4inFLgHhbhcTkGgXJTy5rH9a5z31G3S2BZZuUgPSf2Ee").unwrap()];
         let mut print_value = false;
         if !banned_hashes.contains(hash) {
             match guard.deleted_nodes.get(hash) {
