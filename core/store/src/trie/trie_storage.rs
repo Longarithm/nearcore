@@ -443,12 +443,16 @@ impl TrieStorage for TrieCachingStorage {
         let metrics_labels: [&str; 2] =
             [&format!("{}", self.shard_uid.shard_id), &format!("{}", self.is_view as u8)];
         let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
-        match guard.deleted_nodes.get(hash) {
-            Some(height) => {
-                println!("hash {} was deleted in block {}", hash, height);
-            }
-            _ => {}
-        };
+        let banned_hashes: Vec<CryptoHash> =
+            vec!["4inFLgHhbhcTkGgXJTy5rH9a5z31G3S2BZZuUgPSf2Ee".as_bytes().try_into().unwrap()];
+        if !banned_hashes.contains(hash) {
+            match guard.deleted_nodes.get(hash) {
+                Some(height) => {
+                    println!("hash {} was deleted in block {}", hash, height);
+                }
+                _ => {}
+            };
+        }
 
         metrics::CHUNK_CACHE_SIZE
             .with_label_values(&metrics_labels)
