@@ -445,10 +445,12 @@ impl TrieStorage for TrieCachingStorage {
         let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
         let banned_hashes: Vec<CryptoHash> =
             vec!["4inFLgHhbhcTkGgXJTy5rH9a5z31G3S2BZZuUgPSf2Ee".as_bytes().try_into().unwrap()];
+        let mut print_value = false;
         if !banned_hashes.contains(hash) {
             match guard.deleted_nodes.get(hash) {
                 Some(height) => {
                     println!("hash {} was deleted in block {}", hash, height);
+                    print_value = true;
                 }
                 _ => {}
             };
@@ -462,6 +464,9 @@ impl TrieStorage for TrieCachingStorage {
         if let Some(val) = self.chunk_cache.borrow_mut().get(hash) {
             metrics::CHUNK_CACHE_HITS.with_label_values(&metrics_labels).inc();
             self.inc_mem_read_nodes();
+            if print_value {
+                println!("val = {:?}", val);
+            }
             return Ok(val.clone());
         }
         metrics::CHUNK_CACHE_MISSES.with_label_values(&metrics_labels).inc();
@@ -505,6 +510,10 @@ impl TrieStorage for TrieCachingStorage {
                 val
             }
         };
+
+        if print_value {
+            println!("val = {:?}", val);
+        }
 
         // Because node is not present in chunk cache, increment the nodes counter and optionally insert it into the
         // chunk cache.
