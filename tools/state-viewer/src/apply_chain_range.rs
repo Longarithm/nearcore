@@ -311,34 +311,35 @@ fn apply_block_from_range(
         }
     };
 
-    let storage_key = KeyForStateChanges::for_block(&block_hash);
-    let raw_state_changes: Vec<_> = store
-        .iter_prefix_ser::<RawStateChangesWithTrieKey>(DBCol::StateChanges, &storage_key.0)
-        .map(|change| {
-            // Split off the irrelevant part of the key, so only the original trie_key is left.
-            let (key, state_changes) = change.unwrap();
-            assert!(key.starts_with(&storage_key.0));
-            (key, state_changes)
-        })
-        .collect();
-    let chunk_extra = chain_store.get_chunk_extra(block.header().prev_hash(), &shard_uid).unwrap();
-    let new_chunk_extra = chain_store.get_chunk_extra(&block_hash, &shard_uid).unwrap();
-    let trie = runtime_adapter
-        .get_trie_for_shard(shard_id, block.header().prev_hash(), chunk_extra.state_root().clone())
-        .unwrap();
-    let trie_changes = trie
-        .update(raw_state_changes.into_iter().map(|(k, changes_with_trie_key)| {
-            let data = changes_with_trie_key
-                .changes
-                .last()
-                .expect("Committed entry should have at least one change")
-                .data
-                .clone();
-            (k.to_vec(), data)
-        }))
-        .unwrap();
+    // let storage_key = KeyForStateChanges::for_block(&block_hash);
+    // let raw_state_changes: Vec<_> = store
+    //     .iter_prefix_ser::<RawStateChangesWithTrieKey>(DBCol::StateChanges, &storage_key.0)
+    //     .map(|change| {
+    //         // Split off the irrelevant part of the key, so only the original trie_key is left.
+    //         let (key, state_changes) = change.unwrap();
+    //         assert!(key.starts_with(&storage_key.0));
+    //         (key, state_changes)
+    //     })
+    //     .collect();
+    // let chunk_extra = chain_store.get_chunk_extra(block.header().prev_hash(), &shard_uid).unwrap();
+    // let new_chunk_extra = chain_store.get_chunk_extra(&block_hash, &shard_uid).unwrap();
+    // let trie = runtime_adapter
+    //     .get_trie_for_shard(shard_id, block.header().prev_hash(), chunk_extra.state_root().clone())
+    //     .unwrap();
+    // let trie_changes = trie
+    //     .update(raw_state_changes.into_iter().map(|(k, changes_with_trie_key)| {
+    //         let data = changes_with_trie_key
+    //             .changes
+    //             .last()
+    //             .expect("Committed entry should have at least one change")
+    //             .data
+    //             .clone();
+    //         (k.to_vec(), data)
+    //     }))
+    //     .unwrap();
+    let trie_changes = apply_result.trie_changes.trie_changes;
     println!("del: {}, ins: {}", trie_changes.deletions.len(), trie_changes.insertions.len());
-    assert_eq!(new_chunk_extra.state_root(), &trie_changes.new_root);
+    // assert_eq!(new_chunk_extra.state_root(), &trie_changes.new_root);
     maybe_add_to_csv(
         csv_file_mutex,
         &format!(
