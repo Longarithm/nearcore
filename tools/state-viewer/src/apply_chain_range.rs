@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::io;
 use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -19,8 +20,8 @@ use near_primitives::transaction::{
 };
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
-use near_primitives::types::{BlockHeight, ShardId};
-use near_store::{get, DBCol, Store, TrieChanges, WrappedTrieChanges};
+use near_primitives::types::{BlockHeight, RawStateChangesWithTrieKey, ShardId};
+use near_store::{get, DBCol, KeyForStateChanges, Store, TrieChanges, WrappedTrieChanges};
 use nearcore::NightshadeRuntime;
 
 fn timestamp_ms() -> u64 {
@@ -310,12 +311,32 @@ fn apply_block_from_range(
         }
     };
 
-    let trie_changes: Option<TrieChanges> =
-        store.get_ser(DBCol::TrieChanges, &get_block_shard_uid(&block_hash, &shard_uid)).unwrap();
-    println!("trie changes:");
-    if let Some(trie_changes) = trie_changes {
-        println!("del: {}, ins: {}", trie_changes.deletions.len(), trie_changes.insertions.len());
-    }
+    let storage_key = KeyForStateChanges::for_block(&block_hash);
+    let raw_state_changes: Vec<_> = store
+        .iter_prefix_ser::<RawStateChangesWithTrieKey>(DBCol::StateChanges, &storage_key.0)
+        .map(|change| {
+            // Split off the irrelevant part of the key, so only the original trie_key is left.
+            let (key, state_changes) = change.unwrap();
+            assert!(key.starts_with(&storage_key.0));
+            (key, state_changes)
+        })
+        .collect();
+    let chunk_extra = chain_store.get_chunk_extra(block.header().prev_hash(), &shard_uid).unwrap();
+    let trie = runtime_adapter
+        .get_trie_for_shard(shard_id, block.header().prev_hash(), chunk_extra.state_root().clone())
+        .unwrap();
+    let trie_changes = trie
+        .update(raw_state_changes.into_iter().map(|(k, changes_with_trie_key)| {
+            let data = changes_with_trie_key
+                .changes
+                .last()
+                .expect("Committed entry should have at least one change")
+                .data
+                .clone();
+            (k.to_vec(), data)
+        }))
+        .unwrap();
+    println!("del: {}, ins: {}", trie_changes.deletions.len(), trie_changes.insertions.len());
     maybe_add_to_csv(
         csv_file_mutex,
         &format!(

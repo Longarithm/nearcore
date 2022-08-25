@@ -396,7 +396,7 @@ impl WrappedTrieChanges {
 }
 
 #[derive(derive_more::AsRef, derive_more::Into)]
-pub struct KeyForStateChanges(Vec<u8>);
+pub struct KeyForStateChanges(pub Vec<u8>);
 
 impl KeyForStateChanges {
     fn estimate_prefix_len() -> usize {
