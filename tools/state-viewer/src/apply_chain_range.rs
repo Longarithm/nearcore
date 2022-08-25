@@ -277,6 +277,7 @@ fn apply_block_from_range(
             )
             .unwrap()
     };
+    let trie_changes = apply_result.trie_changes.trie_changes.clone();
 
     let (outcome_root, _) = ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
     let chunk_extra = ChunkExtra::new(
@@ -337,7 +338,6 @@ fn apply_block_from_range(
     //         (k.to_vec(), data)
     //     }))
     //     .unwrap();
-    let trie_changes = apply_result.trie_changes.trie_changes;
     println!("del: {}, ins: {}", trie_changes.deletions.len(), trie_changes.insertions.len());
     // assert_eq!(new_chunk_extra.state_root(), &trie_changes.new_root);
     maybe_add_to_csv(
