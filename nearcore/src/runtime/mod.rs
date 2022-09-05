@@ -95,6 +95,7 @@ pub struct NightshadeRuntime {
 
 impl NightshadeRuntime {
     pub fn from_config(home_dir: &Path, store: Store, config: &NearConfig) -> Self {
+        println!("{:?}", config.config.store.trie_cache_capacities);
         Self::new(
             home_dir,
             store,
