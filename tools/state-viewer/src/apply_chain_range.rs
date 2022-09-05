@@ -40,12 +40,28 @@ struct ProgressReporter {
     non_empty_blocks: AtomicU64,
     // Total gas burned (in TGas)
     tgas_burned: AtomicU64,
+    cache_entries: AtomicU64,
+    cache_total_size: AtomicU64,
 }
 
 impl ProgressReporter {
+    pub fn push_cache_metrics(&self, cache_entries: usize, cache_total_size: u64) {
+        self.cache_entries.store(cache_entries as u64, Ordering::Relaxed);
+        self.cache_total_size.store(cache_total_size, Ordering::Relaxed);
+    }
+
     pub fn inc_and_report_progress(&self, gas_burnt: u64) {
-        let ProgressReporter { cnt, ts, all, skipped, empty_blocks, non_empty_blocks, tgas_burned } =
-            self;
+        let ProgressReporter {
+            cnt,
+            ts,
+            all,
+            skipped,
+            empty_blocks,
+            non_empty_blocks,
+            tgas_burned,
+            cache_entries,
+            cache_total_size,
+        } = self;
         if gas_burnt == 0 {
             empty_blocks.fetch_add(1, Ordering::Relaxed);
         } else {
@@ -69,8 +85,10 @@ impl ProgressReporter {
             };
 
             println!(
-                "Processed {} blocks, {:.4} blocks per second ({} skipped), {:.2} secs remaining {} empty blocks {:.2} avg gas per non-empty block",
+                "Processed {} blocks, cache entries: {}, cache total size: {}, {:.4} blocks per second ({} skipped), {:.2} secs remaining {} empty blocks {:.2} avg gas per non-empty block",
                 prev + 1,
+                cache_entries.load(Ordering::Relaxed),
+                cache_total_size.load(Ordering::Relaxed),
                 per_second,
                 skipped.load(Ordering::Relaxed),
                 secs_remaining,
@@ -307,6 +325,9 @@ fn apply_block_from_range(
         let op_refs: Vec<_> =
             ops.iter().map(|(hash, value)| (hash.clone(), Some(value.as_ref()))).collect();
         cache.update_cache(op_refs);
+
+        let mut guard = cache.0.lock().expect("");
+        progress_reporter.push_cache_metrics(guard.len(), guard.current_total_size());
     }
 
     let (outcome_root, _) = ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);

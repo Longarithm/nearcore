@@ -205,7 +205,7 @@ impl TrieCacheInner {
 
 /// Wrapper over LruCache to handle concurrent access.
 #[derive(Clone)]
-pub struct TrieCache(Arc<Mutex<TrieCacheInner>>);
+pub struct TrieCache(pub Arc<Mutex<TrieCacheInner>>);
 
 impl TrieCache {
     pub fn new(shard_id: u32, is_view: bool) -> Self {
