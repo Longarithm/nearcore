@@ -47,11 +47,12 @@ impl Scenario {
         let (tempdir, store) = if self.use_in_memory_store {
             (None, create_test_store())
         } else {
-            let (tempdir, opener) = near_store::Store::test_opener();
-            (Some(tempdir), opener.open())
+            let (tempdir, opener) = near_store::NodeStorage::test_opener();
+            let store = opener.open().unwrap();
+            (Some(tempdir), store.get_store(near_store::Temperature::Hot))
         };
 
-        let mut env = TestEnv::builder(ChainGenesis::from(&genesis))
+        let mut env = TestEnv::builder(ChainGenesis::new(&genesis))
             .clients(clients.clone())
             .validators(clients)
             .runtime_adapters(vec![Arc::new(NightshadeRuntime::test_with_runtime_config_store(
@@ -182,7 +183,7 @@ mod test {
     use std::path::Path;
     use std::time::{Duration, Instant};
 
-    use near_logger_utils::init_test_logger;
+    use near_o11y::testonly::init_test_logger;
     use tracing::info;
 
     #[test]

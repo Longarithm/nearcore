@@ -1,24 +1,23 @@
+//! Contains files used for a few different purposes:
+//! - Changes related to network config - TODO - move to another file
+//! - actix messages - used for communicating with `PeerManagerActor` - TODO move to another file
+//! - internal types used by `peer-store` only - TODO move to `peer_store.rs`
+//! - some types used for different purposes that don't meet any of the criteria above
+//! - unused code - TODO remove?
+//! - Some types types that are neither of the above
+//!
+//! NOTE:
+//! - We also export publicly types from `crate::network_protocol`
 use crate::time;
-/// Contains files used for a few different purposes:
-/// - Changes related to network config - TODO - move to another file
-/// - actix messages - used for communicating with `PeerManagerActor` - TODO move to another file
-/// - internal types used by `peer-store` only - TODO move to `peer_store.rs`
-/// - some types used for different purposes that don't meet any of the criteria above
-/// - unused code - TODO remove?
-/// - Some types types that are neither of the above
-///
-/// NOTE:
-/// - We also export publicly types from `crate::network_protocol`
 use actix::Message;
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_crypto::SecretKey;
-use near_primitives::block::{Block, BlockHeader, GenesisId};
+use near_primitives::block::{Block, BlockHeader};
 use near_primitives::hash::CryptoHash;
 use near_primitives::network::{AnnounceAccount, PeerId};
 use near_primitives::syncing::{EpochSyncFinalizationResponse, EpochSyncResponse};
-use near_primitives::transaction::ExecutionOutcomeWithIdAndProof;
 use near_primitives::types::{AccountId, BlockHeight, EpochId, ShardId};
-use near_primitives::views::{FinalExecutionOutcomeView, QueryResponse};
+use near_primitives::views::FinalExecutionOutcomeView;
 use serde::Serialize;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -29,13 +28,14 @@ use tokio::net::TcpStream;
 pub use crate::network_protocol::{
     PartialEncodedChunkForwardMsg, PartialEncodedChunkRequestMsg, PartialEncodedChunkResponseMsg,
     PeerChainInfo, PeerChainInfoV2, PeerIdOrHash, PeerInfo, Ping, Pong, RoutedMessage,
-    RoutedMessageBody, StateResponseInfo, StateResponseInfoV1, StateResponseInfoV2,
+    RoutedMessageBody, RoutedMessageV2, StateResponseInfo, StateResponseInfoV1,
+    StateResponseInfoV2,
 };
 
 pub use crate::blacklist::{Blacklist, Entry as BlacklistEntry};
-pub use crate::config::{NetworkConfig, ValidatorConfig, ValidatorEndpoints};
-pub use crate::config_json::Config as ConfigJSON;
-pub use crate::network_protocol::edge::{Edge, EdgeState, PartialEdgeInfo, SimpleEdge};
+pub use crate::network_protocol::edge::{
+    Edge, EdgeState, PartialEdgeInfo, EDGE_MIN_TIMESTAMP_NONCE,
+};
 
 /// Number of hops a message is allowed to travel before being dropped.
 /// This is used to avoid infinite loop because of inconsistent view of the network
@@ -44,8 +44,7 @@ pub const ROUTED_MESSAGE_TTL: u8 = 100;
 /// On every message from peer don't update `last_time_received_message`
 /// but wait some "small" timeout between updates to avoid a lot of messages between
 /// Peer and PeerManager.
-pub const UPDATE_INTERVAL_LAST_TIME_RECEIVED_MESSAGE: std::time::Duration =
-    std::time::Duration::from_secs(60);
+pub const UPDATE_INTERVAL_LAST_TIME_RECEIVED_MESSAGE: time::Duration = time::Duration::seconds(60);
 /// Due to implementation limits of `Graph` in `near-network`, we support up to 128 client.
 pub const MAX_NUM_PEERS: usize = 128;
 
@@ -114,23 +113,22 @@ impl RawRoutedMessage {
         author: PeerId,
         secret_key: &SecretKey,
         routed_message_ttl: u8,
-    ) -> Box<RoutedMessage> {
+        now: Option<time::Utc>,
+    ) -> RoutedMessageV2 {
         let target = self.target.peer_id_or_hash().unwrap();
         let hash = RoutedMessage::build_hash(&target, &author, &self.body);
         let signature = secret_key.sign(hash.as_ref());
-        RoutedMessage { target, author, signature, ttl: routed_message_ttl, body: self.body }.into()
+        RoutedMessageV2 {
+            msg: RoutedMessage {
+                target,
+                author,
+                signature,
+                ttl: routed_message_ttl,
+                body: self.body,
+            },
+            created_at: now,
+        }
     }
-}
-
-/// Routed Message wrapped with previous sender of the message.
-#[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
-#[derive(actix::Message, Clone, Debug)]
-#[rtype(result = "bool")]
-pub struct RoutedMessageFrom {
-    /// Routed messages.
-    pub msg: Box<RoutedMessage>,
-    /// Previous hop in the route. Used for messages that needs routing back.
-    pub from: PeerId,
 }
 
 /// Status of the known peers.
@@ -273,23 +271,6 @@ pub enum NetworkAdversarialMessage {
     AdvSetSyncInfo(u64),
 }
 
-#[cfg(feature = "sandbox")]
-#[derive(Debug)]
-pub enum NetworkSandboxMessage {
-    SandboxPatchState(Vec<near_primitives::state_record::StateRecord>),
-    SandboxPatchStateStatus,
-    SandboxFastForward(near_primitives::types::BlockHeightDelta),
-    SandboxFastForwardStatus,
-}
-
-#[cfg(feature = "sandbox")]
-#[derive(Eq, PartialEq, Debug)]
-pub enum SandboxResponse {
-    SandboxPatchStateFinished(bool),
-    SandboxFastForwardFinished(bool),
-    SandboxFastForwardFailed(String),
-}
-
 #[derive(actix::Message, strum::IntoStaticStr)]
 #[rtype(result = "NetworkViewClientResponses")]
 pub enum NetworkViewClientMessages {
@@ -300,10 +281,6 @@ pub enum NetworkViewClientMessages {
     TxStatus { tx_hash: CryptoHash, signer_account_id: AccountId },
     /// Transaction status response
     TxStatusResponse(Box<FinalExecutionOutcomeView>),
-    /// Request for receipt outcome
-    ReceiptOutcomeRequest(CryptoHash),
-    /// Receipt outcome response
-    ReceiptOutcomeResponse(Box<ExecutionOutcomeWithIdAndProof>),
     /// Request a block.
     BlockRequest(CryptoHash),
     /// Request headers.
@@ -316,8 +293,6 @@ pub enum NetworkViewClientMessages {
     EpochSyncRequest { epoch_id: EpochId },
     /// A request for headers and proofs during Epoch Sync
     EpochSyncFinalizationRequest { epoch_id: EpochId },
-    /// Get Chain information from Client.
-    GetChainInfo,
     /// Account announcements that needs to be validated before being processed.
     /// They are paired with last epoch id known to this announcement, in order to accept only
     /// newer announcements.
@@ -328,21 +303,10 @@ pub enum NetworkViewClientMessages {
 pub enum NetworkViewClientResponses {
     /// Transaction execution outcome
     TxStatus(Box<FinalExecutionOutcomeView>),
-    /// Response to general queries
-    QueryResponse { query_id: String, response: Result<QueryResponse, String> },
-    /// Receipt outcome response
-    ReceiptOutcomeResponse(Box<ExecutionOutcomeWithIdAndProof>),
     /// Block response.
     Block(Box<Block>),
     /// Headers response.
     BlockHeaders(Vec<BlockHeader>),
-    /// Chain information.
-    ChainInfo {
-        genesis_id: GenesisId,
-        height: BlockHeight,
-        tracked_shards: Vec<ShardId>,
-        archival: bool,
-    },
     /// Response to state request.
     StateResponse(Box<StateResponseInfo>),
     /// Valid announce accounts.
@@ -389,13 +353,11 @@ mod tests {
     #[test]
     fn test_struct_size() {
         assert_size!(PeerInfo);
-        assert_size!(PeerChainInfoV2);
         assert_size!(AnnounceAccount);
         assert_size!(Ping);
         assert_size!(Pong);
         assert_size!(RawRoutedMessage);
         assert_size!(RoutedMessage);
-        assert_size!(RoutedMessageFrom);
         assert_size!(KnownPeerState);
         assert_size!(InboundTcpConnect);
         assert_size!(OutboundTcpConnect);

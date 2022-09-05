@@ -20,7 +20,7 @@ use near_primitives::transaction::{
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, ShardId};
-use near_store::{encode_value_with_rc, get, DBCol, Store};
+use near_store::{add_positive_refcount, encode_negative_refcount, get, DBCol, Store};
 use nearcore::NightshadeRuntime;
 
 fn timestamp_ms() -> u64 {
@@ -86,7 +86,7 @@ impl ProgressReporter {
 
 fn old_outcomes(
     store: Store,
-    new_outcomes: &Vec<ExecutionOutcomeWithId>,
+    new_outcomes: &[ExecutionOutcomeWithId],
 ) -> Vec<ExecutionOutcomeWithId> {
     new_outcomes
         .iter()
@@ -162,7 +162,13 @@ fn apply_block_from_range(
             height
         );
         existing_chunk_extra = Some(res_existing_chunk_extra.unwrap());
-        let chunk = chain_store.get_chunk(&block.chunks()[shard_id as usize].chunk_hash()).unwrap();
+        let chunk_hash = block.chunks()[shard_id as usize].chunk_hash();
+        let chunk = chain_store.get_chunk(&chunk_hash).unwrap_or_else(|error| {
+            panic!(
+                "Can't get chunk on height: {} chunk_hash: {:?} error: {}",
+                height, chunk_hash, error
+            );
+        });
 
         let prev_block = match chain_store.get_block(block.header().prev_hash()) {
             Ok(prev_block) => prev_block,
@@ -240,7 +246,7 @@ fn apply_block_from_range(
                 *block.header().random_value(),
                 true,
                 is_first_block_with_chunk_of_version,
-                None,
+                Default::default(),
             )
             .unwrap()
     } else {
@@ -266,7 +272,7 @@ fn apply_block_from_range(
                 *block.header().random_value(),
                 false,
                 false,
-                None,
+                Default::default(),
             )
             .unwrap()
     };
@@ -276,7 +282,16 @@ fn apply_block_from_range(
         let caches = tries.0.caches.write().unwrap();
         let shard_uid = ShardUId { version: 1, shard_id: shard_id as u32 };
         let cache = caches.get(&shard_uid).unwrap();
-        let ops: Vec<_> = apply_result
+        let mut ops: Vec<_> = apply_result
+            .trie_changes
+            .trie_changes
+            .deletions
+            .iter()
+            .map(|trie_change| {
+                (trie_change.trie_node_or_value_hash, encode_negative_refcount(trie_change.rc))
+            })
+            .collect();
+        let insertion_ops: Vec<_> = apply_result
             .trie_changes
             .trie_changes
             .insertions
@@ -284,11 +299,13 @@ fn apply_block_from_range(
             .map(|trie_change| {
                 (
                     trie_change.trie_node_or_value_hash,
-                    encode_value_with_rc(&trie_change.trie_node_or_value, trie_change.rc as i64),
+                    add_positive_refcount(&trie_change.trie_node_or_value, trie_change.rc),
                 )
             })
             .collect();
-        let op_refs: Vec<_> = ops.iter().map(|(hash, value)| (hash.clone(), Some(value))).collect();
+        ops.extend(insertion_ops);
+        let op_refs: Vec<_> =
+            ops.iter().map(|(hash, value)| (hash.clone(), Some(value.as_ref()))).collect();
         cache.update_cache(op_refs);
     }
 
@@ -304,8 +321,8 @@ fn apply_block_from_range(
 
     let state_update =
         runtime_adapter.get_tries().new_trie_update(shard_uid, *chunk_extra.state_root());
-    let delayed_indices =
-        get::<DelayedReceiptIndices>(&state_update, &TrieKey::DelayedReceiptIndices).unwrap();
+    let delayed_indices: Option<DelayedReceiptIndices> =
+        get(&state_update, &TrieKey::DelayedReceiptIndices).unwrap();
 
     match existing_chunk_extra {
         Some(existing_chunk_extra) => {

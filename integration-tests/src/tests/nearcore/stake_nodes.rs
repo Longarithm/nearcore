@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use actix::{Actor, Addr, System};
 use futures::{future, FutureExt};
-use near_primitives::num_rational::Rational;
+use near_primitives::num_rational::Ratio;
 use rand::Rng;
 
 use crate::genesis_helpers::genesis_hash;
@@ -13,9 +13,9 @@ use near_actix_test_utils::run_actix;
 use near_chain_configs::Genesis;
 use near_client::{ClientActor, GetBlock, Query, Status, ViewClientActor};
 use near_crypto::{InMemorySigner, KeyType};
-use near_logger_utils::init_integration_logger;
 use near_network::test_utils::{convert_boot_nodes, open_port, WaitOrTimeoutActor};
 use near_network::types::NetworkClientMessages;
+use near_o11y::testonly::init_integration_logger;
 use near_primitives::hash::CryptoHash;
 use near_primitives::transaction::SignedTransaction;
 use near_primitives::types::{AccountId, BlockHeightDelta, BlockReference, NumSeats};
@@ -54,7 +54,7 @@ fn init_test_staking(
     genesis.config.chunk_producer_kickout_threshold = 20;
     genesis.config.minimum_stake_divisor = minimum_stake_divisor;
     if !enable_rewards {
-        genesis.config.max_inflation_rate = Rational::from_integer(0);
+        genesis.config.max_inflation_rate = Ratio::from_integer(0);
         genesis.config.min_gas_price = 0;
     }
     let first_node = open_port();

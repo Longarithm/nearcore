@@ -1,8 +1,11 @@
+use crate::config::{safe_add_gas, RuntimeConfig};
+use crate::ext::{ExternalError, RuntimeExt};
+use crate::{ActionResult, ApplyState};
 use borsh::{BorshDeserialize, BorshSerialize};
-
 use near_crypto::PublicKey;
 use near_primitives::account::{AccessKey, AccessKeyPermission, Account};
 use near_primitives::checked_feature;
+use near_primitives::config::ViewConfig;
 use near_primitives::contract::ContractCode;
 use near_primitives::errors::{ActionError, ActionErrorKind, ContractCallError, RuntimeError};
 use near_primitives::hash::CryptoHash;
@@ -29,18 +32,13 @@ use near_vm_errors::{
 };
 use near_vm_logic::types::PromiseResult;
 use near_vm_logic::VMContext;
-
-use crate::config::{safe_add_gas, RuntimeConfig};
-use crate::ext::{ExternalError, RuntimeExt};
-use crate::{ActionResult, ApplyState};
-use near_primitives::config::ViewConfig;
 use near_vm_runner::{precompile_contract, VMResult};
 
 /// Runs given function call with given context / apply state.
 pub(crate) fn execute_function_call(
     apply_state: &ApplyState,
     runtime_ext: &mut RuntimeExt,
-    account: &mut Account,
+    account: &Account,
     predecessor_id: &AccountId,
     action_receipt: &ActionReceipt,
     promise_results: &[PromiseResult],
@@ -51,6 +49,7 @@ pub(crate) fn execute_function_call(
     view_config: Option<ViewConfig>,
 ) -> VMResult {
     let account_id = runtime_ext.account_id();
+    tracing::debug!(target: "runtime", %account_id, "Calling the contract");
     let code = match runtime_ext.get_code(account.code_hash()) {
         Ok(Some(code)) => code,
         Ok(None) => {
@@ -278,7 +277,6 @@ pub(crate) fn action_stake(
     stake: &StakeAction,
     last_block_hash: &CryptoHash,
     epoch_info_provider: &dyn EpochInfoProvider,
-    #[cfg(feature = "protocol_feature_chunk_only_producers")] is_chunk_only: bool,
 ) -> Result<(), RuntimeError> {
     let increment = stake.stake.saturating_sub(account.locked());
 
@@ -307,8 +305,6 @@ pub(crate) fn action_stake(
             account_id.clone(),
             stake.public_key.clone(),
             stake.stake,
-            #[cfg(feature = "protocol_feature_chunk_only_producers")]
-            is_chunk_only,
         ));
         if stake.stake > account.locked() {
             // We've checked above `account.amount >= increment`
@@ -632,16 +628,6 @@ pub(crate) fn check_actor_permissions(
                 .into());
             }
         }
-        #[cfg(feature = "protocol_feature_chunk_only_producers")]
-        Action::StakeChunkOnly(_) => {
-            if actor_id != account_id {
-                return Err(ActionErrorKind::ActorNoPermission {
-                    account_id: account_id.clone(),
-                    actor_id: actor_id.clone(),
-                }
-                .into());
-            }
-        }
         Action::DeleteAccount(_) => {
             if actor_id != account_id {
                 return Err(ActionErrorKind::ActorNoPermission {
@@ -726,15 +712,6 @@ pub(crate) fn check_account_existence(
         | Action::AddKey(_)
         | Action::DeleteKey(_)
         | Action::DeleteAccount(_) => {
-            if account.is_none() {
-                return Err(ActionErrorKind::AccountDoesNotExist {
-                    account_id: account_id.clone(),
-                }
-                .into());
-            }
-        }
-        #[cfg(feature = "protocol_feature_chunk_only_producers")]
-        Action::StakeChunkOnly(_) => {
             if account.is_none() {
                 return Err(ActionErrorKind::AccountDoesNotExist {
                     account_id: account_id.clone(),

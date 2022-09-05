@@ -1,7 +1,10 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use derive_more::{AsRef as DeriveAsRef, From as DeriveFrom};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+
 use std::ops;
+use std::sync::Arc;
 
 use near_crypto::PublicKey;
 
@@ -9,7 +12,7 @@ use crate::account::{AccessKey, Account};
 use crate::challenge::ChallengesResult;
 use crate::errors::EpochError;
 use crate::hash::CryptoHash;
-use crate::serialize::u128_dec_format;
+use crate::serialize::dec_format;
 use crate::trie_key::TrieKey;
 
 use crate::receipt::Receipt;
@@ -21,7 +24,7 @@ pub type StateRoot = CryptoHash;
 
 /// Different types of finality.
 #[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
-#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum Finality {
     #[serde(rename = "optimistic")]
     None,
@@ -48,7 +51,7 @@ pub struct AccountWithPublicKey {
 pub struct AccountInfo {
     pub account_id: AccountId,
     pub public_key: PublicKey,
-    #[serde(with = "u128_dec_format")]
+    #[serde(with = "dec_format")]
     pub amount: Balance,
 }
 
@@ -421,15 +424,21 @@ impl StateChanges {
 #[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
 #[derive(PartialEq, Eq, Clone, Debug, BorshSerialize, BorshDeserialize, Serialize)]
 pub struct StateRootNode {
-    /// in Nightshade, data is the serialized TrieNodeWithSize
-    pub data: Vec<u8>,
-    /// in Nightshade, memory_usage is a field of TrieNodeWithSize
+    /// In Nightshade, data is the serialized TrieNodeWithSize.
+    ///
+    /// Beware that hash of an empty state root (i.e. once who’s data is an
+    /// empty byte string) **does not** equal hash of an empty byte string.
+    /// Instead, an all-zero hash indicates an empty node.
+    pub data: Arc<[u8]>,
+
+    /// In Nightshade, memory_usage is a field of TrieNodeWithSize.
     pub memory_usage: u64,
 }
 
 impl StateRootNode {
     pub fn empty() -> Self {
-        StateRootNode { data: vec![], memory_usage: 0 }
+        static EMPTY: Lazy<Arc<[u8]>> = Lazy::new(|| Arc::new([]));
+        StateRootNode { data: EMPTY.clone(), memory_usage: 0 }
     }
 }
 
@@ -445,6 +454,7 @@ impl StateRootNode {
     Eq,
     PartialEq,
     PartialOrd,
+    Ord,
     DeriveAsRef,
     BorshSerialize,
     BorshDeserialize,
@@ -484,23 +494,6 @@ pub mod validator_stake {
     #[serde(tag = "validator_stake_struct_version")]
     pub enum ValidatorStake {
         V1(ValidatorStakeV1),
-        #[cfg(feature = "protocol_feature_chunk_only_producers")]
-        V2(ValidatorStakeV2),
-    }
-
-    #[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
-    #[cfg(feature = "protocol_feature_chunk_only_producers")]
-    #[derive(BorshSerialize, BorshDeserialize, Serialize, Debug, Clone, PartialEq, Eq)]
-    pub struct ValidatorStakeV2 {
-        /// Account that stakes money.
-        pub account_id: AccountId,
-        /// Public key of the proposed validator.
-        pub public_key: PublicKey,
-        /// Stake / weight of the validator.
-        pub stake: Balance,
-        /// Flag indicating if this validator proposed to be a chunk-only producer
-        /// (i.e. cannot become a block producer).
-        pub is_chunk_only: bool,
     }
 
     pub struct ValidatorStakeIter<'a> {
@@ -564,44 +557,13 @@ pub mod validator_stake {
             Self::V1(ValidatorStakeV1 { account_id, public_key, stake })
         }
 
-        #[cfg(not(feature = "protocol_feature_chunk_only_producers"))]
         pub fn new(account_id: AccountId, public_key: PublicKey, stake: Balance) -> Self {
             Self::new_v1(account_id, public_key, stake)
-        }
-
-        #[cfg(feature = "protocol_feature_chunk_only_producers")]
-        pub fn new(
-            account_id: AccountId,
-            public_key: PublicKey,
-            stake: Balance,
-            is_chunk_only: bool,
-        ) -> Self {
-            Self::V2(ValidatorStakeV2 { account_id, public_key, stake, is_chunk_only })
         }
 
         pub fn into_v1(self) -> ValidatorStakeV1 {
             match self {
                 Self::V1(v1) => v1,
-                #[cfg(feature = "protocol_feature_chunk_only_producers")]
-                Self::V2(v2) => {
-                    // This function is called on V2 variant if
-                    // protocol_feature_chunk_only_producers is enabled, but current protocol
-                    // version is lower than required for block headers v3.
-                    ValidatorStakeV1 {
-                        account_id: v2.account_id,
-                        public_key: v2.public_key,
-                        stake: v2.stake,
-                    }
-                }
-            }
-        }
-
-        #[inline]
-        pub fn is_chunk_only(&self) -> bool {
-            match self {
-                Self::V1(_) => false,
-                #[cfg(feature = "protocol_feature_chunk_only_producers")]
-                Self::V2(v2) => v2.is_chunk_only,
             }
         }
 
@@ -609,8 +571,6 @@ pub mod validator_stake {
         pub fn account_and_stake(self) -> (AccountId, Balance) {
             match self {
                 Self::V1(v1) => (v1.account_id, v1.stake),
-                #[cfg(feature = "protocol_feature_chunk_only_producers")]
-                Self::V2(v2) => (v2.account_id, v2.stake),
             }
         }
 
@@ -618,8 +578,6 @@ pub mod validator_stake {
         pub fn destructure(self) -> (AccountId, PublicKey, Balance) {
             match self {
                 Self::V1(v1) => (v1.account_id, v1.public_key, v1.stake),
-                #[cfg(feature = "protocol_feature_chunk_only_producers")]
-                Self::V2(v2) => (v2.account_id, v2.public_key, v2.stake),
             }
         }
 
@@ -627,8 +585,6 @@ pub mod validator_stake {
         pub fn take_account_id(self) -> AccountId {
             match self {
                 Self::V1(v1) => v1.account_id,
-                #[cfg(feature = "protocol_feature_chunk_only_producers")]
-                Self::V2(v2) => v2.account_id,
             }
         }
 
@@ -636,8 +592,6 @@ pub mod validator_stake {
         pub fn account_id(&self) -> &AccountId {
             match self {
                 Self::V1(v1) => &v1.account_id,
-                #[cfg(feature = "protocol_feature_chunk_only_producers")]
-                Self::V2(v2) => &v2.account_id,
             }
         }
 
@@ -645,8 +599,6 @@ pub mod validator_stake {
         pub fn take_public_key(self) -> PublicKey {
             match self {
                 Self::V1(v1) => v1.public_key,
-                #[cfg(feature = "protocol_feature_chunk_only_producers")]
-                Self::V2(v2) => v2.public_key,
             }
         }
 
@@ -654,8 +606,6 @@ pub mod validator_stake {
         pub fn public_key(&self) -> &PublicKey {
             match self {
                 Self::V1(v1) => &v1.public_key,
-                #[cfg(feature = "protocol_feature_chunk_only_producers")]
-                Self::V2(v2) => &v2.public_key,
             }
         }
 
@@ -663,8 +613,6 @@ pub mod validator_stake {
         pub fn stake(&self) -> Balance {
             match self {
                 Self::V1(v1) => v1.stake,
-                #[cfg(feature = "protocol_feature_chunk_only_producers")]
-                Self::V2(v2) => v2.stake,
             }
         }
 
@@ -672,8 +620,6 @@ pub mod validator_stake {
         pub fn stake_mut(&mut self) -> &mut Balance {
             match self {
                 Self::V1(v1) => &mut v1.stake,
-                #[cfg(feature = "protocol_feature_chunk_only_producers")]
-                Self::V2(v2) => &mut v2.stake,
             }
         }
 
@@ -838,7 +784,7 @@ pub struct ChunkExtraV1 {
 }
 
 #[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum BlockId {
     Height(BlockHeight),
@@ -848,7 +794,7 @@ pub enum BlockId {
 pub type MaybeBlockId = Option<BlockId>;
 
 #[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SyncCheckpoint {
     Genesis,
@@ -856,7 +802,7 @@ pub enum SyncCheckpoint {
 }
 
 #[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BlockReference {
     BlockId(BlockId),
@@ -882,13 +828,13 @@ impl From<Finality> for BlockReference {
     }
 }
 
-#[derive(Default, BorshSerialize, BorshDeserialize, Clone, Debug, PartialEq)]
+#[derive(Default, BorshSerialize, BorshDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ValidatorStats {
     pub produced: NumBlocks,
     pub expected: NumBlocks,
 }
 
-#[derive(Debug, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, BorshSerialize, BorshDeserialize, PartialEq, Eq)]
 pub struct BlockChunkValidatorStats {
     pub block_stats: ValidatorStats,
     pub chunk_stats: ValidatorStats,
@@ -921,6 +867,17 @@ impl Serialize for EpochReference {
     }
 }
 
+/// Either an epoch id or latest block hash.  When `EpochId` variant is used it
+/// must be an identifier of a past epoch.  When `BlockHeight` is used it must
+/// be hash of the latest block in the current epoch.  Using current epoch id
+/// with `EpochId` or arbitrary block hash in past or present epochs will result
+/// in errors.
+#[derive(Debug)]
+pub enum ValidatorInfoIdentifier {
+    EpochId(EpochId),
+    BlockHash(CryptoHash),
+}
+
 /// Reasons for removing a validator from the validator set.
 #[cfg_attr(feature = "deepsize_feature", derive(deepsize::DeepSizeOf))]
 #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -935,9 +892,9 @@ pub enum ValidatorKickoutReason {
     Unstaked,
     /// Validator stake is now below threshold
     NotEnoughStake {
-        #[serde(with = "u128_dec_format", rename = "stake_u128")]
+        #[serde(with = "dec_format", rename = "stake_u128")]
         stake: Balance,
-        #[serde(with = "u128_dec_format", rename = "threshold_u128")]
+        #[serde(with = "dec_format", rename = "threshold_u128")]
         threshold: Balance,
     },
     /// Enough stake but is not chosen because of seat limits.
@@ -953,8 +910,8 @@ pub enum TransactionOrReceiptId {
 
 /// Cache for compiled modules
 pub trait CompiledContractCache: Send + Sync {
-    fn put(&self, key: &[u8], value: &[u8]) -> Result<(), std::io::Error>;
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, std::io::Error>;
+    fn put(&self, key: &CryptoHash, value: Vec<u8>) -> Result<(), std::io::Error>;
+    fn get(&self, key: &CryptoHash) -> Result<Option<Vec<u8>>, std::io::Error>;
 }
 
 /// Provides information about current epoch validators.

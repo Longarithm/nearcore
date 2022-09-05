@@ -9,6 +9,7 @@ use near_primitives::account::id::AccountId;
 use near_primitives::network::{AnnounceAccount, PeerId};
 use near_store::DBCol;
 use std::io;
+use std::sync::Arc;
 
 #[cfg(test)]
 mod tests;
@@ -258,29 +259,35 @@ pub trait Column {
 
 /// A type-safe wrapper of the near_store::Store.
 #[derive(Clone)]
-pub struct Store(near_store::Store);
+pub struct Store(std::sync::Arc<dyn near_store::db::Database>);
 
 /// A type-safe wrapper of the near_store::StoreUpdate.
-pub struct StoreUpdate(near_store::StoreUpdate);
+#[derive(Default)]
+pub struct StoreUpdate(near_store::db::DBTransaction);
 
 impl Store {
-    pub fn new(s: near_store::Store) -> Store {
-        Store(s)
-    }
     pub fn new_update(&mut self) -> StoreUpdate {
-        StoreUpdate(self.0.store_update())
+        Default::default()
     }
+    pub fn commit(&mut self, update: StoreUpdate) -> Result<(), Error> {
+        self.0.write(update.0)
+    }
+
     pub fn iter<C: Column>(
         &self,
     ) -> impl Iterator<Item = Result<(<C::Key as Format>::T, <C::Value as Format>::T), Error>> + '_
     {
-        self.0.iter(C::COL).map(|(k, v)| Ok((C::Key::decode(&k)?, C::Value::decode(&v)?)))
+        debug_assert!(!C::COL.is_rc());
+        self.0
+            .iter_raw_bytes(C::COL)
+            .map(|item| item.and_then(|(k, v)| Ok((C::Key::decode(&k)?, C::Value::decode(&v)?))))
     }
     pub fn get<C: Column>(
         &self,
         k: &<C::Key as Format>::T,
     ) -> Result<Option<<C::Value as Format>::T>, Error> {
-        let v = self.0.get(C::COL, to_vec::<C::Key>(k).as_ref())?;
+        debug_assert!(!C::COL.is_rc());
+        let v = self.0.get_raw_bytes(C::COL, to_vec::<C::Key>(k).as_ref())?;
         Ok(match v {
             Some(v) => Some(C::Value::decode(&v)?),
             None => None,
@@ -288,14 +295,17 @@ impl Store {
     }
 }
 
+impl From<Arc<dyn near_store::db::Database>> for Store {
+    fn from(db: Arc<dyn near_store::db::Database>) -> Self {
+        Self(db)
+    }
+}
+
 impl StoreUpdate {
     pub fn set<C: Column>(&mut self, k: &<C::Key as Format>::T, v: &<C::Value as Format>::T) {
-        self.0.set(C::COL, to_vec::<C::Key>(k).as_ref(), to_vec::<C::Value>(v).as_ref())
+        self.0.set(C::COL, to_vec::<C::Key>(k), to_vec::<C::Value>(v))
     }
     pub fn delete<C: Column>(&mut self, k: &<C::Key as Format>::T) {
-        self.0.delete(C::COL, to_vec::<C::Key>(k).as_ref())
-    }
-    pub fn commit(self) -> Result<(), Error> {
-        self.0.commit()
+        self.0.delete(C::COL, to_vec::<C::Key>(k))
     }
 }

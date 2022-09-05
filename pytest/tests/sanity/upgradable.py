@@ -78,18 +78,15 @@ def test_upgrade() -> None:
     node_root = utils.get_near_tempdir('upgradable', clean=True)
 
     # Setup local network.
-    # TODO(#4372): testnet subcommand deprecated since 1.24.  Replace with
-    # localnet after a couple of releases in 2022.
-    cmd = (executables.stable.neard, "--home=%s" % node_root, "testnet", "--v",
-           "4", "--prefix", "test")
+    cmd = (executables.stable.neard, f'--home={node_root}', 'localnet', '-v',
+           '4', '--prefix', 'test')
     logger.info(' '.join(str(arg) for arg in cmd))
     subprocess.check_call(cmd)
     genesis_config_changes = [("epoch_length", 20),
                               ("num_block_producer_seats", 10),
                               ("num_block_producer_seats_per_shard", [10]),
                               ("block_producer_kickout_threshold", 80),
-                              ("chunk_producer_kickout_threshold", 80),
-                              ("chain_id", "testnet")]
+                              ("chunk_producer_kickout_threshold", 80)]
     node_dirs = [os.path.join(node_root, 'test%d' % i) for i in range(4)]
     for i, node_dir in enumerate(node_dirs):
         cluster.apply_genesis_changes(node_dir, genesis_config_changes)

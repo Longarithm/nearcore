@@ -12,13 +12,13 @@ use near_chain::{Block, Chain};
 use near_chain_configs::Genesis;
 use near_client::{ClientActor, GetBlock};
 use near_crypto::{InMemorySigner, KeyType};
-use near_logger_utils::init_integration_logger;
 use near_network::test_utils::{convert_boot_nodes, open_port, WaitOrTimeoutActor};
 use near_network::types::NetworkClientMessages;
 use near_network_primitives::types::PeerInfo;
+use near_o11y::testonly::init_integration_logger;
 use near_primitives::block::Approval;
 use near_primitives::merkle::PartialMerkleTree;
-use near_primitives::num_rational::Rational;
+use near_primitives::num_rational::Ratio;
 use near_primitives::transaction::SignedTransaction;
 use near_primitives::types::validator_stake::ValidatorStake;
 use near_primitives::types::{BlockHeightDelta, EpochId};
@@ -50,15 +50,6 @@ fn add_blocks(
         let next_epoch_id = EpochId(
             *blocks[(((prev.header().height()) / epoch_length) * epoch_length) as usize].hash(),
         );
-        #[cfg(feature = "protocol_feature_chunk_only_producers")]
-        let next_bp_hash = Chain::compute_collection_hash(vec![ValidatorStake::new(
-            "other".parse().unwrap(),
-            signer.public_key(),
-            TESTING_INIT_STAKE,
-            false,
-        )])
-        .unwrap();
-        #[cfg(not(feature = "protocol_feature_chunk_only_producers"))]
         let next_bp_hash = Chain::compute_collection_hash(vec![ValidatorStake::new(
             "other".parse().unwrap(),
             signer.public_key(),
@@ -84,7 +75,7 @@ fn add_blocks(
                 )
                 .signature,
             )],
-            Rational::from_integer(0),
+            Ratio::from_integer(0),
             0,
             1000,
             Some(0),

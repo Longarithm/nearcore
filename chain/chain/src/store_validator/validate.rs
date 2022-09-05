@@ -17,8 +17,7 @@ use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, EpochId};
 use near_primitives::utils::{get_block_shard_id, index_to_bytes};
 use near_store::{
-    DBCol, TrieChanges, TrieIterator, CHUNK_TAIL_KEY, FORK_TAIL_KEY, HEADER_HEAD_KEY, HEAD_KEY,
-    TAIL_KEY,
+    DBCol, TrieChanges, CHUNK_TAIL_KEY, FORK_TAIL_KEY, HEADER_HEAD_KEY, HEAD_KEY, TAIL_KEY,
 };
 
 use crate::StoreValidator;
@@ -454,7 +453,7 @@ pub(crate) fn block_epoch_exists(
     Ok(())
 }
 
-pub(crate) fn block_increase_refcount(
+pub(crate) fn block_increment_refcount(
     sv: &mut StoreValidator,
     _block_hash: &CryptoHash,
     block: &Block,
@@ -560,9 +559,9 @@ pub(crate) fn trie_changes_chunk_extra_exists(
         );
     }
     // 4) Trie should exist for `shard_uid` and the root
-    let trie = sv.runtime_adapter.get_tries().get_trie_for_shard(*shard_uid);
+    let trie = sv.runtime_adapter.get_tries().get_trie_for_shard(*shard_uid, new_root.clone());
     let trie_iterator = unwrap_or_err!(
-        TrieIterator::new(&trie, &new_root),
+        trie.iter(),
         "Trie Node Missing for shard {:?} root {:?}",
         shard_uid,
         new_root
@@ -653,7 +652,7 @@ pub(crate) fn header_hash_of_height_exists(
 pub(crate) fn outcome_by_outcome_id_exists(
     sv: &mut StoreValidator,
     block_hash: &CryptoHash,
-    outcome_ids: &Vec<CryptoHash>,
+    outcome_ids: &[CryptoHash],
 ) -> Result<(), StoreValidatorError> {
     for outcome_id in outcome_ids {
         let outcomes = unwrap_or_err_db!(
@@ -674,7 +673,7 @@ pub(crate) fn outcome_by_outcome_id_exists(
 pub(crate) fn outcome_id_block_exists(
     sv: &mut StoreValidator,
     block_hash: &CryptoHash,
-    _outcome_ids: &Vec<CryptoHash>,
+    _outcome_ids: &[CryptoHash],
 ) -> Result<(), StoreValidatorError> {
     unwrap_or_err_db!(
         sv.store.get_ser::<Block>(DBCol::Block, block_hash.as_ref()),
@@ -686,7 +685,7 @@ pub(crate) fn outcome_id_block_exists(
 pub(crate) fn outcome_indexed_by_block_hash(
     sv: &mut StoreValidator,
     outcome_id: &CryptoHash,
-    outcomes: &Vec<ExecutionOutcomeWithIdAndProof>,
+    outcomes: &[ExecutionOutcomeWithIdAndProof],
 ) -> Result<(), StoreValidatorError> {
     for outcome in outcomes {
         let block = unwrap_or_err_db!(
@@ -875,7 +874,7 @@ pub(crate) fn state_header_block_exists(
 pub(crate) fn state_part_header_exists(
     sv: &mut StoreValidator,
     key: &StatePartKey,
-    _part: &Vec<u8>,
+    _part: &[u8],
 ) -> Result<(), StoreValidatorError> {
     let StatePartKey(block_hash, shard_id, part_id) = *key;
     let state_header_key = unwrap_or_err!(

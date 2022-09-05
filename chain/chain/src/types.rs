@@ -4,13 +4,14 @@ use std::sync::Arc;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use chrono::DateTime;
-use near_primitives::sandbox_state_patch::SandboxStatePatch;
+use near_primitives::sandbox::state_patch::SandboxStatePatch;
 use near_primitives::time::Utc;
-use num_rational::Rational;
+use num_rational::Rational32;
 
-use crate::DoomslugThresholdMode;
-use near_chain_configs::{GenesisConfig, ProtocolConfig};
+use crate::{metrics, DoomslugThresholdMode};
+use near_chain_configs::{Genesis, ProtocolConfig};
 use near_chain_primitives::Error;
+use near_client_primitives::types::StateSplitApplyingStatus;
 use near_crypto::Signature;
 use near_pool::types::PoolIterator;
 use near_primitives::challenge::{ChallengesResult, SlashedValidator};
@@ -30,6 +31,7 @@ use near_primitives::types::validator_stake::{ValidatorStake, ValidatorStakeIter
 use near_primitives::types::{
     AccountId, ApprovalStake, Balance, BlockHeight, BlockHeightDelta, EpochHeight, EpochId, Gas,
     MerkleHash, NumBlocks, ShardId, StateChangesForSplitStates, StateRoot, StateRootNode,
+    ValidatorInfoIdentifier,
 };
 use near_primitives::version::{
     ProtocolVersion, MIN_GAS_PRICE_NEP_92, MIN_GAS_PRICE_NEP_92_FIX, MIN_PROTOCOL_VERSION_NEP_92,
@@ -160,9 +162,9 @@ impl BlockHeaderInfo {
 
 /// Block economics config taken from genesis config
 pub struct BlockEconomicsConfig {
-    gas_price_adjustment_rate: Rational,
-    min_gas_price: Balance,
-    max_gas_price: Balance,
+    gas_price_adjustment_rate: Rational32,
+    genesis_min_gas_price: Balance,
+    genesis_max_gas_price: Balance,
     genesis_protocol_version: ProtocolVersion,
 }
 
@@ -170,6 +172,12 @@ impl BlockEconomicsConfig {
     /// Set max gas price to be this multiplier * min_gas_price
     const MAX_GAS_MULTIPLIER: u128 = 20;
     /// Compute min gas price according to protocol version and genesis protocol version.
+    ///
+    /// This returns the effective minimum gas price for a block with the given
+    /// protocol version. The base value is defined in genesis.config but has
+    /// been overwritten at specific protocol versions. Chains with a genesis
+    /// version higher than those changes are not overwritten and will instead
+    /// respect the value defined in genesis.
     pub fn min_gas_price(&self, protocol_version: ProtocolVersion) -> Balance {
         if self.genesis_protocol_version < MIN_PROTOCOL_VERSION_NEP_92 {
             if protocol_version >= MIN_PROTOCOL_VERSION_NEP_92_FIX {
@@ -177,7 +185,7 @@ impl BlockEconomicsConfig {
             } else if protocol_version >= MIN_PROTOCOL_VERSION_NEP_92 {
                 MIN_GAS_PRICE_NEP_92
             } else {
-                self.min_gas_price
+                self.genesis_min_gas_price
             }
         } else if self.genesis_protocol_version < MIN_PROTOCOL_VERSION_NEP_92_FIX {
             if protocol_version >= MIN_PROTOCOL_VERSION_NEP_92_FIX {
@@ -186,22 +194,22 @@ impl BlockEconomicsConfig {
                 MIN_GAS_PRICE_NEP_92
             }
         } else {
-            self.min_gas_price
+            self.genesis_min_gas_price
         }
     }
 
     pub fn max_gas_price(&self, protocol_version: ProtocolVersion) -> Balance {
         if checked_feature!("stable", CapMaxGasPrice, protocol_version) {
             std::cmp::min(
-                self.max_gas_price,
+                self.genesis_max_gas_price,
                 Self::MAX_GAS_MULTIPLIER * self.min_gas_price(protocol_version),
             )
         } else {
-            self.max_gas_price
+            self.genesis_max_gas_price
         }
     }
 
-    pub fn gas_price_adjustment_rate(&self, _protocol_version: ProtocolVersion) -> Rational {
+    pub fn gas_price_adjustment_rate(&self, _protocol_version: ProtocolVersion) -> Rational32 {
         self.gas_price_adjustment_rate
     }
 }
@@ -210,8 +218,8 @@ impl From<&ChainGenesis> for BlockEconomicsConfig {
     fn from(chain_genesis: &ChainGenesis) -> Self {
         BlockEconomicsConfig {
             gas_price_adjustment_rate: chain_genesis.gas_price_adjustment_rate,
-            min_gas_price: chain_genesis.min_gas_price,
-            max_gas_price: chain_genesis.max_gas_price,
+            genesis_min_gas_price: chain_genesis.min_gas_price,
+            genesis_max_gas_price: chain_genesis.max_gas_price,
             genesis_protocol_version: chain_genesis.protocol_version,
         }
     }
@@ -226,29 +234,25 @@ pub struct ChainGenesis {
     pub min_gas_price: Balance,
     pub max_gas_price: Balance,
     pub total_supply: Balance,
-    pub gas_price_adjustment_rate: Rational,
+    pub gas_price_adjustment_rate: Rational32,
     pub transaction_validity_period: NumBlocks,
     pub epoch_length: BlockHeightDelta,
     pub protocol_version: ProtocolVersion,
 }
 
-impl<T> From<T> for ChainGenesis
-where
-    T: AsRef<GenesisConfig>,
-{
-    fn from(genesis_config: T) -> Self {
-        let genesis_config = genesis_config.as_ref();
+impl ChainGenesis {
+    pub fn new(genesis: &Genesis) -> Self {
         Self {
-            time: genesis_config.genesis_time,
-            height: genesis_config.genesis_height,
-            gas_limit: genesis_config.gas_limit,
-            min_gas_price: genesis_config.min_gas_price,
-            max_gas_price: genesis_config.max_gas_price,
-            total_supply: genesis_config.total_supply,
-            gas_price_adjustment_rate: genesis_config.gas_price_adjustment_rate,
-            transaction_validity_period: genesis_config.transaction_validity_period,
-            epoch_length: genesis_config.epoch_length,
-            protocol_version: genesis_config.protocol_version,
+            time: genesis.config.genesis_time,
+            height: genesis.config.genesis_height,
+            gas_limit: genesis.config.gas_limit,
+            min_gas_price: genesis.config.min_gas_price,
+            max_gas_price: genesis.config.max_gas_price,
+            total_supply: genesis.config.total_supply,
+            gas_price_adjustment_rate: genesis.config.gas_price_adjustment_rate,
+            transaction_validity_period: genesis.config.transaction_validity_period,
+            epoch_length: genesis.config.epoch_length,
+            protocol_version: genesis.config.protocol_version,
         }
     }
 }
@@ -267,13 +271,19 @@ pub trait RuntimeAdapter: Send + Sync {
     /// Returns trie. Since shard layout may change from epoch to epoch, `shard_id` itself is
     /// not enough to identify the trie. `prev_hash` is used to identify the epoch the given
     /// `shard_id` is at.
-    fn get_trie_for_shard(&self, shard_id: ShardId, prev_hash: &CryptoHash) -> Result<Trie, Error>;
+    fn get_trie_for_shard(
+        &self,
+        shard_id: ShardId,
+        prev_hash: &CryptoHash,
+        state_root: StateRoot,
+    ) -> Result<Trie, Error>;
 
     /// Returns trie with view cache
     fn get_view_trie_for_shard(
         &self,
         shard_id: ShardId,
         prev_hash: &CryptoHash,
+        state_root: StateRoot,
     ) -> Result<Trie, Error>;
 
     fn verify_block_vrf(
@@ -412,6 +422,9 @@ pub trait RuntimeAdapter: Send + Sync {
         parent_hash: &CryptoHash,
     ) -> Result<Vec<(ApprovalStake, bool)>, Error>;
 
+    /// Returns all the chunk producers for a given epoch.
+    fn get_epoch_chunk_producers(&self, epoch_id: &EpochId) -> Result<Vec<ValidatorStake>, Error>;
+
     /// Block producers for given height for the main block. Return error if outside of known boundaries.
     fn get_block_producer(
         &self,
@@ -455,8 +468,8 @@ pub trait RuntimeAdapter: Send + Sync {
         epoch_id: &EpochId,
     ) -> Result<ShardId, Error>;
 
-    /// Returns `account_id` that suppose to have the `part_id` of all chunks given previous block hash.
-    fn get_part_owner(&self, parent_hash: &CryptoHash, part_id: u64) -> Result<AccountId, Error>;
+    /// Returns `account_id` that suppose to have the `part_id`.
+    fn get_part_owner(&self, epoch_id: &EpochId, part_id: u64) -> Result<AccountId, Error>;
 
     fn get_shard_layout(&self, epoch_id: &EpochId) -> Result<ShardLayout, Error>;
 
@@ -609,13 +622,16 @@ pub trait RuntimeAdapter: Send + Sync {
         random_seed: CryptoHash,
         is_new_chunk: bool,
         is_first_block_with_chunk_of_version: bool,
-        state_patch: Option<SandboxStatePatch>,
+        state_patch: SandboxStatePatch,
     ) -> Result<ApplyTransactionResult, Error> {
         let _span = tracing::debug_span!(
             target: "runtime",
             "apply_transactions",
             shard_id)
         .entered();
+        let _timer = metrics::APPLYING_CHUNKS_TIME
+            .with_label_values(&[&format!("{}", shard_id)])
+            .start_timer();
         self.apply_transactions_with_optional_storage_proof(
             shard_id,
             state_root,
@@ -655,7 +671,7 @@ pub trait RuntimeAdapter: Send + Sync {
         generate_storage_proof: bool,
         is_new_chunk: bool,
         is_first_block_with_chunk_of_version: bool,
-        state_patch: Option<SandboxStatePatch>,
+        state_patch: SandboxStatePatch,
     ) -> Result<ApplyTransactionResult, Error>;
 
     fn check_state_transition(
@@ -691,6 +707,7 @@ pub trait RuntimeAdapter: Send + Sync {
         request: &QueryRequest,
     ) -> Result<QueryResponse, near_chain_primitives::error::QueryError>;
 
+    /// WARNING: this call may be expensive.
     fn get_validator_info(
         &self,
         epoch_id: ValidatorInfoIdentifier,
@@ -708,7 +725,7 @@ pub trait RuntimeAdapter: Send + Sync {
 
     /// Validate state part that expected to be given state root with provided data.
     /// Returns false if the resulting part doesn't match the expected one.
-    fn validate_state_part(&self, state_root: &StateRoot, part_id: PartId, data: &Vec<u8>) -> bool;
+    fn validate_state_part(&self, state_root: &StateRoot, part_id: PartId, data: &[u8]) -> bool;
 
     fn apply_update_to_split_states(
         &self,
@@ -723,6 +740,7 @@ pub trait RuntimeAdapter: Send + Sync {
         shard_uid: ShardUId,
         state_root: &StateRoot,
         next_epoch_shard_layout: &ShardLayout,
+        state_split_status: Arc<StateSplitApplyingStatus>,
     ) -> Result<HashMap<ShardUId, StateRoot>, Error>;
 
     /// Should be executed after accepting all the parts to set up a new state.
@@ -787,17 +805,6 @@ pub struct LatestKnown {
     pub seen: u64,
 }
 
-/// Either an epoch id or latest block hash.  When `EpochId` variant is used it
-/// must be an identifier of a past epoch.  When `BlockHeight` is used it must
-/// be hash of the latest block in the current epoch.  Using current epoch id
-/// with `EpochId` or arbitrary block hash in past or present epochs will result
-/// in errors.
-#[derive(Debug)]
-pub enum ValidatorInfoIdentifier {
-    EpochId(EpochId),
-    BlockHash(CryptoHash),
-}
-
 #[cfg(test)]
 mod tests {
     use near_primitives::time::Utc;
@@ -818,7 +825,7 @@ mod tests {
     fn test_block_produce() {
         let num_shards = 32;
         let genesis_chunks =
-            genesis_chunks(vec![StateRoot::default()], num_shards, 1_000_000, 0, PROTOCOL_VERSION);
+            genesis_chunks(vec![Trie::EMPTY_ROOT], num_shards, 1_000_000, 0, PROTOCOL_VERSION);
         let genesis_bps: Vec<ValidatorStake> = Vec::new();
         let genesis = Block::genesis(
             PROTOCOL_VERSION,
