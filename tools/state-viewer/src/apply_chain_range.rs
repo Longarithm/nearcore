@@ -426,6 +426,8 @@ pub fn apply_chain_range(
         empty_blocks: AtomicU64::new(0),
         non_empty_blocks: AtomicU64::new(0),
         tgas_burned: AtomicU64::new(0),
+        cache_entries: AtomicU64::new(0),
+        cache_total_size: AtomicU64::new(0),
     };
     let process_height = |height| {
         apply_block_from_range(
