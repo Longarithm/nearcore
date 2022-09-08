@@ -3494,7 +3494,7 @@ impl Chain {
             let shard_uid =
                 self.runtime_adapter.shard_id_to_uid(shard_id, block.header().epoch_id())?;
             let is_new_chunk = chunk_header.height_included() == block.header().height();
-            let flat_state = self.flat_state.create_flat_state(&prev_block_hash, self.store());
+            let flat_state = self.flat_state.create_flat_state(prev_hash, self.store());
 
             if should_apply_transactions {
                 if is_new_chunk {

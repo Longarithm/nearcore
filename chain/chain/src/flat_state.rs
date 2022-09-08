@@ -16,7 +16,12 @@ mod imp {
             prev_block_hash: &CryptoHash,
             chain_store: &ChainStore,
         ) -> Option<FlatState> {
-            near_store::flat_state::maybe_new(true, chain_store.store(), prev_block_hash, lock)
+            near_store::flat_state::maybe_new(
+                true,
+                chain_store.store(),
+                prev_block_hash,
+                self.lock.clone(),
+            )
         }
     }
 }
