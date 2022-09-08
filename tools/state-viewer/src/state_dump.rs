@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::fs::File;
+use std::option::Option::None;
 use std::path::Path;
 
 /// Returns a `NearConfig` with genesis records taken from the current state.
@@ -141,7 +142,12 @@ pub fn state_dump_redis(
 
     for (shard_id, state_root) in state_roots.iter().enumerate() {
         let trie = runtime
-            .get_trie_for_shard(shard_id as u64, last_block_header.prev_hash(), state_root.clone())
+            .get_trie_for_shard(
+                shard_id as u64,
+                last_block_header.prev_hash(),
+                state_root.clone(),
+                None,
+            )
             .unwrap();
         for item in trie.iter().unwrap() {
             let (key, value) = item.unwrap();
@@ -232,7 +238,12 @@ fn iterate_over_records(
     let mut total_supply = 0;
     for (shard_id, state_root) in state_roots.iter().enumerate() {
         let trie = runtime
-            .get_trie_for_shard(shard_id as u64, last_block_header.prev_hash(), state_root.clone())
+            .get_trie_for_shard(
+                shard_id as u64,
+                last_block_header.prev_hash(),
+                state_root.clone(),
+                None,
+            )
             .unwrap();
         for item in trie.iter().unwrap() {
             let (key, value) = item.unwrap();

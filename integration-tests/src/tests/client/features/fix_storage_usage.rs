@@ -7,6 +7,7 @@ use near_primitives::version::ProtocolFeature;
 use near_primitives::{trie_key::TrieKey, types::AccountId};
 use near_store::{ShardUId, TrieUpdate};
 use nearcore::config::GenesisExt;
+use std::option::Option::None;
 use std::rc::Rc;
 
 use crate::tests::client::process_blocks::{
@@ -46,7 +47,7 @@ fn process_blocks_with_storage_usage_fix(
         let trie = Rc::new(
             env.clients[0]
                 .runtime_adapter
-                .get_trie_for_shard(0, block.header().prev_hash(), root)
+                .get_trie_for_shard(0, block.header().prev_hash(), root, None)
                 .unwrap(),
         );
         let state_update = TrieUpdate::new(trie.clone());

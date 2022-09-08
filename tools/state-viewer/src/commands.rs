@@ -30,6 +30,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Write;
+use std::option::Option::None;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -44,7 +45,7 @@ pub(crate) fn state(home_dir: &Path, near_config: NearConfig, store: Store) {
     println!("Storage roots are {:?}, block height is {}", state_roots, header.height());
     for (shard_id, state_root) in state_roots.iter().enumerate() {
         let trie = runtime
-            .get_trie_for_shard(shard_id as u64, header.prev_hash(), state_root.clone())
+            .get_trie_for_shard(shard_id as u64, header.prev_hash(), state_root.clone(), None)
             .unwrap();
         for item in trie.iter().unwrap() {
             let (key, value) = item.unwrap();
@@ -221,7 +222,7 @@ pub(crate) fn dump_account_storage(
         load_trie_stop_at_height(store, home_dir, &near_config, block_height);
     for (shard_id, state_root) in state_roots.iter().enumerate() {
         let trie = runtime
-            .get_trie_for_shard(shard_id as u64, header.prev_hash(), state_root.clone())
+            .get_trie_for_shard(shard_id as u64, header.prev_hash(), state_root.clone(), None)
             .unwrap();
         let key = TrieKey::ContractData {
             account_id: account_id.parse().unwrap(),
@@ -435,6 +436,7 @@ pub(crate) fn apply_block(
                 true,
                 is_first_block_with_chunk_of_version,
                 Default::default(),
+                None,
             )
             .unwrap()
     } else {
@@ -459,6 +461,7 @@ pub(crate) fn apply_block(
                 false,
                 false,
                 Default::default(),
+                None,
             )
             .unwrap()
     };

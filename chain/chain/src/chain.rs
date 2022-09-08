@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::option::Option::None;
 
 use std::sync::{Arc, RwLock};
 use std::time::{Duration as TimeDuration, Instant};
@@ -55,6 +56,7 @@ use crate::block_processing_utils::{
 };
 use crate::blocks_delay_tracker::BlocksDelayTracker;
 use crate::crypto_hash_timer::CryptoHashTimer;
+use crate::flat_state::ChainFlatState;
 use crate::lightclient::get_epoch_block_producers_view;
 use crate::migrations::check_if_block_is_first_with_chunk_of_version;
 use crate::missing_chunks::{BlockLike, MissingChunksPool};
@@ -446,7 +448,7 @@ pub struct Chain {
     /// impossible to have non-empty state patch on non-sandbox builds.
     pending_state_patch: SandboxStatePatch,
 
-    flat_state_lock: Arc<RwLock<()>>,
+    flat_state: ChainFlatState,
 }
 
 impl Drop for Chain {
@@ -509,7 +511,7 @@ impl Chain {
             apply_chunks_receiver: rc,
             last_time_head_updated: Clock::instant(),
             pending_state_patch: Default::default(),
-            flat_state_lock: Arc::new(Default::default()),
+            flat_state: Default::default(),
         })
     }
 
@@ -648,7 +650,7 @@ impl Chain {
             apply_chunks_receiver: rc,
             last_time_head_updated: Clock::instant(),
             pending_state_patch: Default::default(),
-            flat_state_lock: Arc::new(Default::default()),
+            flat_state: Default::default(),
         })
     }
 
@@ -2038,7 +2040,8 @@ impl Chain {
 
         let prev_head = self.store.head()?;
         let mut chain_update = self.chain_update();
-        let _ = chain_update.flat_state_lock.write().expect("Flat state lock was poisoned.");
+        #[cfg(feature = "protocol_feature_flat_state")]
+        let _ = self.flat_state.lock.write().expect("Flat state lock was poisoned.");
         let provenance = block_preprocess_info.provenance.clone();
         let block_start_processing_time = block_preprocess_info.block_start_processing_time.clone();
         let new_head =
@@ -3491,6 +3494,8 @@ impl Chain {
             let shard_uid =
                 self.runtime_adapter.shard_id_to_uid(shard_id, block.header().epoch_id())?;
             let is_new_chunk = chunk_header.height_included() == block.header().height();
+            let flat_state = self.flat_state.create_flat_state(&prev_block_hash, self.store());
+
             if should_apply_transactions {
                 if is_new_chunk {
                     let prev_chunk_height_included = prev_chunk_header.height_included();
@@ -3588,7 +3593,6 @@ impl Chain {
                     let random_seed = *block.header().random_value();
                     let height = chunk_header.height_included();
                     let prev_block_hash = chunk_header.prev_block_hash().clone();
-                    let flat_state_lock = self.flat_state_lock.clone();
 
                     result.push(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
                         let _span = tracing::debug_span!(
@@ -3599,7 +3603,6 @@ impl Chain {
                         .entered();
                         let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
 
-                        let _ = flat_state_lock.read().expect("Flat state lock was poisoned.");
                         match runtime_adapter.apply_transactions(
                             shard_id,
                             chunk_inner.prev_state_root(),
@@ -3617,6 +3620,7 @@ impl Chain {
                             true,
                             is_first_block_with_chunk_of_version,
                             state_patch,
+                            flat_state.clone(),
                         ) {
                             Ok(apply_result) => {
                                 let apply_split_result_or_state_changes =
@@ -3677,6 +3681,7 @@ impl Chain {
                             false,
                             false,
                             state_patch,
+                            flat_state.clone(),
                         ) {
                             Ok(apply_result) => {
                                 let apply_split_result_or_state_changes =
@@ -3760,7 +3765,6 @@ impl Chain {
             self.runtime_adapter.clone(),
             self.doomslug_threshold_mode,
             self.transaction_validity_period,
-            self.flat_state_lock.clone(),
         )
     }
 
@@ -4338,7 +4342,6 @@ pub struct ChainUpdate<'a> {
     doomslug_threshold_mode: DoomslugThresholdMode,
     #[allow(unused)]
     transaction_validity_period: BlockHeightDelta,
-    flat_state_lock: Arc<RwLock<()>>,
 }
 
 pub struct SameHeightResult {
@@ -4372,7 +4375,6 @@ impl<'a> ChainUpdate<'a> {
         runtime_adapter: Arc<dyn RuntimeAdapter>,
         doomslug_threshold_mode: DoomslugThresholdMode,
         transaction_validity_period: BlockHeightDelta,
-        flat_state_lock: Arc<RwLock<()>>,
     ) -> Self {
         let chain_store_update: ChainStoreUpdate<'_> = store.store_update();
         Self::new_impl(
@@ -4380,7 +4382,6 @@ impl<'a> ChainUpdate<'a> {
             doomslug_threshold_mode,
             transaction_validity_period,
             chain_store_update,
-            flat_state_lock,
         )
     }
 
@@ -4389,14 +4390,12 @@ impl<'a> ChainUpdate<'a> {
         doomslug_threshold_mode: DoomslugThresholdMode,
         transaction_validity_period: BlockHeightDelta,
         chain_store_update: ChainStoreUpdate<'a>,
-        flat_state_lock: Arc<RwLock<()>>,
     ) -> Self {
         ChainUpdate {
             runtime_adapter,
             chain_store_update,
             doomslug_threshold_mode,
             transaction_validity_period,
-            flat_state_lock,
         }
     }
 
@@ -5022,6 +5021,7 @@ impl<'a> ChainUpdate<'a> {
             true,
             is_first_block_with_chunk_of_version,
             Default::default(),
+            None,
         )?;
 
         let (outcome_root, outcome_proofs) =
@@ -5106,6 +5106,7 @@ impl<'a> ChainUpdate<'a> {
             false,
             false,
             Default::default(),
+            None,
         )?;
 
         self.chain_store_update.save_trie_changes(apply_result.trie_changes);

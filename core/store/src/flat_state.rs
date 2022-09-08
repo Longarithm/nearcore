@@ -16,6 +16,7 @@ mod imp {
     use near_primitives::errors::StorageError;
     use near_primitives::hash::CryptoHash;
     use near_primitives::state::ValueRef;
+    use std::sync::{Arc, RwLock};
 
     use crate::{KeyForStateChanges, Store};
 
@@ -32,10 +33,12 @@ mod imp {
     pub struct FlatState {
         store: Store,
         prev_block_hash: CryptoHash,
+        lock: Arc<RwLock<()>>,
     }
 
     impl FlatState {
         fn get_raw_ref(&self, key: &[u8]) -> Result<Option<crate::db::DBSlice<'_>>, StorageError> {
+            let _ = self.lock.read().expect("Flat state lock was poisoned.");
             tracing::debug!(target: "client", "fs_get_raw_ref: {:?}", key);
             let flat_state_head: CryptoHash = self
                 .store
@@ -106,9 +109,13 @@ mod imp {
         use_flat_state: bool,
         store: &Store,
         prev_block_hash: &CryptoHash,
+        lock: Arc<RwLock<()>>,
     ) -> Option<FlatState> {
-        use_flat_state
-            .then(|| FlatState { store: store.clone(), prev_block_hash: prev_block_hash.clone() })
+        use_flat_state.then(|| FlatState {
+            store: store.clone(),
+            prev_block_hash: prev_block_hash.clone(),
+            lock,
+        })
     }
 }
 
@@ -140,3 +147,4 @@ mod imp {
 }
 
 pub use imp::{maybe_new, FlatState};
+use std::sync::{Arc, RwLock};

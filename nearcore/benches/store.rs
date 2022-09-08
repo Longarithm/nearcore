@@ -8,6 +8,7 @@ use near_logger_utils::init_integration_logger;
 use near_primitives::types::StateRoot;
 use near_store::{Mode, Temperature};
 use nearcore::{get_default_home, load_config, NightshadeRuntime};
+use std::option::Option::None;
 use std::time::{Duration, Instant};
 
 /// Read `TrieItem`s - nodes containing values - using Trie iterator, stop when 10k items were read.
@@ -45,7 +46,7 @@ fn read_trie_items(bench: &mut Bencher, shard_id: usize, mode: Mode) {
         let header = last_block.header();
 
         let trie = runtime
-            .get_trie_for_shard(shard_id as u64, header.prev_hash(), state_roots[shard_id])
+            .get_trie_for_shard(shard_id as u64, header.prev_hash(), state_roots[shard_id], None)
             .unwrap();
         let start = Instant::now();
         let num_items_read = trie

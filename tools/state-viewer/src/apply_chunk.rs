@@ -19,6 +19,7 @@ use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 use std::cmp::Ord;
 use std::collections::{HashMap, HashSet};
+use std::option::Option::None;
 use std::sync::Arc;
 use tracing::warn;
 
@@ -135,6 +136,7 @@ pub(crate) fn apply_chunk(
             true,
             is_first_block_with_chunk_of_version,
             Default::default(),
+            None,
         )?,
         chunk_header.gas_limit(),
     ))

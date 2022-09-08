@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::Write;
+use std::option::Option::None;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
@@ -246,6 +247,7 @@ fn apply_block_from_range(
                 true,
                 is_first_block_with_chunk_of_version,
                 Default::default(),
+                None,
             )
             .unwrap()
     } else {
@@ -272,6 +274,7 @@ fn apply_block_from_range(
                 false,
                 false,
                 Default::default(),
+                None,
             )
             .unwrap()
     };

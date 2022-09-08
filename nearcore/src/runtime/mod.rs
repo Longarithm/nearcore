@@ -46,6 +46,7 @@ use near_primitives::views::{
     AccessKeyInfoView, CallResult, EpochValidatorInfo, QueryRequest, QueryResponse,
     QueryResponseKind, ViewApplyState, ViewStateResult,
 };
+use near_store::flat_state::FlatState;
 use near_store::split_state::get_delayed_receipts;
 use near_store::{
     get_genesis_hash, get_genesis_state_roots, set_genesis_hash, set_genesis_state_roots,
@@ -64,6 +65,7 @@ use node_runtime::{
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::option::Option::None;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
@@ -669,6 +671,7 @@ impl RuntimeAdapter for NightshadeRuntime {
         shard_id: ShardId,
         prev_hash: &CryptoHash,
         state_root: StateRoot,
+        flat_state: Option<FlatState>,
     ) -> Result<Trie, Error> {
         let shard_uid = self.get_shard_uid_from_prev_hash(shard_id, prev_hash)?;
         Ok(self.tries.get_trie_with_flat_state_for_shard(shard_uid, state_root, prev_hash))
@@ -1355,14 +1358,15 @@ impl RuntimeAdapter for NightshadeRuntime {
         last_validator_proposals: ValidatorStakeIter,
         gas_price: Balance,
         gas_limit: Gas,
-        challenges: &ChallengesResult,
+        challenges_result: &ChallengesResult,
         random_seed: CryptoHash,
         generate_storage_proof: bool,
         is_new_chunk: bool,
         is_first_block_with_chunk_of_version: bool,
-        states_to_patch: SandboxStatePatch,
+        state_patch: SandboxStatePatch,
+        flat_state: Option<FlatState>,
     ) -> Result<ApplyTransactionResult, Error> {
-        let trie = self.get_trie_for_shard(shard_id, prev_block_hash, state_root.clone())?;
+        let trie = self.get_trie_for_shard(shard_id, prev_block_hash, state_root.clone(), None)?;
 
         // TODO (#6316): support chunk nodes caching for TrieRecordingStorage
         if generate_storage_proof {
@@ -1381,11 +1385,11 @@ impl RuntimeAdapter for NightshadeRuntime {
             last_validator_proposals,
             gas_price,
             gas_limit,
-            challenges,
+            challenges_result,
             random_seed,
             is_new_chunk,
             is_first_block_with_chunk_of_version,
-            states_to_patch,
+            state_patch,
         ) {
             Ok(result) => Ok(result),
             Err(e) => match e {
@@ -1937,6 +1941,7 @@ impl node_runtime::adapter::ViewRuntimeAdapter for NightshadeRuntime {
 #[cfg(test)]
 mod test {
     use std::collections::BTreeSet;
+    use std::option::Option::None;
 
     use num_rational::Ratio;
 
@@ -2011,6 +2016,7 @@ mod test {
                     true,
                     false,
                     Default::default(),
+                    None,
                 )
                 .unwrap();
             let mut store_update = self.store.store_update();
@@ -3408,8 +3414,10 @@ mod test {
     #[test]
     fn test_flat_state_usage() {
         let env = TestEnv::new(vec![vec!["test1".parse().unwrap()]], 4, false);
-        let trie =
-            env.runtime.get_trie_for_shard(0, &env.head.prev_block_hash, Trie::EMPTY_ROOT).unwrap();
+        let trie = env
+            .runtime
+            .get_trie_for_shard(0, &env.head.prev_block_hash, Trie::EMPTY_ROOT, None)
+            .unwrap();
         assert_eq!(trie.flat_state.is_some(), cfg!(feature = "protocol_feature_flat_state"));
 
         let trie = env
@@ -3451,9 +3459,10 @@ mod test {
         // - using view state, which should never use flat state
         let head_prev_block_hash = env.head.prev_block_hash;
         let state_root = env.state_roots[0];
-        let state = env.runtime.get_trie_for_shard(0, &head_prev_block_hash, state_root).unwrap();
+        let state =
+            env.runtime.get_trie_for_shard(0, &head_prev_block_hash, state_root, None).unwrap();
         let view_state =
-            env.runtime.get_trie_for_shard(0, &head_prev_block_hash, state_root).unwrap();
+            env.runtime.get_trie_for_shard(0, &head_prev_block_hash, state_root, None).unwrap();
         let trie_key = TrieKey::Account { account_id: validators[1].clone() };
         let key = trie_key.to_vec();
 

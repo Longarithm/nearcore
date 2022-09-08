@@ -59,6 +59,7 @@ use crate::{BlockProcessingArtifact, Doomslug, Provenance};
 use near_primitives::epoch_manager::ShardConfig;
 use near_primitives::time::Clock;
 use near_primitives::utils::MaybeValidated;
+use near_store::flat_state::FlatState;
 
 pub use self::validator_schedule::ValidatorSchedule;
 
@@ -414,8 +415,9 @@ impl RuntimeAdapter for KeyValueRuntime {
     fn get_trie_for_shard(
         &self,
         shard_id: ShardId,
-        _block_hash: &CryptoHash,
+        prev_hash: &CryptoHash,
         state_root: StateRoot,
+        flat_state: Option<FlatState>,
     ) -> Result<Trie, Error> {
         Ok(self
             .tries
@@ -741,21 +743,22 @@ impl RuntimeAdapter for KeyValueRuntime {
         &self,
         shard_id: ShardId,
         state_root: &StateRoot,
-        _height: BlockHeight,
-        _block_timestamp: u64,
-        _prev_block_hash: &CryptoHash,
+        height: BlockHeight,
+        block_timestamp: u64,
+        prev_block_hash: &CryptoHash,
         block_hash: &CryptoHash,
         receipts: &[Receipt],
         transactions: &[SignedTransaction],
-        _last_validator_proposals: ValidatorStakeIter,
+        last_validator_proposals: ValidatorStakeIter,
         gas_price: Balance,
-        _gas_limit: Gas,
-        _challenges: &ChallengesResult,
-        _random_seed: CryptoHash,
+        gas_limit: Gas,
+        challenges_result: &ChallengesResult,
+        random_seed: CryptoHash,
         generate_storage_proof: bool,
-        _is_new_chunk: bool,
-        _is_first_block_with_chunk_of_version: bool,
-        _state_patch: SandboxStatePatch,
+        is_new_chunk: bool,
+        is_first_block_with_chunk_of_version: bool,
+        state_patch: SandboxStatePatch,
+        flat_state: Option<FlatState>,
     ) -> Result<ApplyTransactionResult, Error> {
         assert!(!generate_storage_proof);
         let mut tx_results = vec![];

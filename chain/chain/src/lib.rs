@@ -13,6 +13,7 @@ pub mod blocks_delay_tracker;
 pub mod chain;
 pub mod crypto_hash_timer;
 mod doomslug;
+pub mod flat_state;
 mod lightclient;
 mod metrics;
 pub mod migrations;

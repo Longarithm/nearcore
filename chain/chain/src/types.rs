@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::option::Option::None;
 use std::sync::Arc;
 
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -40,6 +41,7 @@ use near_primitives::views::{EpochValidatorInfo, QueryRequest, QueryResponse};
 use near_store::{PartialStorage, ShardTries, Store, StoreUpdate, Trie, WrappedTrieChanges};
 
 pub use near_primitives::block::{Block, BlockHeader, Tip};
+use near_store::flat_state::FlatState;
 
 #[derive(Eq, PartialEq, Debug, Clone)]
 pub enum BlockStatus {
@@ -275,6 +277,7 @@ pub trait RuntimeAdapter: Send + Sync {
         shard_id: ShardId,
         prev_hash: &CryptoHash,
         state_root: StateRoot,
+        flat_state: Option<FlatState>,
     ) -> Result<Trie, Error>;
 
     /// Returns trie with view cache
@@ -622,6 +625,7 @@ pub trait RuntimeAdapter: Send + Sync {
         is_new_chunk: bool,
         is_first_block_with_chunk_of_version: bool,
         state_patch: SandboxStatePatch,
+        flat_state: Option<FlatState>,
     ) -> Result<ApplyTransactionResult, Error> {
         let _span = tracing::debug_span!(
             target: "runtime",
@@ -649,6 +653,7 @@ pub trait RuntimeAdapter: Send + Sync {
             is_new_chunk,
             is_first_block_with_chunk_of_version,
             state_patch,
+            flat_state,
         )
     }
 
@@ -671,6 +676,7 @@ pub trait RuntimeAdapter: Send + Sync {
         is_new_chunk: bool,
         is_first_block_with_chunk_of_version: bool,
         state_patch: SandboxStatePatch,
+        flat_state: Option<FlatState>,
     ) -> Result<ApplyTransactionResult, Error>;
 
     fn check_state_transition(
