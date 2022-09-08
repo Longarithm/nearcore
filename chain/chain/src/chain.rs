@@ -2039,9 +2039,9 @@ impl Chain {
         .entered();
 
         let prev_head = self.store.head()?;
-        let mut chain_update = self.chain_update();
         #[cfg(feature = "protocol_feature_flat_state")]
-        let _ = self.flat_state.lock.write().expect("Flat state lock was poisoned.");
+        let _ = self.flat_state.lock.clone().write().expect("Flat state lock was poisoned.");
+        let mut chain_update = self.chain_update();
         let provenance = block_preprocess_info.provenance.clone();
         let block_start_processing_time = block_preprocess_info.block_start_processing_time.clone();
         let new_head =
