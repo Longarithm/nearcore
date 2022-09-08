@@ -16,9 +16,10 @@ mod imp {
     use near_primitives::errors::StorageError;
     use near_primitives::hash::CryptoHash;
     use near_primitives::state::ValueRef;
+    use std::collections::HashMap;
     use std::sync::{Arc, RwLock};
 
-    use crate::{KeyForStateChanges, Store};
+    use crate::{DBCol, KeyForStateChanges, Store};
 
     /// Struct for getting value references from the flat storage.
     ///
@@ -111,6 +112,32 @@ mod imp {
         prev_block_hash: &CryptoHash,
         lock: Arc<RwLock<()>>,
     ) -> Option<FlatState> {
+        let flat_state_head: CryptoHash = store
+            .get_ser(crate::DBCol::BlockMisc, FLAT_STATE_HEAD_KEY)
+            .map_err(|_| StorageError::StorageInternalError)?
+            .unwrap();
+        let mut block_hashes: Vec<CryptoHash> = vec![];
+        let mut deltas: Vec<HashMap<Vec<u8>, Vec<u8>>> = vec![];
+        let mut block_hash = prev_block_hash.clone();
+        while block_hash != flat_state_head {
+            tracing::debug!(target: "client", "fs_get_raw_ref: block_hash: {:?}", block_hash);
+            let mut delta: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
+            let flat_state_deltas_key = KeyForStateChanges::for_block(&block_hash);
+            let key_prefix = flat_state_deltas_key.as_ref();
+            let updates: Vec<_> = store.iter_prefix(DBCol::FlatStateDeltas, key_prefix).collect();
+            for update in updates {
+                let (key, value) = update?;
+                debug_assert!(key.starts_with(key_prefix));
+                let flat_state_key = key.split_at(key_prefix.len()).1;
+                delta.insert(flat_state_key.to_vec(), value.to_vec());
+            }
+            block_hashes.push(block_hash);
+            let block_header: BlockHeader = store
+                .get_ser(crate::DBCol::BlockHeader, block_hash.as_ref())
+                .map_err(|_| StorageError::StorageInternalError)?
+                .unwrap();
+            block_hash = block_header.prev_hash().clone();
+        }
         use_flat_state.then(|| FlatState {
             store: store.clone(),
             prev_block_hash: prev_block_hash.clone(),
