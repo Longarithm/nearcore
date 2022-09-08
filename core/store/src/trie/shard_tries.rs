@@ -126,9 +126,8 @@ impl ShardTries {
         &self,
         shard_uid: ShardUId,
         state_root: StateRoot,
-        prev_block_hash: &CryptoHash,
+        flat_state: Option<FlatState>,
     ) -> Trie {
-        let flat_state = crate::flat_state::maybe_new(true, &self.0.store, prev_block_hash);
         self.get_trie_for_shard_internal(shard_uid, state_root, false, flat_state)
     }
 
