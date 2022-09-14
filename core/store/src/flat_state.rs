@@ -132,6 +132,8 @@ mod imp {
             }))
         }
 
+        /// Creates `FlatState` for accessing flat storage data for particular shard and the given block.
+        /// Returns `None` if block is not provided or the request was made from view client.
         pub fn new_flat_state_for_shard(
             &self,
             shard_id: ShardId,
@@ -201,14 +203,6 @@ mod imp {
     pub enum FlatState {}
 
     impl FlatState {
-        pub fn update_head(
-            _shard_id: ShardId,
-            _block_hash: &CryptoHash,
-            store: &Store,
-        ) -> StoreUpdate {
-            StoreUpdate::new(store.storage.clone())
-        }
-
         pub fn get_ref(&self, _key: &[u8]) -> ! {
             match *self {}
         }
@@ -314,20 +308,6 @@ impl FlatStateDelta {
 #[cfg(feature = "protocol_feature_flat_state")]
 use near_primitives::block_header::BlockHeader;
 use std::sync::{Arc, RwLock};
-
-pub enum FlatStateDeltaDir {
-    Forward,
-    Backward,
-}
-
-pub struct FlatStateDeltaWithDir {
-    #[allow(unused)]
-    delta: FlatStateDelta,
-    #[allow(unused)]
-    dir: FlatStateDeltaDir,
-}
-
-pub enum Error {}
 
 /// FlatStorageState stores information on which blocks flat storage current supports key lookups on.
 /// Note that this struct is shared by multiple threads, the chain thread, threads that apply chunks,
