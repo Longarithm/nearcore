@@ -2088,11 +2088,12 @@ impl Chain {
                     if new_flat_head == CryptoHash::default() {
                         new_flat_head = *self.genesis.hash();
                     }
-                    flat_storage_state.update_flat_head(&new_flat_head).unwrap_or_else(|_| {
+                    flat_storage_state.update_flat_head(&new_flat_head).unwrap_or_else(|err| {
                         panic!(
-                            "Cannot update flat head from {:?} to {:?}",
+                            "Cannot update flat head from {:?} to {:?}: {:?}",
                             flat_storage_state.get_flat_head(),
-                            new_flat_head
+                            new_flat_head,
+                            err
                         )
                     });
                 } else {
