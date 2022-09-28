@@ -2773,6 +2773,7 @@ fn test_query_final_state() {
     for i in 1..5 {
         let block = env.clients[0].produce_block(i).unwrap().unwrap();
         blocks.push(block.clone());
+        println!("process {}", i);
         env.process_block(0, block.clone(), Provenance::PRODUCED);
     }
 
@@ -2810,6 +2811,7 @@ fn test_query_final_state() {
         .unwrap();
     let fork2_block = env.clients[0].produce_block(6).unwrap().unwrap();
     assert_eq!(fork1_block.header().prev_hash(), fork2_block.header().prev_hash());
+    println!("process fork1");
     env.process_block(0, fork1_block, Provenance::NONE);
     assert_eq!(env.clients[0].chain.head().unwrap().height, 5);
 
@@ -2820,6 +2822,7 @@ fn test_query_final_state() {
         "test0".parse().unwrap(),
     );
 
+    println!("process fork2");
     env.process_block(0, fork2_block, Provenance::NONE);
     assert_eq!(env.clients[0].chain.head().unwrap().height, 6);
 

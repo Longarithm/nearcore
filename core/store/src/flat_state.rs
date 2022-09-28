@@ -401,7 +401,7 @@ pub struct FlatStorageState(Arc<RwLock<FlatStorageStateInner>>);
 #[allow(unused)]
 const FLAT_STORAGE_MAX_BLOCKS: u64 = 16;
 
-#[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, Debug)]
 pub struct BlockInfo {
     pub hash: CryptoHash,
     pub height: BlockHeight,
@@ -544,7 +544,7 @@ impl FlatStorageStateInner {
                 .blocks
                 .get(&block_hash)
                 .ok_or(FlatStorageError::BlockNotSupported(*target_block_hash))?;
-
+            println!("visit {:?}", block_info);
             if block_info.height < flat_head_info.height {
                 return Err(FlatStorageError::BlockNotSupported(*target_block_hash));
             }
