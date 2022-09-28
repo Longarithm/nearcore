@@ -544,8 +544,12 @@ impl FlatStorageStateInner {
                 .blocks
                 .get(&block_hash)
                 .ok_or(FlatStorageError::BlockNotSupported(*target_block_hash))?;
-            println!("visit {:?}", block_info);
+            println!("visit {:?}, shard {}", block_info, self.shard_id);
             if block_info.height < flat_head_info.height {
+                println!(
+                    "error: shard {} heights {} {}",
+                    self.shard_id, block_info.height, flat_head_info.height
+                );
                 return Err(FlatStorageError::BlockNotSupported(*target_block_hash));
             }
 
@@ -659,7 +663,9 @@ impl FlatStorageState {
 
         guard.flat_head = *new_head;
         let mut store_update = StoreUpdate::new(guard.store.storage.clone());
+        println!("moving head for shard {} to {}", guard.shard_id, new_head);
         store_helper::set_flat_head(&mut store_update, guard.shard_id, new_head);
+        println!("moved head for shard {} to {}", guard.shard_id, new_head);
         merged_delta.apply_to_flat_state(&mut store_update);
         store_update.commit().expect(BORSH_ERR);
         Ok(())
