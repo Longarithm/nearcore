@@ -2748,25 +2748,22 @@ fn test_discard_not_finalizable_block() {
         .runtime_adapters(create_nightshade_runtimes(&genesis, 1))
         .build();
 
-    let mut blocks = vec![];
-    for i in 1..6 {
+    env.produce_block(0, 1);
+    let non_finalizable_block = env.clients[0].produce_block(6).unwrap().unwrap();
+
+    for i in 2..6 {
         let block = env.clients[0].produce_block(i).unwrap().unwrap();
         blocks.push(block.clone());
         env.process_block(0, block.clone(), Provenance::PRODUCED);
     }
 
-    env.clients[0]
-        .chain
-        .mut_store()
-        .save_latest_known(LatestKnown {
-            height: blocks[0].header().height(),
-            seen: blocks[0].header().raw_timestamp(),
-        })
-        .unwrap();
     println!("{:?}", env.clients[0].chain.final_head().unwrap());
-    let fork_block = env.clients[0].produce_block(6).unwrap().unwrap();
-    println!("{:?} {:?}", fork_block.header().prev_hash(), fork_block.header().prev_height());
-    let result = env.clients[0].process_block_test(fork_block.into(), Provenance::NONE);
+    println!(
+        "{:?} {:?}",
+        non_finalizable_block.header().prev_hash(),
+        non_finalizable_block.header().prev_height()
+    );
+    let result = env.clients[0].process_block_test(non_finalizable_block.into(), Provenance::NONE);
     println!("{:?}", result);
 }
 
