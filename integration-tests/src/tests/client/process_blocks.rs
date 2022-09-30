@@ -2740,6 +2740,34 @@ fn test_epoch_protocol_version_change() {
     assert_eq!(protocol_version, PROTOCOL_VERSION);
 }
 
+#[test]
+fn test_discard_not_finalizable_block() {
+    let mut genesis = Genesis::test(vec!["test0".parse().unwrap(), "test1".parse().unwrap()], 1);
+    let chain_genesis = ChainGenesis::new(&genesis);
+    let mut env = TestEnv::builder(chain_genesis)
+        .runtime_adapters(create_nightshade_runtimes(&genesis, 1))
+        .build();
+
+    let mut blocks = vec![];
+    for i in 1..6 {
+        let block = env.clients[0].produce_block(i).unwrap().unwrap();
+        blocks.push(block.clone());
+        env.process_block(0, block.clone(), Provenance::PRODUCED);
+    }
+
+    env.clients[0]
+        .chain
+        .mut_store()
+        .save_latest_known(LatestKnown {
+            height: blocks[0].header().height(),
+            seen: blocks[0].header().raw_timestamp(),
+        })
+        .unwrap();
+    let fork_block = env.clients[0].produce_block(6).unwrap().unwrap();
+    let result = env.clients[0].process_block_test(fork_block.into(), Provenance::NONE);
+    println!("{:?}", result);
+}
+
 /// Final state should be consistent when a node switches between forks in the following scenario
 ///                      /-----------h+2
 /// h-2 ---- h-1 ------ h
