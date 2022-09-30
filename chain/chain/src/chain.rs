@@ -1130,7 +1130,7 @@ impl Chain {
         let final_head = self.final_head()?;
         for _ in 0..NUM_PARENTS_TO_CHECK_FINALITY {
             // If we reached final head, then block can be finalized.
-            if header.hash() == final_head.last_block_hash {
+            if header.hash() == &final_head.last_block_hash {
                 return Ok(());
             }
             // If we went behind final head, then block cannot be finalized on top of final head.
