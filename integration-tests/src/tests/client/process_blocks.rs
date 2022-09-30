@@ -2741,7 +2741,7 @@ fn test_epoch_protocol_version_change() {
 }
 
 #[test]
-fn test_discard_not_finalizable_block() {
+fn test_discard_non_finalizable_block() {
     let genesis = Genesis::test(vec!["test0".parse().unwrap(), "test1".parse().unwrap()], 1);
     let chain_genesis = ChainGenesis::new(&genesis);
     let mut env = TestEnv::builder(chain_genesis)
@@ -2750,6 +2750,7 @@ fn test_discard_not_finalizable_block() {
 
     let first_block = env.clients[0].produce_block(1).unwrap().unwrap();
     env.process_block(0, first_block.clone(), Provenance::PRODUCED);
+    // Produce, but not process test block on top of block (1).
     let non_finalizable_block = env.clients[0].produce_block(6).unwrap().unwrap();
     env.clients[0]
         .chain
@@ -2762,6 +2763,7 @@ fn test_discard_not_finalizable_block() {
 
     let second_block = env.clients[0].produce_block(2).unwrap().unwrap();
     env.process_block(0, second_block.clone(), Provenance::PRODUCED);
+    // Produce, but not process test block on top of block (2).
     let finalizable_block = env.clients[0].produce_block(7).unwrap().unwrap();
     env.clients[0]
         .chain
@@ -2771,18 +2773,21 @@ fn test_discard_not_finalizable_block() {
             seen: second_block.header().raw_timestamp(),
         })
         .unwrap();
+
+    // Produce and process two more blocks.
     for i in 3..5 {
-        let block = env.clients[0].produce_block(i).unwrap().unwrap();
-        env.process_block(0, block.clone(), Provenance::PRODUCED);
+        env.produce_block(0, i).unwrap();
     }
 
+    assert_eq!(env.clients[0].chain.final_head().unwrap().height, 2);
+    // Check that the first test block can't be finalized, because it is produced behind final head.
     assert_matches!(
         env.clients[0]
             .process_block_test(non_finalizable_block.into(), Provenance::NONE)
             .unwrap_err(),
         Error::CannotBeFinalized
     );
-    println!("{:?}", env.clients[0].chain.final_head());
+    // Check that the second test block still can be finalized.
     assert_matches!(
         env.clients[0].process_block_test(finalizable_block.into(), Provenance::NONE),
         Ok(_)

@@ -2119,20 +2119,20 @@ impl Chain {
                 shard_id,
                 true,
             ) {
-                if let Some(_flat_storage_state) =
+                if let Some(flat_storage_state) =
                     self.runtime_adapter.get_flat_storage_state_for_shard(shard_id)
                 {
-                    // let mut new_flat_head = *block.header().last_final_block();
-                    // if new_flat_head == CryptoHash::default() {
-                    //     new_flat_head = *self.genesis.hash();
-                    // }
-                    // flat_storage_state.update_flat_head(&new_flat_head).unwrap_or_else(|_| {
-                    //     panic!(
-                    //         "Cannot update flat head from {:?} to {:?}",
-                    //         flat_storage_state.get_flat_head(),
-                    //         new_flat_head
-                    //     )
-                    // });
+                    let mut new_flat_head = *block.header().last_final_block();
+                    if new_flat_head == CryptoHash::default() {
+                        new_flat_head = *self.genesis.hash();
+                    }
+                    flat_storage_state.update_flat_head(&new_flat_head).unwrap_or_else(|_| {
+                        panic!(
+                            "Cannot update flat head from {:?} to {:?}",
+                            flat_storage_state.get_flat_head(),
+                            new_flat_head
+                        )
+                    });
                 } else {
                     // TODO (#7327): some error handling code here. Should probably return an error (or panic?)
                     // here if the flat storage doesn't exist. We don't do that yet because
