@@ -2752,9 +2752,7 @@ fn test_discard_not_finalizable_block() {
     let non_finalizable_block = env.clients[0].produce_block(6).unwrap().unwrap();
 
     for i in 2..6 {
-        let block = env.clients[0].produce_block(i).unwrap().unwrap();
-        blocks.push(block.clone());
-        env.process_block(0, block.clone(), Provenance::PRODUCED);
+        env.produce_block(0, i);
     }
 
     println!("{:?}", env.clients[0].chain.final_head().unwrap());
