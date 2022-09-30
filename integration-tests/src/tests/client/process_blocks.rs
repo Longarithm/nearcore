@@ -2782,6 +2782,7 @@ fn test_discard_not_finalizable_block() {
             .unwrap_err(),
         Error::CannotBeFinalized
     );
+    println!("{:?}", env.clients[0].chain.final_head());
     assert_matches!(
         env.clients[0].process_block_test(finalizable_block.into(), Provenance::NONE),
         Ok(_)
