@@ -2759,18 +2759,33 @@ fn test_discard_not_finalizable_block() {
             seen: first_block.header().raw_timestamp(),
         })
         .unwrap();
-    for i in 2..6 {
-        env.produce_block(0, i);
+
+    let second_block = env.clients[0].produce_block(2).unwrap().unwrap();
+    env.process_block(0, second_block.clone(), Provenance::PRODUCED);
+    let finalizable_block = env.clients[0].produce_block(7).unwrap().unwrap();
+    env.clients[0]
+        .chain
+        .mut_store()
+        .save_latest_known(LatestKnown {
+            height: second_block.header().height(),
+            seen: second_block.header().raw_timestamp(),
+        })
+        .unwrap();
+    for i in 3..5 {
+        let block = env.clients[0].produce_block(i).unwrap().unwrap();
+        env.process_block(0, block.clone(), Provenance::PRODUCED);
     }
 
-    println!("{:?}", env.clients[0].chain.final_head().unwrap());
-    println!(
-        "{:?} {:?}",
-        non_finalizable_block.header().prev_hash(),
-        non_finalizable_block.header().prev_height()
+    assert_eq!(
+        env.clients[0]
+            .process_block_test(non_finalizable_block.into(), Provenance::NONE)
+            .unwrap_err(),
+        Error::CannotBeFinalized
     );
-    let result = env.clients[0].process_block_test(non_finalizable_block.into(), Provenance::NONE);
-    println!("{:?}", result);
+    assert_matches!(
+        env.clients[0].process_block_test(finalizable_block.into(), Provenance::NONE),
+        Ok(_)
+    );
 }
 
 /// Final state should be consistent when a node switches between forks in the following scenario
