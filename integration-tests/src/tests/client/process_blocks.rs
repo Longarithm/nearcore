@@ -2776,7 +2776,7 @@ fn test_discard_not_finalizable_block() {
         env.process_block(0, block.clone(), Provenance::PRODUCED);
     }
 
-    assert_eq!(
+    assert_matches!(
         env.clients[0]
             .process_block_test(non_finalizable_block.into(), Provenance::NONE)
             .unwrap_err(),
