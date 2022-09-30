@@ -2763,7 +2763,9 @@ fn test_discard_not_finalizable_block() {
             seen: blocks[0].header().raw_timestamp(),
         })
         .unwrap();
+    println!("{:?}", env.clients[0].chain.final_head().unwrap());
     let fork_block = env.clients[0].produce_block(6).unwrap().unwrap();
+    println!("{:?} {:?}", fork_block.header().prev_hash(), fork_block.header().prev_height());
     let result = env.clients[0].process_block_test(fork_block.into(), Provenance::NONE);
     println!("{:?}", result);
 }
