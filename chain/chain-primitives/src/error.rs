@@ -249,6 +249,7 @@ impl Error {
             | Error::ValidatorError(_)
             | Error::EpochOutOfBounds(_)
             | Error::ChallengedBlockOnChain
+            | Error::CannotBeFinalized
             | Error::StorageError(_)
             | Error::GCError(_)
             | Error::DBNotFoundErr(_) => false,
