@@ -2119,7 +2119,7 @@ impl Chain {
                 shard_id,
                 true,
             ) {
-                if let Some(flat_storage_state) =
+                if let Some(_flat_storage_state) =
                     self.runtime_adapter.get_flat_storage_state_for_shard(shard_id)
                 {
                     // let mut new_flat_head = *block.header().last_final_block();
