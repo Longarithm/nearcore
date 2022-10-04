@@ -312,7 +312,6 @@ mod imp {
 }
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use std::borrow::BorrowMut;
 
 use crate::{CryptoHash, Store, StoreUpdate};
 pub use imp::{FlatState, FlatStateFactory};
@@ -477,6 +476,11 @@ pub mod store_helper {
         store_update
             .set_ser(crate::DBCol::FlatStateDeltas, &key.try_to_vec().unwrap(), delta)
             .map_err(|_| FlatStorageError::StorageInternalError)
+    }
+
+    pub fn remove_delta(store_update: &mut StoreUpdate, shard_id: ShardId, block_hash: CryptoHash) {
+        let key = KeyForFlatStateDelta { shard_id, block_hash };
+        store_update.delete(crate::DBCol::FlatStateDeltas, &key.try_to_vec().unwrap());
     }
 
     pub(crate) fn get_flat_head(store: &Store, shard_id: ShardId) -> CryptoHash {
@@ -975,6 +979,14 @@ mod tests {
         assert_eq!(flat_state0.get_ref(&[2]).unwrap(), Some(ValueRef::new(&[1])));
         assert_eq!(flat_state1.get_ref(&[1]).unwrap(), Some(ValueRef::new(&[4])));
         assert_eq!(flat_state1.get_ref(&[2]).unwrap(), None);
+        assert_matches!(
+            store_helper::get_delta(&store, 0, chain.get_block_hash(5)).unwrap(),
+            Some(_)
+        );
+        assert_matches!(
+            store_helper::get_delta(&store, 0, chain.get_block_hash(10)).unwrap(),
+            Some(_)
+        );
 
         // 5. Move the flat head to block 5, verify that flat_state0 still returns the same values
         // and flat_state1 returns an error. Also check that DBCol::FlatState is updated correctly
@@ -986,6 +998,11 @@ mod tests {
         assert_eq!(flat_state0.get_ref(&[1]).unwrap(), None);
         assert_eq!(flat_state0.get_ref(&[2]).unwrap(), Some(ValueRef::new(&[1])));
         assert_matches!(flat_state1.get_ref(&[1]), Err(StorageError::FlatStorageError(_)));
+        assert_matches!(store_helper::get_delta(&store, 0, chain.get_block_hash(5)).unwrap(), None);
+        assert_matches!(
+            store_helper::get_delta(&store, 0, chain.get_block_hash(10)).unwrap(),
+            Some(_)
+        );
 
         // 6. Move the flat head to block 10, verify that flat_state0 still returns the same values
         //    Also checks that DBCol::FlatState is updated correctly.
@@ -997,5 +1014,9 @@ mod tests {
         assert_eq!(store_helper::get_ref(&store, &[2]).unwrap(), Some(ValueRef::new(&[1])));
         assert_eq!(flat_state0.get_ref(&[1]).unwrap(), None);
         assert_eq!(flat_state0.get_ref(&[2]).unwrap(), Some(ValueRef::new(&[1])));
+        assert_matches!(
+            store_helper::get_delta(&store, 0, chain.get_block_hash(10)).unwrap(),
+            None
+        );
     }
 }
