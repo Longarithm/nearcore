@@ -679,6 +679,7 @@ impl FlatStorageState {
             .iter()
             .filter(|(_, block_info)| block_info.height < flat_head_height)
             .map(|(block_hash, _)| block_hash)
+            .cloned()
             .collect();
         for hash in hashes_to_remove {
             guard.blocks.remove(hash);
