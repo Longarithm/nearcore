@@ -312,6 +312,7 @@ mod imp {
 }
 
 use borsh::{BorshDeserialize, BorshSerialize};
+use std::borrow::BorrowMut;
 
 use crate::{CryptoHash, Store, StoreUpdate};
 pub use imp::{FlatState, FlatStateFactory};
@@ -672,7 +673,7 @@ impl FlatStorageState {
         let mut store_update = StoreUpdate::new(guard.store.storage.clone());
         store_helper::set_flat_head(&mut store_update, guard.shard_id, new_head);
         merged_delta.apply_to_flat_state(&mut store_update);
-        let blocks = &mut guard.blocks;
+        let blocks = &mut guard.borrow_mut().blocks;
         let deltas = &mut guard.deltas;
         blocks.retain(|block_hash, block_info| {
             let result = block_info.height >= flat_head_height;
