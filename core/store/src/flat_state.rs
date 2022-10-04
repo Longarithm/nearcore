@@ -688,6 +688,7 @@ impl FlatStorageState {
         for hash in hashes_to_remove {
             guard.blocks.remove(&hash);
             guard.deltas.remove(&hash);
+            store_helper::remove_delta(&mut store_update, guard.shard_id, hash);
         }
 
         store_update.commit().expect(BORSH_ERR);
