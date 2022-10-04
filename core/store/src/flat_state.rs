@@ -673,15 +673,18 @@ impl FlatStorageState {
         let mut store_update = StoreUpdate::new(guard.store.storage.clone());
         store_helper::set_flat_head(&mut store_update, guard.shard_id, new_head);
         merged_delta.apply_to_flat_state(&mut store_update);
-        let blocks = &mut guard.borrow_mut().blocks;
-        let deltas = &mut guard.deltas;
-        blocks.retain(|block_hash, block_info| {
-            let result = block_info.height >= flat_head_height;
-            if !result {
-                deltas.remove(block_hash);
-            }
-            result
-        });
+
+        let hashes_to_remove: Vec<_> = guard
+            .blocks
+            .iter()
+            .filter(|(_, block_info)| block_info.height < flat_head_height)
+            .map(|(block_hash, _)| block_hash)
+            .collect();
+        for hash in hashes_to_remove {
+            guard.blocks.remove(hash);
+            guard.deltas.remove(hash);
+        }
+
         store_update.commit().expect(BORSH_ERR);
         Ok(())
     }
