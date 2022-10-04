@@ -682,8 +682,8 @@ impl FlatStorageState {
             .cloned()
             .collect();
         for hash in hashes_to_remove {
-            guard.blocks.remove(hash);
-            guard.deltas.remove(hash);
+            guard.blocks.remove(&hash);
+            guard.deltas.remove(&hash);
         }
 
         store_update.commit().expect(BORSH_ERR);
