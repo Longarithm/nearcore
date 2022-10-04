@@ -681,7 +681,10 @@ impl FlatStorageState {
         let hashes_to_remove: Vec<_> = guard
             .blocks
             .iter()
-            .filter(|(_, block_info)| block_info.height <= flat_head_height)
+            .filter(|(_, block_info)| {
+                block_info.height < flat_head_height
+                    || block_info.height == flat_head_height && block_info.hash != new_head
+            })
             .map(|(block_hash, _)| block_hash)
             .cloned()
             .collect();
