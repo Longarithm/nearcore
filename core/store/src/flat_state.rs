@@ -668,13 +668,17 @@ impl FlatStorageState {
         }
 
         guard.flat_head = *new_head;
+        let flat_head_height = guard.blocks.get(&guard.flat_head).unwrap().height;
         let mut store_update = StoreUpdate::new(guard.store.storage.clone());
         store_helper::set_flat_head(&mut store_update, guard.shard_id, new_head);
         merged_delta.apply_to_flat_state(&mut store_update);
-        // guard.blocks.retain(|block_hash, block_info| {
-        //     let result = block_info.height >=
-        //     true
-        // });
+        guard.blocks.retain(|block_hash, block_info| {
+            let result = block_info.height >= flat_head_height;
+            if !result {
+                guard.deltas.remove(block_hash);
+            }
+            result
+        });
         store_update.commit().expect(BORSH_ERR);
         Ok(())
     }
