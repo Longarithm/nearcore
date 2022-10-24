@@ -635,7 +635,7 @@ impl UnderchargingLogger {
         let name = format!("receipts_{}.txt", chrono::Utc::now().date().to_string());
         let file = self.folder.join(name);
         if !file.exists() {
-            File::create(file.clone());
+            File::create(file.clone()).unwrap();
         }
         let mut file = fs::OpenOptions::new().write(true).append(true).open(file).unwrap();
         file.write(value.to_string().as_bytes()).unwrap();
