@@ -567,7 +567,7 @@ impl TrieCachingStorage {
     }
 
     pub fn get_sum_calls(&self) -> u64 {
-        let mut guard = self.shard_cache.0.lock().unwrap();
+        let guard = self.shard_cache.0.lock().unwrap();
         guard.sum_calls
     }
 }
