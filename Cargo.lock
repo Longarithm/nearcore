@@ -3276,28 +3276,21 @@ dependencies = [
  "actix",
  "atty",
  "backtrace",
-<<<<<<< HEAD
  "chrono",
-=======
  "bencher",
->>>>>>> master
  "clap 3.1.18",
  "itoa 1.0.2",
  "near-crypto",
  "near-primitives-core",
  "once_cell",
  "opentelemetry",
-<<<<<<< HEAD
- "opentelemetry-jaeger",
  "serde_json",
-=======
  "opentelemetry-otlp",
  "opentelemetry-semantic-conventions",
  "prometheus",
  "serde",
  "smartstring",
  "strum",
->>>>>>> master
  "thiserror",
  "tokio",
  "tracing",
@@ -3734,10 +3727,7 @@ dependencies = [
  "indicatif",
  "near-chain-configs",
  "near-crypto",
-<<<<<<< HEAD
  "near-metrics",
-=======
->>>>>>> master
  "near-o11y",
  "near-primitives",
  "near-store",

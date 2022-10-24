@@ -32,11 +32,6 @@ near-store = { path = "../../core/store" }
 near-vm-errors = { path = "../../runtime/near-vm-errors" }
 near-vm-logic = { path = "../../runtime/near-vm-logic" }
 near-vm-runner = { path = "../../runtime/near-vm-runner" }
-<<<<<<< HEAD
-near-vm-errors = { path = "../../runtime/near-vm-errors" }
-near-o11y = { path = "../../core/o11y" }
-=======
->>>>>>> master
 
 [features]
 default = []
