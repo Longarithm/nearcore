@@ -46,4 +46,3 @@ io_trace = []
 [[bench]]
 name = "metrics"
 harness = false
->>>>>>> master
