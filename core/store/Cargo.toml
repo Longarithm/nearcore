@@ -9,7 +9,6 @@ rust-version.workspace = true
 edition.workspace = true
 
 [dependencies]
-atomic_refcell.workspace = true
 anyhow.workspace = true
 borsh.workspace = true
 byteorder.workspace = true
