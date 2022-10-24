@@ -4,11 +4,11 @@ use crate::trie::prefetching_trie_storage::PrefetcherResult;
 use crate::trie::POISONED_LOCK_ERR;
 use crate::{metrics, DBCol, PrefetchApi, StorageError, Store};
 use lru::LruCache;
-use near_primitives::math::FastDistribution;
 use near_o11y::log_assert;
 use near_o11y::metrics::prometheus;
 use near_o11y::metrics::prometheus::core::{GenericCounter, GenericGauge};
 use near_primitives::hash::CryptoHash;
+use near_primitives::math::FastDistribution;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::types::{ShardId, TrieCacheMode, TrieNodesCount};
 use std::borrow::Borrow;
@@ -49,16 +49,6 @@ impl<T> BoundedQueue<T> {
     pub(crate) fn len(&self) -> usize {
         self.queue.len()
     }
-}
-
-<<<<<<< HEAD
-
-
-pub struct SafeTrieCache {
-    pub shard_id: u32,
-    pub cache: LruCache<CryptoHash, Arc<[u8]>>,
-    pub monitoring_data: HashMap<u8, (FastDistribution, Option<std::time::Instant>, u64)>,
-    pub sum_calls: u64,
 }
 
 /// In-memory cache for trie items - nodes and values. All nodes are stored in the LRU cache with three modifications.
@@ -140,6 +130,8 @@ impl TrieCacheInner {
             shard_id,
             is_view,
             metrics,
+            monitoring_data: HashMap::default(),
+            sum_calls: 0,
         }
     }
 
