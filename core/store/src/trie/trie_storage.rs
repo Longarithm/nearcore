@@ -316,10 +316,10 @@ impl TrieCache {
                         guard.metrics.shard_cache_too_large.inc();
                     }
                 } else {
-                    guard.cache.pop(&hash);
+                    guard.pop(&hash);
                 }
             } else {
-                guard.cache.pop(&hash);
+                guard.pop(&hash);
             }
         }
     }
