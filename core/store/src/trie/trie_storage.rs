@@ -691,6 +691,7 @@ impl TrieStorage for TrieCachingStorage {
         if let TrieCacheMode::CachingChunk = self.cache_mode.borrow().get() {
             self.chunk_cache.borrow_mut().insert(*hash, val.clone());
         };
+        let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
         guard.update_latency_retrieve_and_print_if_needed(
             start_time,
             start_time.elapsed().as_micros(),
