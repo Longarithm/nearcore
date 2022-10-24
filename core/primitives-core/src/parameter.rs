@@ -108,6 +108,8 @@ pub enum Parameter {
     WasmRipemd160Base,
     WasmRipemd160Block,
     WasmEcrecoverBase,
+    WasmEd25519VerifyBase,
+    WasmEd25519VerifyByte,
     WasmLogBase,
     WasmLogByte,
     WasmStorageWriteBase,
@@ -171,6 +173,7 @@ pub enum Parameter {
     MaxFunctionsNumberPerContract,
     Wasmer2StackLimit,
     MaxLocalsPerContract,
+    AccountIdValidityRulesVersion,
 }
 
 #[derive(
@@ -235,6 +238,8 @@ impl Parameter {
             Parameter::WasmRipemd160Base,
             Parameter::WasmRipemd160Block,
             Parameter::WasmEcrecoverBase,
+            Parameter::WasmEd25519VerifyBase,
+            Parameter::WasmEd25519VerifyByte,
             Parameter::WasmLogBase,
             Parameter::WasmLogByte,
             Parameter::WasmStorageWriteBase,
@@ -303,6 +308,7 @@ impl Parameter {
             Parameter::MaxFunctionsNumberPerContract,
             Parameter::Wasmer2StackLimit,
             Parameter::MaxLocalsPerContract,
+            Parameter::AccountIdValidityRulesVersion,
         ]
         .iter()
     }
