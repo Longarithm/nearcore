@@ -302,7 +302,7 @@ impl TrieCache {
     }
 
     pub fn clear(&self) {
-        self.0.lock().expect(POISONED_LOCK_ERR).cache.clear()
+        self.0.lock().expect(POISONED_LOCK_ERR).clear()
     }
 
     pub fn update_cache(&self, ops: Vec<(CryptoHash, Option<&[u8]>)>) {
