@@ -596,6 +596,7 @@ impl TrieStorage for TrieCachingStorage {
         self.metrics.shard_cache_current_total_size.set(guard.current_total_size() as i64);
         let val = match guard.get(hash) {
             Some(val) => {
+                std::mem::drop(guard);
                 self.metrics.shard_cache_hits.inc();
                 near_o11y::io_trace!(count: "shard_cache_hit");
                 val.clone()
@@ -691,12 +692,7 @@ impl TrieStorage for TrieCachingStorage {
         if let TrieCacheMode::CachingChunk = self.cache_mode.borrow().get() {
             self.chunk_cache.borrow_mut().insert(*hash, val.clone());
         };
-        let mut guard = self.shard_cache.0.lock().expect(POISONED_LOCK_ERR);
-        guard.update_latency_retrieve_and_print_if_needed(
-            start_time,
-            start_time.elapsed().as_micros(),
-            self.action_type.get(),
-        );
+        self.update_latency_get_and_print_if_needed(start_time, start_time.elapsed().as_micros());
         Ok(val)
     }
 
