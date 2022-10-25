@@ -1283,17 +1283,14 @@ impl Runtime {
 
             let mut gas_burnt = 0;
             tracing::debug!(target: "runtime", node_counter = ?state_update.trie().get_trie_nodes_count());
-            result?.into_iter().try_for_each(
-                |outcome_with_id: ExecutionOutcomeWithId| -> Result<(), RuntimeError> {
-                    gas_burnt = safe_add_gas(gas_burnt, outcome_with_id.outcome.gas_burnt)?;
-                    outcomes.push(outcome_with_id);
-                    Ok(())
-                },
-            )?;
+            if let Some(outcome_with_id) = result? {
+                gas_burnt = outcome_with_id.outcome.gas_burnt;
+                *total_gas_burnt =
+                    safe_add_gas(*total_gas_burnt, outcome_with_id.outcome.gas_burnt)?;
+                outcomes.push(outcome_with_id);
+            }
 
-            *total_gas_burnt = safe_add_gas(*total_gas_burnt, gas_burnt)?;
             let elapsed = start_time.elapsed().as_millis();
-
             if elapsed >= 100 && (elapsed as u64) * 10u64.pow(12) > gas_burnt * 3 {
                 let sum_calls = state_update.get_sum_calls() - sum_calls_before;
                 let (mem_calls_new, rocksdb_calls_new, db_calls_new) = state_update.get_reads();
