@@ -232,7 +232,11 @@ pub fn setup(
         runtime.clone(),
         &chain_genesis,
         doomslug_threshold_mode,
-        ChainConfig { save_trie_changes: true, background_migration_threads: 1 },
+        ChainConfig {
+            save_trie_changes: true,
+            background_migration_threads: 1,
+            ..Default::default()
+        },
     )
     .unwrap();
     let genesis_block = chain.get_block(&chain.genesis().hash().clone()).unwrap();
@@ -338,7 +342,11 @@ pub fn setup_only_view(
         runtime.clone(),
         &chain_genesis,
         doomslug_threshold_mode,
-        ChainConfig { save_trie_changes: true, background_migration_threads: 1 },
+        ChainConfig {
+            save_trie_changes: true,
+            background_migration_threads: 1,
+            ..Default::default()
+        },
     )
     .unwrap();
 
@@ -1196,7 +1204,11 @@ pub fn setup_synchronous_shards_manager(
         runtime_adapter.clone(),
         chain_genesis,
         DoomslugThresholdMode::TwoThirds, // irrelevant
-        ChainConfig { save_trie_changes: true, background_migration_threads: 1 }, // irrelevant
+        ChainConfig {
+            save_trie_changes: true,
+            background_migration_threads: 1,
+            ..Default::default()
+        }, // irrelevant
     )
     .unwrap();
     let chain_head = chain.head().unwrap();
