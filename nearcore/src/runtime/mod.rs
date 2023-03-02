@@ -95,6 +95,7 @@ pub struct NightshadeRuntime {
     genesis_state_roots: Vec<StateRoot>,
     migration_data: Arc<MigrationData>,
     gc_num_epochs_to_keep: u64,
+    trie_config: TrieConfig,
 }
 
 impl NightshadeRuntime {
@@ -143,7 +144,7 @@ impl NightshadeRuntime {
         let flat_state_factory = FlatStateFactory::new(store.clone());
         let tries = ShardTries::new(
             store.clone(),
-            trie_config,
+            trie_config.clone(),
             &genesis_config.shard_layout.get_shard_uids(),
             flat_state_factory.clone(),
         );
@@ -164,6 +165,7 @@ impl NightshadeRuntime {
             genesis_state_roots: state_roots,
             migration_data: Arc::new(load_migration_data(&genesis.config.chain_id)),
             gc_num_epochs_to_keep: gc_num_epochs_to_keep.max(MIN_GC_NUM_EPOCHS_TO_KEEP),
+            trie_config,
         }
     }
 
@@ -747,13 +749,12 @@ impl RuntimeAdapter for NightshadeRuntime {
         latest_block_height: BlockHeight,
         chain_access: &dyn ChainAccessForFlatStorage,
     ) {
-        let cache_capacity = self.tries.flat_state_cache_capacity() as usize;
         let flat_storage_state = FlatStorageState::new(
             self.store.clone(),
             shard_id,
             latest_block_height,
             chain_access,
-            cache_capacity,
+            self.trie_config.clone(),
         );
         self.flat_state_factory.add_flat_storage_state_for_shard(shard_id, flat_storage_state);
     }
@@ -1581,7 +1582,7 @@ mod test {
         AccountView, CurrentEpochValidatorInfo, EpochValidatorInfo, NextEpochValidatorInfo,
         ValidatorKickoutView,
     };
-    use near_store::{flat_state, FlatStateDelta, NodeStorage, Temperature};
+    use near_store::{flat_state, FlatStateDelta, NodeStorage};
 
     use super::*;
 
@@ -1770,7 +1771,7 @@ mod test {
             minimum_stake_divisor: Option<u64>,
         ) -> Self {
             let (dir, opener) = NodeStorage::test_opener();
-            let store = opener.open().unwrap().get_store(Temperature::Hot);
+            let store = opener.open().unwrap().get_hot_store();
             let all_validators = validators.iter().fold(BTreeSet::new(), |acc, x| {
                 acc.union(&x.iter().cloned().collect()).cloned().collect()
             });
