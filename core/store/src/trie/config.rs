@@ -21,7 +21,7 @@ const DEFAULT_SHARD_CACHE_DELETIONS_QUEUE_CAPACITY: usize =
 const TRIE_LIMIT_CACHED_VALUE_SIZE: usize = 1000;
 
 /// Stores necessary configuration for the creation of tries.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TrieConfig {
     pub shard_cache_config: TrieCacheConfig,
     pub view_shard_cache_config: TrieCacheConfig,
