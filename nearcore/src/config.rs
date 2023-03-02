@@ -697,6 +697,9 @@ impl NearConfig {
                 enable_statistics_export: config.store.enable_statistics_export,
                 client_background_migration_threads: config.store.background_migration_threads,
                 flat_storage_creation_period: config.store.flat_storage_creation_period,
+                flat_storage_measure_blocks: config.store.flat_storage_measure_blocks,
+                flat_head_skip_blocks: config.store.flat_head_skip_blocks,
+                flat_head_catchup_period: config.store.flat_head_catchup_period,
             },
             network_config: NetworkConfig::new(
                 config.network,

@@ -924,7 +924,7 @@ impl FlatStorageStateInner {
     }
 }
 
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
 impl FlatStorageState {
