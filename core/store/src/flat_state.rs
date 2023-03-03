@@ -1224,7 +1224,8 @@ impl FlatStorageState {
         // BLOW DELTA UP
         let mut blown_delta = delta.clone();
         let current_len = blown_delta.len() as u32;
-        let delta_items = (guard.blow_delta_size as u64 / CachedFlatStateDelta::ENTRY_SIZE)
+        let delta_items = (guard.blow_delta_size as u64
+            / (CachedFlatStateDelta::ENTRY_SIZE as u64))
             .saturating_sub(current_len as u64);
         let mut rng: ChaCha20Rng = SeedableRng::seed_from_u64(123);
         for i in 0..delta_items {
