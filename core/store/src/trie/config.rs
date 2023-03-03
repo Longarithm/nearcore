@@ -21,7 +21,7 @@ const DEFAULT_SHARD_CACHE_DELETIONS_QUEUE_CAPACITY: usize =
 const TRIE_LIMIT_CACHED_VALUE_SIZE: usize = 1000;
 
 /// Stores necessary configuration for the creation of tries.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TrieConfig {
     pub shard_cache_config: TrieCacheConfig,
     pub view_shard_cache_config: TrieCacheConfig,
@@ -33,6 +33,8 @@ pub struct TrieConfig {
     pub sweat_prefetch_senders: Vec<AccountId>,
     /// Capacity of `ValueRef`s cache for flat storage head for each shard.
     pub flat_state_cache_capacity: u64,
+    pub flat_storage_cap_deltas: u64,
+    pub flat_storage_blow_delta_size: u64,
 }
 
 impl TrieConfig {
@@ -66,6 +68,8 @@ impl TrieConfig {
         }
 
         this.flat_state_cache_capacity = config.flat_state_cache_capacity;
+        this.flat_storage_cap_deltas = config.flat_storage_cap_deltas;
+        this.flat_storage_blow_delta_size = config.flat_storage_blow_delta_size;
 
         this
     }

@@ -330,6 +330,10 @@ impl ShardTries {
     pub fn flat_state_cache_capacity(&self) -> u64 {
         self.0.trie_config.flat_state_cache_capacity
     }
+
+    pub fn flat_storage_cap_deltas(&self) -> u64 {
+        self.0.trie_config.flat_storage_cap_deltas
+    }
 }
 
 pub struct WrappedTrieChanges {
