@@ -408,7 +408,7 @@ impl From<FlatStateDelta> for CachedFlatStateDelta {
 
 impl CachedFlatStateDelta {
     /// Size of cache entry in bytes.
-    const ENTRY_SIZE: usize =
+    pub const ENTRY_SIZE: usize =
         std::mem::size_of::<CryptoHash>() + std::mem::size_of::<Option<ValueRef>>();
 
     /// Returns `Some(Option<ValueRef>)` from delta for the given key. If key is not present, returns None.
@@ -1223,13 +1223,13 @@ impl FlatStorageState {
 
         // BLOW DELTA UP
         let mut blown_delta = delta.clone();
-        let current_size = blown_delta.total_size() as u32;
-        let delta_items = ((guard.blow_delta_size as u32).saturating_sub(current_size)) / 1_000;
+        let current_len = blown_delta.len() as u32;
+        let delta_items = (guard.blow_delta_size as u64 / CachedFlatStateDelta::ENTRY_SIZE)
+            .saturating_sub(current_len as u64);
         let mut rng: ChaCha20Rng = SeedableRng::seed_from_u64(123);
         for i in 0..delta_items {
-            // key length is 1_000
             let mut key = vec![100u8]; // start from non-existent byte
-            key.extend_from_slice(&(0..939).map(|_| rng.gen_range(0..20)).collect::<Vec<_>>()); // 940 B per length + 70 B approximate overhead
+            key.extend_from_slice(&(0..9).map(|_| rng.gen_range(0..20)).collect::<Vec<_>>());
             blown_delta.insert(key, Some(ValueRef::new(&[(i / 256 % 256) as u8, (i % 256) as u8])));
         }
 
