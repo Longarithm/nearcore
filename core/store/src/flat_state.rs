@@ -422,7 +422,7 @@ impl CachedFlatStateDelta {
     }
 
     /// Total size in bytes consumed by delta. May be changed if we implement inlining of `ValueRef`s.
-    fn total_size(&self) -> u64 {
+    pub fn total_size(&self) -> u64 {
         (self.0.capacity() as u64) * (Self::ENTRY_SIZE as u64)
     }
 }
