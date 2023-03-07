@@ -5,7 +5,7 @@ use lru::LruCache;
 use near_o11y::metrics::IntGauge;
 use near_primitives::errors::StorageError;
 use near_primitives::hash::CryptoHash;
-use near_primitives::shard_layout::ShardLayout;
+use near_primitives::shard_layout::{ShardLayout, ShardUId};
 use near_primitives::state::ValueRef;
 use near_primitives::types::{BlockHeight, ShardId};
 use tracing::info;
@@ -41,7 +41,7 @@ pub struct FlatStorage(pub(crate) Arc<RwLock<FlatStorageInner>>);
 pub(crate) struct FlatStorageInner {
     store: Store,
     /// Id of the shard which state is accessed by this flat storage.
-    shard_id: ShardId,
+    shard_uid: ShardUId,
     /// The block for which we store the key value pairs of the state after it is applied.
     /// For non catchup mode, it should be the last final block.
     flat_head: CryptoHash,
@@ -97,7 +97,7 @@ impl FlatStorageInner {
         &self,
         target_block_hash: &CryptoHash,
     ) -> Result<Vec<CryptoHash>, FlatStorageError> {
-        let shard_id = &self.shard_id;
+        let shard_id = &self.shard_uid;
         let flat_head = &self.flat_head;
         let flat_head_info = self
             .blocks
@@ -225,7 +225,7 @@ impl FlatStorage {
 
         Self(Arc::new(RwLock::new(FlatStorageInner {
             store,
-            shard_id,
+            shard_uid: shard_id,
             flat_head,
             blocks,
             deltas,
@@ -284,12 +284,12 @@ impl FlatStorage {
             let mut store_update = StoreUpdate::new(guard.store.storage.clone());
             // We unwrap here because flat storage is locked and we could retrieve path from old to new head, so delta
             // must exist.
-            let delta = store_helper::get_delta(&guard.store, guard.shard_id, block)?.unwrap();
+            let delta = store_helper::get_delta(&guard.store, guard.shard_uid, block)?.unwrap();
             for (key, value) in delta.0.iter() {
                 guard.put_value_ref_to_cache(key.clone(), value.clone());
             }
             delta.apply_to_flat_state(&mut store_update);
-            store_helper::set_flat_head(&mut store_update, guard.shard_id, &block);
+            store_helper::set_flat_head(&mut store_update, guard.shard_uid, &block);
 
             // Remove old blocks and deltas from disk and memory.
             // Do it for each head update separately to ensure that old data is removed properly if node was
@@ -311,7 +311,7 @@ impl FlatStorage {
             for hash in hashes_to_remove {
                 // It is fine to remove all deltas in single store update, because memory overhead of `DeleteRange`
                 // operation is low.
-                store_helper::remove_delta(&mut store_update, guard.shard_id, hash);
+                store_helper::remove_delta(&mut store_update, guard.shard_uid, hash);
                 match guard.deltas.remove(&hash) {
                     Some(delta) => {
                         guard.metrics.cached_deltas.dec();
@@ -335,7 +335,7 @@ impl FlatStorage {
             store_update.commit().unwrap();
         }
 
-        let shard_id = guard.shard_id;
+        let shard_id = guard.shard_uid;
         guard.flat_head = *new_head;
         let flat_head_height = guard
             .blocks
@@ -360,14 +360,14 @@ impl FlatStorage {
         block: BlockInfo,
     ) -> Result<StoreUpdate, FlatStorageError> {
         let mut guard = self.0.write().expect(super::POISONED_LOCK_ERR);
-        let shard_id = guard.shard_id;
+        let shard_id = guard.shard_uid;
         let block_height = block.height;
         info!(target: "chain", %shard_id, %block_hash, %block_height, "Adding block to flat storage");
         if !guard.blocks.contains_key(&block.prev_hash) {
             return Err(guard.create_block_not_supported_error(block_hash));
         }
         let mut store_update = StoreUpdate::new(guard.store.storage.clone());
-        store_helper::set_delta(&mut store_update, guard.shard_id, *block_hash, &delta)?;
+        store_helper::set_delta(&mut store_update, guard.shard_uid, *block_hash, &delta)?;
         let cached_delta: CachedFlatStateDelta = delta.into();
         guard.metrics.cached_deltas.inc();
         guard.metrics.cached_deltas_num_items.add(cached_delta.len() as i64);
@@ -381,7 +381,7 @@ impl FlatStorage {
     /// Clears all State key-value pairs from flat storage.
     pub fn clear_state(&self, shard_layout: ShardLayout) -> Result<(), StorageError> {
         let guard = self.0.write().expect(super::POISONED_LOCK_ERR);
-        let shard_id = guard.shard_id;
+        let shard_id = guard.shard_uid;
 
         // Removes all items belonging to the shard one by one.
         // Note that it does not work for resharding.

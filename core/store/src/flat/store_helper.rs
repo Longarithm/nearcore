@@ -8,7 +8,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use byteorder::ReadBytesExt;
 use near_primitives::errors::StorageError;
 use near_primitives::hash::CryptoHash;
-use near_primitives::shard_layout::{account_id_to_shard_id, ShardLayout};
+use near_primitives::shard_layout::{account_id_to_shard_id, ShardLayout, ShardUId};
 use near_primitives::state::ValueRef;
 use near_primitives::trie_key::trie_key_parsers::parse_account_id_from_raw_key;
 use near_primitives::types::ShardId;
@@ -46,30 +46,30 @@ impl FlatStateColumn {
 
 pub fn get_delta(
     store: &Store,
-    shard_id: ShardId,
+    shard_uid: ShardUId,
     block_hash: CryptoHash,
 ) -> Result<Option<FlatStateDelta>, FlatStorageError> {
-    let key = KeyForFlatStateDelta { shard_id, block_hash };
+    let key = KeyForFlatStateDelta { shard_uid, block_hash };
     Ok(store
-        .get_ser::<FlatStateDelta>(FlatStateColumn::Deltas.to_db_col(), &key.try_to_vec().unwrap())
+        .get_ser::<FlatStateDelta>(FlatStateColumn::Deltas.to_db_col(), &key.to_bytes())
         .map_err(|_| FlatStorageError::StorageInternalError)?)
 }
 
 pub fn set_delta(
     store_update: &mut StoreUpdate,
-    shard_id: ShardId,
+    shard_uid: ShardUId,
     block_hash: CryptoHash,
     delta: &FlatStateDelta,
 ) -> Result<(), FlatStorageError> {
-    let key = KeyForFlatStateDelta { shard_id, block_hash };
+    let key = KeyForFlatStateDelta { shard_uid, block_hash };
     store_update
-        .set_ser(FlatStateColumn::Deltas.to_db_col(), &key.try_to_vec().unwrap(), delta)
+        .set_ser(FlatStateColumn::Deltas.to_db_col(), &key.to_bytes(), delta)
         .map_err(|_| FlatStorageError::StorageInternalError)
 }
 
-pub fn remove_delta(store_update: &mut StoreUpdate, shard_id: ShardId, block_hash: CryptoHash) {
-    let key = KeyForFlatStateDelta { shard_id, block_hash };
-    store_update.delete(FlatStateColumn::Deltas.to_db_col(), &key.try_to_vec().unwrap());
+pub fn remove_delta(store_update: &mut StoreUpdate, shard_uid: ShardUId, block_hash: CryptoHash) {
+    let key = KeyForFlatStateDelta { shard_uid, block_hash };
+    store_update.delete(FlatStateColumn::Deltas.to_db_col(), &key.to_bytes());
 }
 
 fn flat_head_key(shard_id: ShardId) -> Vec<u8> {

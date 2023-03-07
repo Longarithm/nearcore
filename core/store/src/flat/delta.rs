@@ -1,6 +1,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use near_primitives::hash::hash;
+use near_primitives::shard_layout::ShardUId;
 use near_primitives::state::ValueRef;
 use near_primitives::types::{RawStateChangesWithTrieKey, ShardId};
 use std::collections::HashMap;
@@ -8,10 +9,32 @@ use std::collections::HashMap;
 use super::store_helper;
 use crate::{CryptoHash, StoreUpdate};
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct KeyForFlatStateDelta {
-    pub shard_id: ShardId,
+    pub shard_uid: ShardUId,
     pub block_hash: CryptoHash,
+}
+
+impl KeyForFlatStateDelta {
+    pub fn to_bytes(&self) -> [u8; 40] {
+        let mut res = [0; 40];
+        res[0..8].copy_from_slice(&self.shard_uid.to_bytes());
+        res[8..].copy_from_slice(self.block_hash.as_bytes());
+        res
+    }
+}
+
+impl TryFrom<&[u8]> for KeyForFlatStateDelta {
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        if bytes.len() != 40 {
+            return Err("incorrect length for KeyForFlatStateDelta".into());
+        }
+        let shard_uid = bytes[0..8].try_into().unwrap();
+        let block_hash = bytes[8..40].try_into().unwrap();
+        Ok(Self { shard_uid, block_hash })
+    }
 }
 
 /// Delta of the state for some shard and block, stores mapping from keys to value refs or None, if key was removed in
@@ -113,9 +136,23 @@ impl CachedFlatStateDelta {
 #[cfg(test)]
 mod tests {
     use super::FlatStateDelta;
+    use crate::flat::delta::KeyForFlatStateDelta;
+    use near_primitives::hash::hash;
+    use near_primitives::shard_layout::{ShardLayout, ShardUId};
     use near_primitives::state::ValueRef;
     use near_primitives::trie_key::TrieKey;
     use near_primitives::types::{RawStateChange, RawStateChangesWithTrieKey, StateChangeCause};
+
+    #[test]
+    fn encode_decode_delta_key() {
+        let key = KeyForFlatStateDelta {
+            shard_uid: ShardUId::from_shard_id_and_layout(1, &ShardLayout::v1_test()),
+            block_hash: hash(&[2]),
+        };
+        let bytes = key.to_bytes();
+        let decoded_key = bytes[..].try_into().unwrap();
+        assert_eq!(key, decoded_key);
+    }
 
     /// Check correctness of creating `FlatStateDelta` from state changes.
     #[test]
