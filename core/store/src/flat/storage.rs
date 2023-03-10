@@ -370,6 +370,7 @@ impl FlatStorage {
         info!(target: "chain", %shard_id, %removed_items, "Removing old items from flat storage");
 
         store_helper::remove_flat_head(&mut store_update, shard_id);
+        store_helper::remove_all_deltas(&mut store_update, guard.shard_uid);
         store_update.commit().map_err(|_| StorageError::StorageInternalError)?;
         Ok(())
     }
