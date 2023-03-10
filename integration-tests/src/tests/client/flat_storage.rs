@@ -191,7 +191,7 @@ fn test_flat_storage_creation() {
     env.process_block(0, fork_block, Provenance::PRODUCED);
     env.process_block(0, next_block, Provenance::PRODUCED);
 
-    for height in START_HEIGHT + 2..START_HEIGHT + 4 {
+    for height in START_HEIGHT..START_HEIGHT + 4 {
         let block_hash = env.clients[0].chain.get_block_hash_by_height(height).unwrap();
         assert_matches!(
             store_helper::get_delta_changes(&store, shard_uids[0], block_hash),
