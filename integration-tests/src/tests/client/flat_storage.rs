@@ -1,6 +1,6 @@
 /// Tests which check correctness of background flat storage creation.
 use assert_matches::assert_matches;
-use near_chain::{ChainGenesis, RuntimeWithEpochManagerAdapter};
+use near_chain::{ChainGenesis, Provenance, RuntimeWithEpochManagerAdapter};
 use near_chain_configs::Genesis;
 use near_client::test_utils::TestEnv;
 use near_o11y::testonly::init_test_logger;
@@ -186,7 +186,12 @@ fn test_flat_storage_creation() {
         store_helper::get_flat_storage_creation_status(&store, 0),
         FlatStorageCreationStatus::SavingDeltas
     );
-    for height in START_HEIGHT..START_HEIGHT + 2 {
+    let fork_block = env.clients[0].produce_block(START_HEIGHT).unwrap().unwrap();
+    let next_block = env.clients[0].produce_block(START_HEIGHT + 1).unwrap().unwrap();
+    env.process_block(0, fork_block, Provenance::PRODUCED);
+    env.process_block(0, next_block, Provenance::PRODUCED);
+
+    for height in START_HEIGHT + 2..START_HEIGHT + 4 {
         let block_hash = env.clients[0].chain.get_block_hash_by_height(height).unwrap();
         assert_matches!(
             store_helper::get_delta_changes(&store, shard_uids[0], block_hash),
@@ -198,7 +203,7 @@ fn test_flat_storage_creation() {
     // We started the node from height `START_HEIGHT - 1`, and now final head should move to height `START_HEIGHT`.
     // Because final head height became greater than height on which node started,
     // we must start fetching the state.
-    env.produce_block(0, START_HEIGHT + 2);
+    env.produce_block(0, START_HEIGHT + 4);
     assert!(!env.clients[0].run_flat_storage_creation_step().unwrap());
     let final_block_hash = env.clients[0].chain.get_block_hash_by_height(START_HEIGHT).unwrap();
     assert_eq!(store_helper::get_flat_head(&store, 0), None);
@@ -212,7 +217,7 @@ fn test_flat_storage_creation() {
         })
     );
 
-    wait_for_flat_storage_creation(&mut env, shard_uids[0], START_HEIGHT + 3, true);
+    wait_for_flat_storage_creation(&mut env, shard_uids[0], START_HEIGHT + 5, true);
 }
 
 /// Check that client can create flat storage on some shard while it already exists on another shard.
