@@ -136,7 +136,7 @@ fn test_flat_storage_creation() {
             for height in 0..START_HEIGHT - 2 {
                 let block_hash = env.clients[0].chain.get_block_hash_by_height(height).unwrap();
                 assert_eq!(
-                    store_helper::get_delta_changes(&store, shard_uid, block_hash),
+                    store_helper::get_delta_changes(&store, shard_uids[0], block_hash),
                     Ok(None)
                 );
             }
@@ -145,7 +145,7 @@ fn test_flat_storage_creation() {
             for height in START_HEIGHT - 2..START_HEIGHT {
                 let block_hash = env.clients[0].chain.get_block_hash_by_height(height).unwrap();
                 assert_matches!(
-                    store_helper::get_delta_changes(&store, shard_uid, block_hash),
+                    store_helper::get_delta_changes(&store, shard_uids[0], block_hash),
                     Ok(Some(_))
                 );
             }
@@ -189,7 +189,7 @@ fn test_flat_storage_creation() {
     for height in START_HEIGHT..START_HEIGHT + 2 {
         let block_hash = env.clients[0].chain.get_block_hash_by_height(height).unwrap();
         assert_matches!(
-            store_helper::get_delta_changes(&store, shard_uid, block_hash),
+            store_helper::get_delta_changes(&store, shard_uids[0], block_hash),
             Ok(Some(_))
         );
     }
