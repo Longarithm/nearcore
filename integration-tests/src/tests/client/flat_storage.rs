@@ -186,8 +186,8 @@ fn test_flat_storage_creation() {
         store_helper::get_flat_storage_creation_status(&store, 0),
         FlatStorageCreationStatus::SavingDeltas
     );
-    let fork_block = env.clients[0].produce_block(START_HEIGHT).unwrap().unwrap();
-    let next_block = env.clients[0].produce_block(START_HEIGHT + 1).unwrap().unwrap();
+    let fork_block = env.clients[0].produce_block(START_HEIGHT + 2).unwrap().unwrap();
+    let next_block = env.clients[0].produce_block(START_HEIGHT + 3).unwrap().unwrap();
     env.process_block(0, fork_block, Provenance::PRODUCED);
     env.process_block(0, next_block, Provenance::PRODUCED);
 
