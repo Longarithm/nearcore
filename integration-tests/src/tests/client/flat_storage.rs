@@ -100,7 +100,7 @@ fn wait_for_flat_storage_creation(
         - env.clients[0].chain.final_head().unwrap().height
         - 1;
     let deltas_in_metadata =
-        store_helper::get_all_deltas_metadata(&store, shard_uid).unwrap().len();
+        store_helper::get_all_deltas_metadata(&store, shard_uid).unwrap().len() as u64;
     assert_eq!(expected_deltas_number, deltas_in_metadata);
 
     next_height
