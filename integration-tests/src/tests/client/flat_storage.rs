@@ -97,8 +97,8 @@ fn wait_for_flat_storage_creation(
 
     // Check that deltas are properly garbage-collected during creation.
     let expected_deltas_number = env.clients[0].chain.head().unwrap().height
-        - env.clients[0].chain.final_head().unwrap().height
-        - 1;
+        - env.clients[0].chain.final_head().unwrap().height;
+    println!("{:?}", store_helper::get_all_deltas_metadata(&store, shard_uid).unwrap());
     let deltas_in_metadata =
         store_helper::get_all_deltas_metadata(&store, shard_uid).unwrap().len() as u64;
     assert_eq!(expected_deltas_number, deltas_in_metadata);
