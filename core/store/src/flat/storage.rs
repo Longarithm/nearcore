@@ -8,6 +8,7 @@ use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::{ShardLayout, ShardUId};
 use near_primitives::state::ValueRef;
 use tracing::info;
+use tracing::log::warn;
 
 use crate::flat::delta::CachedFlatStateChanges;
 use crate::flat::store_helper::FlatStateColumn;
@@ -282,14 +283,16 @@ impl FlatStorage {
                         guard.metrics.cached_changes_num_items.sub(delta.changes.len() as i64);
                         guard.metrics.cached_changes_size.sub(delta.changes.total_size() as i64);
                     }
-                    None => {}
+                    None => {
+                        warn!(target: "chain", "Attempted to remove delta not existing in cache with {shard_id}, {hash}");
+                    }
                 }
             }
 
             store_update.commit().unwrap();
+            guard.flat_head = block;
         }
 
-        guard.flat_head = *new_head;
         guard.metrics.flat_head_height.set(new_head_height as i64);
         info!(target: "chain", %shard_id, %new_head, %new_head_height, "Moved flat storage head");
 

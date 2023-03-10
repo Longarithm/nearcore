@@ -321,6 +321,7 @@ impl FlatStorageShardCreator {
                 let mut flat_head = *old_flat_head;
                 let chain_final_head = chain_store.final_head()?;
                 let mut merged_changes = FlatStateChanges::default();
+                let mut store_update = self.runtime_adapter.store().store_update();
 
                 // Merge up to 50 deltas of the next blocks until we reach chain final head.
                 // TODO: consider merging 10 deltas at once to limit memory usage
@@ -338,6 +339,7 @@ impl FlatStorageShardCreator {
                         .unwrap()
                         .unwrap();
                     merged_changes.merge(changes);
+                    store_helper::remove_delta(&mut store_update, self.shard_uid, flat_head);
                 }
 
                 if (old_flat_head != &flat_head) || (flat_head == chain_final_head.last_block_hash)
@@ -349,7 +351,6 @@ impl FlatStorageShardCreator {
                     let height = chain_store.get_block_height(&flat_head).unwrap();
                     debug!(target: "chain", %shard_id, %old_flat_head, %old_height, %flat_head, %height, "Catching up flat head");
                     self.metrics.flat_head_height.set(height as i64);
-                    let mut store_update = self.runtime_adapter.store().store_update();
                     merged_changes.apply_to_flat_state(&mut store_update, shard_uid);
                     if flat_head == chain_final_head.last_block_hash {
                         // If we reached chain final head, we can finish catchup and finally create flat storage.
