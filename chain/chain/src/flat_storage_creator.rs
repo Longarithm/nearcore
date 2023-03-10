@@ -377,11 +377,11 @@ impl FlatStorageShardCreator {
                         let mut gc_count = 0;
                         for delta_metadata in deltas_metadata {
                             if delta_metadata.block.height <= chain_final_head.height {
-                                // store_helper::remove_delta(
-                                //     &mut store_update,
-                                //     self.shard_uid,
-                                //     delta_metadata.block.hash,
-                                // );
+                                store_helper::remove_delta(
+                                    &mut store_update,
+                                    self.shard_uid,
+                                    delta_metadata.block.hash,
+                                );
                                 gc_count += 1;
                             }
                         }
