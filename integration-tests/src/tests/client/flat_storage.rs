@@ -33,7 +33,7 @@ fn setup_env(genesis: &Genesis, store: Store) -> TestEnv {
     TestEnv::builder(chain_genesis).runtime_adapters(runtimes).build()
 }
 
-/// Waits for flat storage creation on shard 0 for `CREATION_TIMEOUT` blocks.
+/// Waits for flat storage creation on given shard for `CREATION_TIMEOUT` blocks.
 /// We have a pause after processing each block because state data is being fetched in rayon threads,
 /// but we expect it to finish in <30s because state is small and there is only one state part.
 /// Returns next block height available to produce.
@@ -43,15 +43,17 @@ fn wait_for_flat_storage_creation(
     produce_blocks: bool,
 ) -> BlockHeight {
     let store = env.clients[0].runtime_adapter.store().clone();
+    let shard_uid = ShardLayout::v0_single_shard().get_shard_uids()[0];
     let mut next_height = start_height;
-    let mut prev_status = store_helper::get_flat_storage_creation_status(&store, 0);
+    let mut prev_status =
+        store_helper::get_flat_storage_creation_status(&store, shard_uid.shard_id());
     while next_height < start_height + CREATION_TIMEOUT {
         if produce_blocks {
             env.produce_block(0, next_height);
         }
         env.clients[0].run_flat_storage_creation_step().unwrap();
 
-        let status = store_helper::get_flat_storage_creation_status(&store, 0);
+        let status = store_helper::get_flat_storage_creation_status(&store, shard_uid.shard_id());
         // Check validity of state transition for flat storage creation.
         match &prev_status {
             FlatStorageCreationStatus::SavingDeltas => assert_matches!(
@@ -82,13 +84,25 @@ fn wait_for_flat_storage_creation(
 
         thread::sleep(Duration::from_secs(1));
     }
-    let status = store_helper::get_flat_storage_creation_status(&store, 0);
+    let status = store_helper::get_flat_storage_creation_status(&store, shard_uid.shard_id());
     assert_eq!(
         status,
         FlatStorageCreationStatus::Ready,
         "Client couldn't create flat storage until block {next_height}, status: {status:?}"
     );
-    assert!(env.clients[0].runtime_adapter.get_flat_storage_for_shard(0).is_some());
+    assert!(env.clients[0]
+        .runtime_adapter
+        .get_flat_storage_for_shard(shard_uid.shard_id())
+        .is_some());
+
+    // Check that deltas are properly garbage-collected during creation.
+    let expected_deltas_number = env.clients[0].chain.head().unwrap().height
+        - env.clients[0].chain.final_head().unwrap().height
+        - 1;
+    let deltas_in_metadata =
+        store_helper::get_all_deltas_metadata(&store, shard_uid).unwrap().len();
+    assert_eq!(expected_deltas_number, deltas_in_metadata);
+
     next_height
 }
 
