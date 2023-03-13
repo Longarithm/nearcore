@@ -173,6 +173,8 @@ impl FlatStorage {
             .unwrap_or_else(|_| {
                 panic!("Cannot read flat state deltas metadata for shard {shard_id} from storage")
             });
+        let num_deltas = deltas_metadata.len();
+        info!(target: "chain", %shard_id, %flat_head.hash, %flat_head.height, "Read {num_deltas} deltas");
         let mut deltas = HashMap::new();
         for delta_metadata in deltas_metadata {
             let block_hash = delta_metadata.block.hash;
