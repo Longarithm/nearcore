@@ -92,7 +92,9 @@ impl FlatStorageInner {
                 .prev_hash;
         }
         self.metrics.distance_to_head.set(blocks.len() as i64);
-
+        if blocks.len() == 2 {
+            return Err(self.create_block_not_supported_error(target_block_hash));
+        }
         Ok(blocks)
     }
 }
