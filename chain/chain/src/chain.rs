@@ -2105,7 +2105,7 @@ impl Chain {
         shard_id: ShardId,
     ) -> Result<(), Error> {
         if let Some(flat_storage) = self.runtime_adapter.get_flat_storage_for_shard(shard_id) {
-            let mut new_flat_head = *block.header().last_final_block();
+            let mut new_flat_head = *block.header().hash();
             if new_flat_head == CryptoHash::default() {
                 new_flat_head = *self.genesis.hash();
             }
