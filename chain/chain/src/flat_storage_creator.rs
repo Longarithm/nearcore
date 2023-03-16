@@ -131,15 +131,12 @@ impl FlatStorageShardCreator {
         for TrieTraversalItem { hash, key } in
             trie_iter.visit_nodes_interval(&path_begin, &path_end).unwrap()
         {
-            match key {
-                None => {}
-                Some(key) => {
-                    let value = trie.storage.retrieve_raw_bytes(&hash).unwrap();
-                    let value_ref = ValueRef::new(&value);
-                    store_helper::set_ref(&mut store_update, shard_uid, key, Some(value_ref))
-                        .expect("Failed to put value in FlatState");
-                    num_items += 1;
-                }
+            if let Some(key) = key {
+                let value = trie.storage.retrieve_raw_bytes(&hash).unwrap();
+                let value_ref = ValueRef::new(&value);
+                store_helper::set_ref(&mut store_update, shard_uid, key, Some(value_ref))
+                    .expect("Failed to put value in FlatState");
+                num_items += 1;
             }
         }
         store_update.commit().unwrap();
