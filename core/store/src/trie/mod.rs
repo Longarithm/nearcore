@@ -969,20 +969,17 @@ impl Trie {
         let use_flat_storage =
             matches!(mode, KeyLookupMode::FlatStorage) && self.flat_storage_chunk_view.is_some();
 
+        let key_nibbles = NibbleSlice::new(key.clone());
+        let trie_result = self.lookup(key_nibbles);
+
         if use_flat_storage {
-            self.flat_storage_chunk_view.as_ref().unwrap().get_ref(&key)
-        } else {
-            let key_nibbles = NibbleSlice::new(key.clone());
-            let result = self.lookup(key_nibbles);
-            if let Some(chunk_view) = &self.flat_storage_chunk_view {
-                let flat_result = chunk_view.get_ref(key);
-                if matches!(flat_result, Err(StorageError::FlatStorageBlockNotSupported(_))) {
-                    return flat_result;
-                } else {
-                    assert_eq!(result, flat_result);
-                }
+            let flat_result = self.flat_storage_chunk_view.as_ref().unwrap().get_ref(&key);
+            if !matches!(flat_result, Err(StorageError::FlatStorageBlockNotSupported(_))) {
+                assert_eq!(trie_result, flat_result);
             }
-            result
+            flat_result
+        } else {
+            trie_result
         }
     }
 
