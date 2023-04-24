@@ -219,6 +219,7 @@ impl FlatStorageCommand {
 
                 // Trie iterator which skips all the 'delayed' keys - that don't contain the account_id as string.
                 let trie_iter = trie.iter().unwrap().filter(|entry| {
+                    eprintln!("{:?}", entry);
                     let result_copy = &entry.clone().unwrap().0;
                     let result = &result_copy[..];
                     parse_account_id_from_raw_key(result).unwrap().is_some()
