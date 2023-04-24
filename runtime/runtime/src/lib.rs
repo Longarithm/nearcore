@@ -5,7 +5,7 @@ use crate::config::{
     total_prepaid_exec_fees, total_prepaid_gas, RuntimeConfig,
 };
 use crate::genesis::{GenesisStateApplier, StorageComputer};
-use crate::prefetch::TriePrefetcher;
+// use crate::prefetch::TriePrefetcher;
 use crate::verifier::{check_storage_stake, validate_receipt, StorageStakingError};
 pub use crate::verifier::{
     validate_transaction, verify_and_charge_transaction, ZERO_BALANCE_ACCOUNT_STORAGE_LIMIT,
