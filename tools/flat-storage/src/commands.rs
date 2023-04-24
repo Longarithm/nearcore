@@ -1,3 +1,4 @@
+use borsh::BorshDeserialize;
 /// Tools for modifying flat storage - should be used only for experimentation & debugging.
 use clap::Parser;
 use near_chain::{
@@ -5,6 +6,7 @@ use near_chain::{
     ChainStoreAccess,
 };
 use near_epoch_manager::EpochManagerAdapter;
+use near_primitives::state::FlatStateValue;
 use near_primitives::{state::ValueRef, trie_key::trie_key_parsers::parse_account_id_from_raw_key};
 use near_store::flat::{store_helper, FlatStorageStatus};
 use near_store::{Mode, NodeStorage, ShardUId, Store, StoreOpener};
@@ -230,7 +232,9 @@ impl FlatStorageCommand {
                 for (item_trie, item_flat) in
                     tqdm(std::iter::zip(trie_iter, flat_state_entries_iter))
                 {
-                    let value_ref = ValueRef::decode((*item_flat.1).try_into().unwrap());
+                    let FlatStateValue::Ref(value_ref) =
+                        FlatStateValue::try_from_slice(&item_flat.1).unwrap();
+                    // let value_ref = ValueRef::decode((*item_flat.1).try_into().unwrap());
                     verified += 1;
 
                     let item_trie = item_trie.unwrap();

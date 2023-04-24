@@ -7,10 +7,10 @@ use crate::{Store, StoreUpdate};
 use near_primitives::errors::StorageError;
 use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::{ShardLayout, ShardUId};
-use near_primitives::state::ValueRef;
+use near_primitives::state::{FlatStateValue, ValueRef};
 
 use super::delta::{FlatStateDelta, FlatStateDeltaMetadata};
-use super::types::{FlatStateValue, FlatStorageStatus};
+use super::types::FlatStorageStatus;
 
 /// Prefixes for keys in `FlatStateMisc` DB column.
 pub const FLAT_STATE_HEAD_KEY_PREFIX: &[u8; 4] = b"HEAD";

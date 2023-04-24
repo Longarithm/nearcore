@@ -61,3 +61,9 @@ mod tests {
         assert_eq!(value_ref.hash, hash(&value));
     }
 }
+
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq, Eq)]
+pub enum FlatStateValue {
+    Ref(ValueRef),
+    // TODO(8243): add variant here for the inlined value
+}

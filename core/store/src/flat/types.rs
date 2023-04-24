@@ -5,12 +5,6 @@ use near_primitives::state::ValueRef;
 use near_primitives::types::BlockHeight;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq, Eq)]
-pub enum FlatStateValue {
-    Ref(ValueRef),
-    // TODO(8243): add variant here for the inlined value
-}
-
-#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq, Eq)]
 pub struct BlockInfo {
     pub hash: CryptoHash,
     pub height: BlockHeight,
