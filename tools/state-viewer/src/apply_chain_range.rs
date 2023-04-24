@@ -134,6 +134,10 @@ fn apply_block_from_range(
     };
     let block = chain_store.get_block(&block_hash).unwrap();
     let shard_uid = epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id()).unwrap();
+    // HACK
+    if flat_storage {
+        runtime_adapter.create_flat_storage_for_shard(shard_uid);
+    }
     assert!(block.chunks().len() > 0);
     let mut existing_chunk_extra = None;
     let mut prev_chunk_extra = None;
