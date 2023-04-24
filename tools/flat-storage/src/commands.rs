@@ -7,7 +7,6 @@ use near_chain::{
 };
 use near_epoch_manager::EpochManagerAdapter;
 use near_primitives::state::FlatStateValue;
-use near_primitives::trie_key::trie_key_parsers::parse_account_id_from_raw_key;
 use near_store::flat::{store_helper, FlatStorageStatus};
 use near_store::{Mode, NodeStorage, ShardUId, Store, StoreOpener};
 use nearcore::{load_config, NearConfig, NightshadeRuntime};
