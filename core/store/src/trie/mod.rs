@@ -797,7 +797,11 @@ impl Trie {
             let key_nibbles = NibbleSlice::new(key);
             self.lookup(key_nibbles)
         };
-        eprintln!("{:?} {:?}", copied_key, result);
+        if let Ok(Some(value_ref)) = &result {
+            let value = self.storage.retrieve_raw_bytes(&value_ref.hash).unwrap();
+            let sr = StateRecord::from_raw_key_value(copied_key.to_vec(), value.to_vec());
+            eprintln!("{:?}", sr);
+        }
         result
     }
 
