@@ -790,12 +790,15 @@ impl Trie {
         let use_flat_storage =
             matches!(mode, KeyLookupMode::FlatStorage) && self.flat_storage_chunk_view.is_some();
 
-        if use_flat_storage {
+        let copied_key = key.clone();
+        let result = if use_flat_storage {
             self.flat_storage_chunk_view.as_ref().unwrap().get_ref(&key)
         } else {
             let key_nibbles = NibbleSlice::new(key);
             self.lookup(key_nibbles)
-        }
+        };
+        eprintln!("{:?} {:?}", copied_key, result);
+        result
     }
 
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
