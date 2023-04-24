@@ -11,7 +11,7 @@ use near_primitives::transaction::{Action, ExecutionOutcomeWithId, ExecutionOutc
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, ShardId};
-use near_store::{get, DBCol, Store};
+use near_store::{DBCol, Store};
 use nearcore::NightshadeRuntime;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::fs::File;
