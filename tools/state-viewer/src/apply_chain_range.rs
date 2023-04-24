@@ -118,6 +118,7 @@ fn apply_block_from_range(
     verbose_output: bool,
     csv_file_mutex: &Mutex<Option<&mut File>>,
     only_contracts: bool,
+    flat_storage: bool,
 ) {
     // normally save_trie_changes depends on whether the node is
     // archival, but here we don't care, and can just set it to false
@@ -241,7 +242,7 @@ fn apply_block_from_range(
                 true,
                 is_first_block_with_chunk_of_version,
                 Default::default(),
-                false,
+                flat_storage,
             )
             .unwrap()
     } else {
@@ -268,7 +269,7 @@ fn apply_block_from_range(
                 false,
                 false,
                 Default::default(),
-                false,
+                flat_storage,
             )
             .unwrap()
     };
@@ -336,6 +337,7 @@ pub fn apply_chain_range(
     csv_file: Option<&mut File>,
     only_contracts: bool,
     sequential: bool,
+    flat_storage: bool,
 ) {
     let parent_span = tracing::debug_span!(
         target: "state_viewer",
@@ -381,6 +383,7 @@ pub fn apply_chain_range(
             verbose_output,
             &csv_file_mutex,
             only_contracts,
+            flat_storage,
         );
     };
 
@@ -548,6 +551,7 @@ mod test {
             None,
             false,
             false,
+            false,
         );
     }
 
@@ -584,6 +588,7 @@ mod test {
             runtime,
             true,
             Some(file.as_file_mut()),
+            false,
             false,
             false,
         );

@@ -183,6 +183,8 @@ pub struct ApplyRangeCmd {
     only_contracts: bool,
     #[clap(long)]
     sequential: bool,
+    #[clap(long)]
+    flat_storage: bool,
 }
 
 impl ApplyRangeCmd {
@@ -198,6 +200,7 @@ impl ApplyRangeCmd {
             store,
             self.only_contracts,
             self.sequential,
+            self.flat_storage,
         );
     }
 }
