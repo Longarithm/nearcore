@@ -72,7 +72,6 @@ impl FlatStorageCommand {
         let node_storage = opener.open_in_mode(mode).unwrap();
         let hot_runtime =
             NightshadeRuntime::from_config(home_dir, node_storage.get_hot_store(), &near_config);
-        let runtime = NightshadeRuntime::from_config(home_dir, store.clone(), &near_config);
         let chain_store = ChainStore::new(node_storage.get_hot_store(), 0, false);
         let hot_store = node_storage.get_hot_store();
         (node_storage, hot_runtime, chain_store, hot_store)
