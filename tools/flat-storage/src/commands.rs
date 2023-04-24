@@ -72,6 +72,7 @@ impl FlatStorageCommand {
         let node_storage = opener.open_in_mode(mode).unwrap();
         let hot_runtime =
             NightshadeRuntime::from_config(home_dir, node_storage.get_hot_store(), &near_config);
+        let runtime = NightshadeRuntime::from_config(home_dir, store.clone(), &near_config);
         let chain_store = ChainStore::new(node_storage.get_hot_store(), 0, false);
         let hot_store = node_storage.get_hot_store();
         (node_storage, hot_runtime, chain_store, hot_store)
@@ -80,7 +81,7 @@ impl FlatStorageCommand {
     pub fn run(&self, home_dir: &PathBuf) -> anyhow::Result<()> {
         let near_config =
             load_config(home_dir, near_chain_configs::GenesisValidationMode::Full).unwrap();
-        let opener = NodeStorage::opener(home_dir, false, &near_config.config.store, None);
+        let opener = NodeStorage::opener(home_dir, true, &near_config.config.store, None);
 
         match &self.subcmd {
             SubCommand::View => {
