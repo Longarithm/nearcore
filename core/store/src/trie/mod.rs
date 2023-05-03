@@ -24,6 +24,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::str;
+use std::sync::Arc;
 
 mod config;
 mod insert_delete;
@@ -305,7 +306,7 @@ impl std::fmt::Debug for TrieNode {
 }
 
 pub struct Trie {
-    pub storage: Box<dyn TrieStorage + Send>,
+    pub storage: Arc<dyn TrieStorage + Send>,
     root: StateRoot,
     pub flat_storage_chunk_view: Option<FlatStorageChunkView>,
 }
@@ -405,7 +406,7 @@ impl Trie {
     pub const EMPTY_ROOT: StateRoot = StateRoot::new();
 
     pub fn new(
-        storage: Box<dyn TrieStorage + Send>,
+        storage: Arc<dyn TrieStorage + Send>,
         root: StateRoot,
         flat_storage_chunk_view: Option<FlatStorageChunkView>,
     ) -> Self {
@@ -413,14 +414,11 @@ impl Trie {
     }
 
     pub fn recording_reads(&self) -> Self {
-        let storage =
-            self.storage.as_caching_storage().expect("Storage should be TrieCachingStorage");
         let storage = TrieRecordingStorage {
-            store: storage.store.clone(),
-            shard_uid: storage.shard_uid,
+            storage: self.storage.clone(),
             recorded: RefCell::new(Default::default()),
         };
-        Trie { storage: Box::new(storage), root: self.root, flat_storage_chunk_view: None }
+        Trie { storage: Arc::new(storage), root: self.root, flat_storage_chunk_view: None }
     }
 
     pub fn recorded_storage(&self) -> Option<PartialStorage> {
