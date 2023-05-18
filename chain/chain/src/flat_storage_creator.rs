@@ -154,7 +154,7 @@ impl FlatStorageShardCreator {
             let inner_sender = self.fetched_parts_sender.clone();
             let inner_threads_used = self.metrics.threads_used();
             let shard_uid = self.shard_uid.clone();
-            thread_pool.
+            thread_pool.wo
             if thread_pool.current_num_threads() >= three
             thread_pool.spawn(move || {
                 inner_threads_used.inc();
