@@ -124,7 +124,7 @@ impl FlatStorageShardCreator {
 
         let processed_parts = progress.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
 
-        debug!(target: "store",
+        eprintln!(
             "Preload subtrie at {hex_path_begin} done, \
             loaded {num_items} state items, \
             proccessed parts: {processed_parts}"
@@ -133,10 +133,12 @@ impl FlatStorageShardCreator {
         match result_sender.send(num_items) {
             Ok(_) => {}
             Err(e) => {
-                error!(target: "store", "During flat storage creation, state \
+                eprintln!(
+                    "During flat storage creation, state \
                 part sender channel was disconnected: {e}. Results of fetching \
                 state part {part_id:?} for shard {shard_uid} will not be recorded \
-                and flat storage creation will stall. Please restart the node.");
+                and flat storage creation will stall. Please restart the node."
+                );
             }
         }
     }
@@ -498,6 +500,7 @@ impl FlatStorageCreator {
         for shard_creator in self.shard_creators.values_mut() {
             all_created &= shard_creator.update_status(chain_store, &self.pool)?;
         }
+
         Ok(all_created)
     }
 }
