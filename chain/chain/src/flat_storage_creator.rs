@@ -43,7 +43,7 @@ pub struct FlatStorageShardCreator {
     runtime: Arc<dyn RuntimeAdapter>,
     /// Tracks number of state parts which are not fetched yet during a single step.
     /// Stores Some(parts) if threads for fetching state were spawned and None otherwise.
-    remaining_state_parts: Option<u64>,
+    remaining_state_parts: Option<(u64, Vec<u64>)>,
     /// Used by threads which traverse state parts to tell that traversal is finished.
     fetched_parts_sender: Sender<u64>,
     /// Used by main thread to update the number of traversed state parts.
@@ -92,7 +92,6 @@ impl FlatStorageShardCreator {
         shard_uid: ShardUId,
         state_root: StateRoot,
         part_id: PartId,
-        progress: Arc<AtomicU64>,
         result_sender: Sender<u64>,
     ) {
         let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
@@ -122,12 +121,9 @@ impl FlatStorageShardCreator {
         }
         store_update.commit().unwrap();
 
-        let processed_parts = progress.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-
         eprintln!(
             "Preload subtrie at {hex_path_begin} done, \
-            loaded {num_items} state items, \
-            proccessed parts: {processed_parts}"
+            loaded {num_items} state items"
         );
 
         match result_sender.send(num_items) {
@@ -141,6 +137,38 @@ impl FlatStorageShardCreator {
                 );
             }
         }
+    }
+
+    fn try_spawn(
+        &mut self,
+        parts_to_spawn: &[u64],
+        num_parts: u64,
+        store: Store,
+        state_root: StateRoot,
+        thread_pool: &rayon::ThreadPool,
+    ) -> Vec<u64> {
+        let mut remaining_parts_to_spawn = vec![];
+        for part_id in parts_to_spawn {
+            let id = part_id.clone();
+            let inner_store = store.clone();
+            let inner_sender = self.fetched_parts_sender.clone();
+            let inner_threads_used = self.metrics.threads_used();
+            let shard_uid = self.shard_uid.clone();
+            thread_pool.
+            if thread_pool.current_num_threads() >= three
+            thread_pool.spawn(move || {
+                inner_threads_used.inc();
+                Self::fetch_state_part(
+                    inner_store,
+                    shard_uid,
+                    state_root,
+                    PartId::new(id, num_parts),
+                    inner_sender,
+                );
+                inner_threads_used.dec();
+            })
+        }
+        remaining_parts_to_spawn
     }
 
     /// Checks current flat storage creation status, execute work related to it and possibly switch to next status.
@@ -237,43 +265,37 @@ impl FlatStorageShardCreator {
                 let next_start_part_id = num_parts.min(start_part_id + num_parts_in_step);
                 self.metrics.set_remaining_state_parts(num_parts - start_part_id);
 
-                match self.remaining_state_parts {
+                let epoch_id = self.epoch_manager.get_epoch_id(&block_hash)?;
+                let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
+                let state_root =
+                    *chain_store.get_chunk_extra(&block_hash, &shard_uid)?.state_root();
+
+                match self.remaining_state_parts.clone() {
                     None => {
                         error!(target: "store", shard_id, "fetching_state none");
                         // We need to spawn threads to fetch state parts and fill flat storage data.
-                        let epoch_id = self.epoch_manager.get_epoch_id(&block_hash)?;
-                        let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
-                        let state_root =
-                            *chain_store.get_chunk_extra(&block_hash, &shard_uid)?.state_root();
-                        let progress = Arc::new(std::sync::atomic::AtomicU64::new(0));
+
                         debug!(
                             target: "store", %shard_id, %block_hash, %start_part_id, %next_start_part_id, %num_parts,
                             "Spawning threads to fetch state parts for flat storage"
                         );
 
-                        for part_id in start_part_id..next_start_part_id {
-                            let inner_store = store.clone();
-                            let inner_progress = progress.clone();
-                            let inner_sender = self.fetched_parts_sender.clone();
-                            let inner_threads_used = self.metrics.threads_used();
-                            thread_pool.spawn(move || {
-                                inner_threads_used.inc();
-                                Self::fetch_state_part(
-                                    inner_store,
-                                    shard_uid,
-                                    state_root,
-                                    PartId::new(part_id, num_parts),
-                                    inner_progress,
-                                    inner_sender,
-                                );
-                                inner_threads_used.dec();
-                            })
-                        }
-
-                        self.remaining_state_parts = Some(next_start_part_id - start_part_id);
+                        self.remaining_state_parts = Some((
+                            next_start_part_id - start_part_id,
+                            (start_part_id..next_start_part_id).collect(),
+                        ));
                     }
-                    Some(state_parts) if state_parts > 0 => {
+                    Some((state_parts, parts_to_spawn)) if state_parts > 0 => {
                         error!(target: "store", shard_id, "fetching_state {state_parts}");
+
+                        // Try spawning remaining parts.
+                        let parts_to_spawn = self.try_spawn(
+                            &parts_to_spawn,
+                            num_parts,
+                            store,
+                            state_root,
+                            thread_pool,
+                        );
 
                         // If not all state parts were fetched, try receiving new results.
                         let mut updated_state_parts = state_parts;
@@ -281,7 +303,7 @@ impl FlatStorageShardCreator {
                             updated_state_parts -= 1;
                             self.metrics.inc_fetched_state(num_items);
                         }
-                        self.remaining_state_parts = Some(updated_state_parts);
+                        self.remaining_state_parts = Some((updated_state_parts, parts_to_spawn));
 
                         error!(target: "store", shard_id, "fetching_state {state_parts} end {updated_state_parts}");
                     }
