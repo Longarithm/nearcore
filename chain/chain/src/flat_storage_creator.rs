@@ -133,7 +133,7 @@ impl FlatStorageShardCreator {
         match result_sender.send(num_items) {
             Ok(_) => {}
             Err(e) => {
-                error!(target: "chain", "During flat storage creation, state \
+                error!(target: "store", "During flat storage creation, state \
                 part sender channel was disconnected: {e}. Results of fetching \
                 state part {part_id:?} for shard {shard_uid} will not be recorded \
                 and flat storage creation will stall. Please restart the node.");
@@ -150,6 +150,7 @@ impl FlatStorageShardCreator {
         thread_pool: &rayon::ThreadPool,
     ) -> Result<bool, Error> {
         let shard_id = self.shard_uid.shard_id();
+        error!(target: "store", shard_id, "update_status");
         let current_status =
             store_helper::get_flat_storage_status(chain_store.store(), self.shard_uid);
         self.metrics.set_status(&current_status);
@@ -224,6 +225,8 @@ impl FlatStorageShardCreator {
             FlatStorageStatus::Creation(FlatStorageCreationStatus::FetchingState(
                 fetching_state_status,
             )) => {
+                error!(target: "store", shard_id, "fetching_state");
+
                 let store = self.runtime.store().clone();
                 let block_hash = fetching_state_status.block_hash;
                 let start_part_id = fetching_state_status.part_id;
@@ -234,6 +237,7 @@ impl FlatStorageShardCreator {
 
                 match self.remaining_state_parts {
                     None => {
+                        error!(target: "store", shard_id, "fetching_state none");
                         // We need to spawn threads to fetch state parts and fill flat storage data.
                         let epoch_id = self.epoch_manager.get_epoch_id(&block_hash)?;
                         let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
@@ -267,6 +271,8 @@ impl FlatStorageShardCreator {
                         self.remaining_state_parts = Some(next_start_part_id - start_part_id);
                     }
                     Some(state_parts) if state_parts > 0 => {
+                        error!(target: "store", shard_id, "fetching_state {state_parts}");
+
                         // If not all state parts were fetched, try receiving new results.
                         let mut updated_state_parts = state_parts;
                         while let Ok(num_items) = self.fetched_parts_receiver.try_recv() {
@@ -274,8 +280,11 @@ impl FlatStorageShardCreator {
                             self.metrics.inc_fetched_state(num_items);
                         }
                         self.remaining_state_parts = Some(updated_state_parts);
+
+                        error!(target: "store", shard_id, "fetching_state {state_parts} end {updated_state_parts}");
                     }
                     Some(_) => {
+                        error!(target: "store", shard_id, "fetching_state 0");
                         // Mark that we don't wait for new state parts.
                         self.remaining_state_parts = None;
 
@@ -315,6 +324,8 @@ impl FlatStorageShardCreator {
                             );
                         }
                         store_update.commit()?;
+
+                        error!(target: "store", shard_id, "fetching_state end");
                     }
                 }
             }
@@ -410,6 +421,9 @@ impl FlatStorageShardCreator {
                 panic!("initiated flat storage creation for shard {shard_id} while it is disabled");
             }
         };
+
+        error!(target: "store", shard_id, "update_status end");
+
         Ok(false)
     }
 }
@@ -478,6 +492,7 @@ impl FlatStorageCreator {
     pub fn update_status(&mut self, chain_store: &ChainStore) -> Result<bool, Error> {
         // TODO (#7327): If resharding happens, we may want to throw an error here.
         // TODO (#7327): If flat storage is created, the creator probably should be removed.
+        error!(target: "store", "all shards update_status");
 
         let mut all_created = true;
         for shard_creator in self.shard_creators.values_mut() {
