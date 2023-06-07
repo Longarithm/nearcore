@@ -144,6 +144,7 @@ pub struct EpochManager {
     /// Used for tests as a bit of white-box testing.
     #[cfg(test)]
     epoch_info_aggregator_loop_counter: std::sync::atomic::AtomicUsize,
+    enforced_protocol_version: Option<ProtocolVersion>,
 }
 
 impl EpochManager {
@@ -164,6 +165,16 @@ impl EpochManager {
 
     pub fn new_arc_handle(store: Store, genesis_config: &GenesisConfig) -> Arc<EpochManagerHandle> {
         Arc::new(Self::new_from_genesis_config(store, genesis_config).unwrap().into_handle())
+    }
+
+    pub fn new_arc_handle_test(
+        store: Store,
+        genesis_config: &GenesisConfig,
+        enforced_protocol_version: ProtocolVersion,
+    ) -> Arc<EpochManagerHandle> {
+        let mut em = Self::new_from_genesis_config(store, genesis_config).unwrap();
+        em.enforced_protocol_version = Some(enforced_protocol_version);
+        Arc::new(em.into_handle())
     }
 
     pub fn new(
@@ -197,6 +208,7 @@ impl EpochManager {
             #[cfg(test)]
             epoch_info_aggregator_loop_counter: Default::default(),
             largest_final_height: 0,
+            enforced_protocol_version: None,
         };
         let genesis_epoch_id = EpochId::default();
         if !epoch_manager.has_epoch_info(&genesis_epoch_id)? {
