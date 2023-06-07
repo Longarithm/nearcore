@@ -67,6 +67,7 @@ pub struct TrieCosts {
 pub enum KeyLookupMode {
     FlatStorage,
     Trie,
+    BackgroundTrieFetch,
 }
 
 const TRIE_COSTS: TrieCosts = TrieCosts { byte_of_key: 2, byte_of_value: 1, node_cost: 50 };
@@ -803,9 +804,13 @@ impl Trie {
         mode: KeyLookupMode,
     ) -> Result<Option<ValueRef>, StorageError> {
         let use_flat_storage =
-            matches!(mode, KeyLookupMode::FlatStorage) && self.flat_storage_chunk_view.is_some();
+            matches!(mode, KeyLookupMode::FlatStorage | KeyLookupMode::BackgroundTrieFetch)
+                && self.flat_storage_chunk_view.is_some();
 
         if use_flat_storage {
+            if matches!(mode, KeyLookupMode::BackgroundTrieFetch) {
+                self.fetch_trie_key(key);
+            }
             let flat_state_value =
                 self.flat_storage_chunk_view.as_ref().unwrap().get_value(&key)?;
             Ok(flat_state_value.map(|value| value.to_value_ref()))
@@ -894,6 +899,14 @@ impl Trie {
 
     pub fn get_trie_nodes_count(&self) -> TrieNodesCount {
         self.storage.get_trie_nodes_count()
+    }
+
+    pub fn fetch_trie_key(&self, key: &[u8]) {
+        if let Some(storage) = self.storage.as_caching_storage() {
+            if let Some(prefetch_api) = &storage.prefetch_api {
+                let _ = prefetch_api.prefetch_trie_key(self.root, key.to_vec());
+            }
+        }
     }
 }
 

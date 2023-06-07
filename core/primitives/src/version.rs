@@ -157,6 +157,7 @@ pub enum ProtocolFeature {
     /// Enables Near-Vm. Note that this setting is not at all supported without PreparationV2,
     /// as it hardcodes preparation v2 code into the generated assembly.
     NearVmRuntime,
+    BackgroundReads,
 
     /// In case not all validator seats are occupied our algorithm provide incorrect minimal seat
     /// price - it reports as alpha * sum_stake instead of alpha * sum_stake / (1 - alpha), where
@@ -254,6 +255,7 @@ impl ProtocolFeature {
             | ProtocolFeature::DelegateAction => 59,
             ProtocolFeature::ComputeCosts | ProtocolFeature::FlatStorageReads => 61,
             ProtocolFeature::PreparationV2 | ProtocolFeature::NearVmRuntime => 62,
+            ProtocolFeature::BackgroundReads => 63,
 
             // Nightly features
             #[cfg(feature = "protocol_feature_fix_staking_threshold")]

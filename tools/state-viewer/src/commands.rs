@@ -24,6 +24,7 @@ use near_primitives::sharding::ChunkHash;
 use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
+use near_primitives::version::PROTOCOL_VERSION;
 use near_primitives_core::types::Gas;
 use near_store::test_utils::create_test_store;
 use near_store::{DBCol, Store, Trie, TrieCache, TrieCachingStorage, TrieConfig, TrieDBStorage};
@@ -196,7 +197,12 @@ pub(crate) fn apply_range(
 ) {
     let mut csv_file = csv_file.map(|filename| std::fs::File::create(filename).unwrap());
 
-    let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
+    // let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
+    let epoch_manager = EpochManager::new_arc_handle_test(
+        store.clone(),
+        &near_config.genesis.config,
+        PROTOCOL_VERSION + 1,
+    );
     let runtime = NightshadeRuntime::from_config(
         home_dir,
         store.clone(),

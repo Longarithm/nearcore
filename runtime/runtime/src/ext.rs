@@ -120,6 +120,7 @@ impl<'a> External for RuntimeExt<'a> {
         let mode = match mode {
             StorageGetMode::FlatStorage => KeyLookupMode::FlatStorage,
             StorageGetMode::Trie => KeyLookupMode::Trie,
+            StorageGetMode::BackgroundTrieFetch => KeyLookupMode::BackgroundTrieFetch,
         };
         self.trie_update
             .get_ref(&storage_key, mode)
@@ -138,6 +139,7 @@ impl<'a> External for RuntimeExt<'a> {
         let mode = match mode {
             StorageGetMode::FlatStorage => KeyLookupMode::FlatStorage,
             StorageGetMode::Trie => KeyLookupMode::Trie,
+            StorageGetMode::BackgroundTrieFetch => KeyLookupMode::BackgroundTrieFetch,
         };
         self.trie_update
             .get_ref(&storage_key, mode)
