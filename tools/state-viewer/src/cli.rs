@@ -14,7 +14,7 @@ use near_primitives::trie_key::trie_key_parsers::{
 };
 use near_primitives::types::{BlockHeight, ShardId};
 use near_store::{Mode, NodeStorage, ShardUId, Store, Temperature, Trie, TrieDBStorage};
-use nearcore::{load_config, NearConfig};
+use nearcore::{load_config, migrations, NearConfig};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -112,13 +112,22 @@ impl StateViewerSubCommand {
         let near_config = load_config(home_dir, genesis_validation)
             .unwrap_or_else(|e| panic!("Error loading config: {:#}", e));
 
-        let cold_config: Option<&near_store::StoreConfig> = near_config.config.cold_store.as_ref();
+        let migrator = migrations::Migrator::new(&near_config);
+        // let cold_config: Option<&near_store::StoreConfig> = near_config.config.cold_store.as_ref();
+        // let store_opener = NodeStorage::opener(
+        //     home_dir,
+        //     near_config.config.archive,
+        //     &near_config.config.store,
+        //     cold_config,
+        // );
+
         let store_opener = NodeStorage::opener(
             home_dir,
-            near_config.config.archive,
+            near_config.client_config.archive,
             &near_config.config.store,
-            cold_config,
-        );
+            near_config.config.cold_store.as_ref(),
+        )
+        .with_migrator(&migrator);
 
         let storage = store_opener.open_in_mode(mode).unwrap();
         let store = match temperature {
