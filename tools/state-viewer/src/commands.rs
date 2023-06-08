@@ -828,7 +828,7 @@ pub(crate) fn stress_test_flat_storage(
         let mut block_hashes = vec![];
         let mut block_hash = flat_head.hash;
         for _ in 0..steps {
-            let block_hash = chain_store.get_next_block_hash(&block_hash).unwrap();
+            block_hash = chain_store.get_next_block_hash(&block_hash).unwrap();
             block_hashes.push(block_hash);
         }
         assert_eq!(block_hashes.last().unwrap(), &start_hash);
@@ -837,7 +837,7 @@ pub(crate) fn stress_test_flat_storage(
         flat_storage_manager.create_flat_storage_for_shard(shard_uid);
         let flat_storage = flat_storage_manager.get_flat_storage_for_shard(shard_uid).unwrap();
 
-        for block_hash in block_hashes.drain(..).rev() {
+        for block_hash in block_hashes.drain(..) {
             let header = chain_store.get_block_header(&block_hash).unwrap();
             // let delta = store_helper::get_delta(&store, shard_id, block_hash.clone())
             //     .unwrap()
@@ -853,7 +853,7 @@ pub(crate) fn stress_test_flat_storage(
                 runtime.as_ref(),
                 &mut chain_store,
             );
-            let mut changes =
+            let changes =
                 FlatStateChanges::from_state_changes(apply_result.trie_changes.state_changes());
             // add fake delta items
             // let delta_items = 50_000_000u32 / 1_000;
