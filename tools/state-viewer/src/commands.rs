@@ -25,6 +25,7 @@ use near_primitives::state::{FlatStateValue, ValueRef};
 use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
+#[allow(unused)]
 use near_primitives::version::PROTOCOL_VERSION;
 use near_primitives_core::types::Gas;
 use near_store::flat::{

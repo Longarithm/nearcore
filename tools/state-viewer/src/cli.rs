@@ -548,7 +548,7 @@ impl StatePartsCmd {
     }
 }
 
-#[derive(Parser)]
+#[derive(clap::Parser)]
 pub struct StressTestFlatStorageCmd {
     #[clap(long)]
     shard_id: Option<ShardId>,
