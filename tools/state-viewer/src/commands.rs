@@ -21,7 +21,7 @@ use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardLayout;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::sharding::ChunkHash;
-use near_primitives::state::{FlatStateValue, ValueRef};
+use near_primitives::state::FlatStateValue;
 use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
@@ -757,7 +757,7 @@ pub(crate) fn stress_test_flat_storage(
             panic!("cannot create flat storage for shard {shard_id} with status {status:?}")
         }
     };
-    eprintln!("shard id = {} flat_head = {} {}", shard_id, flat_head.height(), flat_head.hash());
+    eprintln!("shard id = {} flat_head = {:?}", shard_id, flat_head);
     // let mut rng: ChaCha20Rng = SeedableRng::seed_from_u64(123);
 
     if mode == 0 {
@@ -778,8 +778,6 @@ pub(crate) fn stress_test_flat_storage(
                 &mut chain_store,
             );
 
-            let shard_layout = runtime_adapter.get_shard_layout(&prev_header.epoch_id()).unwrap();
-            let shard_uid = ShardUId::from_shard_id_and_layout(shard_id, &shard_layout);
             let chunk_extra = chain_store.get_chunk_extra(&prev_hash, &shard_uid).unwrap();
             let state_root = chunk_extra.state_root().clone();
             let prev_trie = runtime_adapter
@@ -834,12 +832,11 @@ pub(crate) fn stress_test_flat_storage(
             let block_hash = chain_store.get_next_block_hash(&block_hash).unwrap();
             block_hashes.push(block_hash);
         }
-        assert_eq!(block_hashes.last().unwrap(), start_hash);
+        assert_eq!(block_hashes.last().unwrap(), &start_hash);
 
         let flat_storage_manager = runtime_adapter.get_flat_storage_manager().unwrap();
         flat_storage_manager.create_flat_storage_for_shard(shard_uid);
-        let flat_storage_state =
-            flat_storage_manager.get_flat_storage_for_shard(shard_uid).unwrap();
+        let flat_storage = flat_storage_manager.get_flat_storage_for_shard(shard_uid).unwrap();
 
         for block_hash in block_hashes.drain(..).rev() {
             let header = chain_store.get_block_header(&block_hash).unwrap();
@@ -873,6 +870,7 @@ pub(crate) fn stress_test_flat_storage(
             //         ]))),
             //     );
             // }
+            eprintln!("len = {}", changes.len());
             let delta = FlatStateDelta {
                 metadata: FlatStateDeltaMetadata {
                     block: BlockInfo {
@@ -883,10 +881,9 @@ pub(crate) fn stress_test_flat_storage(
                 },
                 changes,
             };
-            eprintln!("len = {}", delta.len());
 
-            let store_update = flat_storage_state.add_delta(delta).unwrap();
-            flat_storage_state.update_flat_head(&block_hash).unwrap();
+            let store_update = flat_storage.add_delta(delta).unwrap();
+            flat_storage.update_flat_head(&block_hash).unwrap();
             store_update.commit().unwrap();
 
             // let mut store_update = store.store_update();
