@@ -743,12 +743,12 @@ pub(crate) fn stress_test_flat_storage(
     let mut height = final_head.height;
     let start_hash = final_head.last_block_hash;
     let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
-    let runtime_adapter: Arc<dyn RuntimeAdapter> = Arc::new(NightshadeRuntime::from_config(
+    let runtime = NightshadeRuntime::from_config(
         home_dir,
         store.clone(),
         &near_config,
         epoch_manager.clone(),
-    ));
+    );
     let shard_layout = epoch_manager.get_shard_layout(&final_head.epoch_id).unwrap();
     let shard_uid = ShardUId::from_shard_id_and_layout(shard_id, &shard_layout);
     let flat_head = match store_helper::get_flat_storage_status(&store, shard_uid) {
@@ -774,15 +774,14 @@ pub(crate) fn stress_test_flat_storage(
                 block_hash,
                 shard_id,
                 epoch_manager.as_ref(),
-                runtime_adapter.as_ref(),
+                runtime.as_ref(),
                 &mut chain_store,
             );
 
             let chunk_extra = chain_store.get_chunk_extra(&prev_hash, &shard_uid).unwrap();
             let state_root = chunk_extra.state_root().clone();
-            let prev_trie = runtime_adapter
-                .get_trie_for_shard(shard_id, &block_hash, state_root, false)
-                .unwrap();
+            let prev_trie =
+                runtime.get_trie_for_shard(shard_id, &block_hash, state_root, false).unwrap();
             let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
             let mut old_delta = FlatStateChanges::default();
             for state_change in apply_result.trie_changes.state_changes() {
@@ -834,7 +833,7 @@ pub(crate) fn stress_test_flat_storage(
         }
         assert_eq!(block_hashes.last().unwrap(), &start_hash);
 
-        let flat_storage_manager = runtime_adapter.get_flat_storage_manager().unwrap();
+        let flat_storage_manager = runtime.get_flat_storage_manager().unwrap();
         flat_storage_manager.create_flat_storage_for_shard(shard_uid);
         let flat_storage = flat_storage_manager.get_flat_storage_for_shard(shard_uid).unwrap();
 
@@ -851,7 +850,7 @@ pub(crate) fn stress_test_flat_storage(
                 block_hash,
                 shard_id,
                 epoch_manager.as_ref(),
-                runtime_adapter.as_ref(),
+                runtime.as_ref(),
                 &mut chain_store,
             );
             let mut changes =
