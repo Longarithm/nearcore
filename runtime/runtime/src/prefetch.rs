@@ -54,6 +54,7 @@ use tracing::{debug, warn};
 
 use crate::metrics;
 /// Transaction runtime view of the prefetching subsystem.
+#[allow(unused)]
 pub(crate) struct TriePrefetcher {
     prefetch_api: PrefetchApi,
     trie_root: StateRoot,
@@ -61,6 +62,7 @@ pub(crate) struct TriePrefetcher {
     prefetch_queue_full: GenericCounter<prometheus::core::AtomicU64>,
 }
 
+#[allow(unused)]
 impl TriePrefetcher {
     pub(crate) fn new_if_enabled(trie: &Trie) -> Option<Self> {
         if let Some(caching_storage) = trie.storage.as_caching_storage() {
