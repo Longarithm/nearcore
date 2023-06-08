@@ -88,6 +88,8 @@ pub enum StateViewerSubCommand {
     StateParts(StatePartsCmd),
     /// Benchmark how long does it take to iterate the trie.
     TrieIterationBenchmark(TrieIterationBenchmarkCmd),
+    #[clap(alias = "stress_test_flat_storage")]
+    StressTestFlatStorage(StressTestFlatStorageCmd),
     /// View head of the storage.
     #[clap(alias = "view_chain")]
     ViewChain(ViewChainCmd),
@@ -149,6 +151,9 @@ impl StateViewerSubCommand {
             StateViewerSubCommand::State => state(home_dir, near_config, store),
             StateViewerSubCommand::StateChanges(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::StateParts(cmd) => cmd.run(home_dir, near_config, store),
+            StateViewerSubCommand::StressTestFlatStorage(cmd) => {
+                cmd.run(home_dir, near_config, store)
+            }
             StateViewerSubCommand::ViewChain(cmd) => cmd.run(near_config, store),
             StateViewerSubCommand::ViewTrie(cmd) => cmd.run(store),
             StateViewerSubCommand::TrieIterationBenchmark(cmd) => {
@@ -542,6 +547,32 @@ impl StatePartsCmd {
         );
     }
 }
+
+#[derive(Parser)]
+pub struct StressTestFlatStorageCmd {
+    #[clap(long)]
+    shard_id: Option<ShardId>,
+    #[clap(long)]
+    steps: Option<u64>,
+    #[clap(long)]
+    mode: u8,
+    // 0: move flat storage backwards, write fake deltas
+    // 1: apply blocks forward, simulate reading deltas
+}
+
+impl StressTestFlatStorageCmd {
+    pub fn run(self, home_dir: &Path, near_config: NearConfig, store: Store) {
+        stress_test_flat_storage(
+            self.shard_id,
+            self.steps,
+            self.mode,
+            home_dir,
+            near_config,
+            store,
+        );
+    }
+}
+
 #[derive(clap::Parser)]
 pub struct ViewChainCmd {
     #[clap(long)]

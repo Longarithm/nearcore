@@ -21,13 +21,21 @@ use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardLayout;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::sharding::ChunkHash;
+use near_primitives::state::{FlatStateValue, ValueRef};
 use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
 use near_primitives::version::PROTOCOL_VERSION;
 use near_primitives_core::types::Gas;
+use near_store::flat::{
+    store_helper, BlockInfo, FlatStateChanges, FlatStateDelta, FlatStateDeltaMetadata,
+    FlatStorageReadyStatus, FlatStorageStatus,
+};
 use near_store::test_utils::create_test_store;
-use near_store::{DBCol, Store, Trie, TrieCache, TrieCachingStorage, TrieConfig, TrieDBStorage};
+use near_store::{
+    DBCol, KeyLookupMode, Store, Trie, TrieCache, TrieCachingStorage, TrieConfig, TrieDBStorage,
+    TrieStorage,
+};
 use nearcore::{NearConfig, NightshadeRuntime};
 use node_runtime::adapter::ViewRuntimeAdapter;
 use serde_json::json;
@@ -197,12 +205,12 @@ pub(crate) fn apply_range(
 ) {
     let mut csv_file = csv_file.map(|filename| std::fs::File::create(filename).unwrap());
 
-    // let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
-    let epoch_manager = EpochManager::new_arc_handle_test(
-        store.clone(),
-        &near_config.genesis.config,
-        PROTOCOL_VERSION + 1,
-    );
+    let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
+    // let epoch_manager = EpochManager::new_arc_handle_test(
+    //     store.clone(),
+    //     &near_config.genesis.config,
+    //     PROTOCOL_VERSION + 1,
+    // );
     let runtime = NightshadeRuntime::from_config(
         home_dir,
         store.clone(),
@@ -692,6 +700,202 @@ pub(crate) fn state(home_dir: &Path, near_config: NearConfig, store: Store) {
             if let Some(state_record) = StateRecord::from_raw_key_value(key, value) {
                 println!("{}", state_record);
             }
+        }
+    }
+}
+
+fn to_state_record(
+    trie_storage: &dyn TrieStorage,
+    key: Vec<u8>,
+    value: Option<FlatStateValue>,
+) -> Option<StateRecord> {
+    match value {
+        Some(value) => {
+            let value = match value {
+                FlatStateValue::Ref(value_ref) => {
+                    trie_storage.retrieve_raw_bytes(&value_ref.hash).unwrap().to_vec()
+                }
+                FlatStateValue::Inlined(value) => value,
+            };
+            Some(StateRecord::from_raw_key_value(key, value).unwrap())
+        }
+        None => None,
+    }
+}
+
+pub(crate) fn stress_test_flat_storage(
+    shard_id: Option<ShardId>,
+    steps: Option<u64>,
+    mode: u8,
+    home_dir: &Path,
+    near_config: NearConfig,
+    store: Store,
+) {
+    let steps = steps.unwrap_or(100);
+    let shard_id = shard_id.unwrap_or(0);
+    let mut chain_store = ChainStore::new(
+        store.clone(),
+        near_config.genesis.config.genesis_height,
+        near_config.client_config.save_trie_changes,
+    );
+    let final_head = chain_store.final_head().unwrap();
+    let mut height = final_head.height;
+    let start_hash = final_head.last_block_hash;
+    let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
+    let runtime_adapter: Arc<dyn RuntimeAdapter> = Arc::new(NightshadeRuntime::from_config(
+        home_dir,
+        store.clone(),
+        &near_config,
+        epoch_manager.clone(),
+    ));
+    let shard_layout = epoch_manager.get_shard_layout(&final_head.epoch_id).unwrap();
+    let shard_uid = ShardUId::from_shard_id_and_layout(shard_id, &shard_layout);
+    let flat_head = match store_helper::get_flat_storage_status(&store, shard_uid) {
+        Ok(FlatStorageStatus::Ready(ready_status)) => ready_status.flat_head,
+        status => {
+            panic!("cannot create flat storage for shard {shard_id} with status {status:?}")
+        }
+    };
+    eprintln!("shard id = {} flat_head = {} {}", shard_id, flat_head.height(), flat_head.hash());
+    // let mut rng: ChaCha20Rng = SeedableRng::seed_from_u64(123);
+
+    if mode == 0 {
+        for _ in 0..steps {
+            let block_hash =
+                chain_store.get_block_hash_by_height(height.clone()).expect("Block does not exist");
+            let header = chain_store.get_block_header(&block_hash).unwrap();
+            let prev_hash = header.prev_hash();
+            let prev_header = chain_store.get_block_header(&prev_hash).unwrap();
+            let prev_height = prev_header.height();
+            let prev_prev_hash = prev_header.prev_hash().clone();
+
+            let (_, apply_result) = apply_block(
+                block_hash,
+                shard_id,
+                epoch_manager.as_ref(),
+                runtime_adapter.as_ref(),
+                &mut chain_store,
+            );
+
+            let shard_layout = runtime_adapter.get_shard_layout(&prev_header.epoch_id()).unwrap();
+            let shard_uid = ShardUId::from_shard_id_and_layout(shard_id, &shard_layout);
+            let chunk_extra = chain_store.get_chunk_extra(&prev_hash, &shard_uid).unwrap();
+            let state_root = chunk_extra.state_root().clone();
+            let prev_trie = runtime_adapter
+                .get_trie_for_shard(shard_id, &block_hash, state_root, false)
+                .unwrap();
+            let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
+            let mut old_delta = FlatStateChanges::default();
+            for state_change in apply_result.trie_changes.state_changes() {
+                let key = state_change.trie_key.clone();
+                let value = state_change.changes.last().unwrap().data.clone();
+                let value = match value {
+                    Some(value) => Some(FlatStateValue::Inlined(value)),
+                    None => None,
+                };
+                let prev_value = prev_trie
+                    .get_ref(&key.to_vec(), KeyLookupMode::Trie)
+                    .unwrap()
+                    .map(|value_ref| FlatStateValue::Ref(value_ref));
+                eprintln!(
+                    "{:?} -> {:?}",
+                    to_state_record(&trie_storage, key.to_vec(), prev_value.clone()),
+                    to_state_record(&trie_storage, key.to_vec(), value.clone())
+                );
+
+                old_delta.insert(key.to_vec(), prev_value);
+            }
+
+            // MOVING BACKWARDS, RECORDING DELTAS
+            let mut store_update = store.store_update();
+            old_delta.apply_to_flat_state(&mut store_update, shard_uid);
+            store_helper::set_flat_storage_status(
+                &mut store_update,
+                shard_uid,
+                FlatStorageStatus::Ready(FlatStorageReadyStatus {
+                    flat_head: BlockInfo {
+                        hash: prev_hash.clone(),
+                        height: prev_height.clone(),
+                        prev_hash: prev_prev_hash,
+                    },
+                }),
+            );
+            store_update.commit().unwrap();
+
+            height = prev_height;
+            eprintln!("{}", height);
+        }
+    } else {
+        // simulate block processing
+        let mut block_hashes = vec![];
+        let mut block_hash = flat_head.hash;
+        for _ in 0..steps {
+            let block_hash = chain_store.get_next_block_hash(&block_hash).unwrap();
+            block_hashes.push(block_hash);
+        }
+        assert_eq!(block_hashes.last().unwrap(), start_hash);
+
+        let flat_storage_manager = runtime_adapter.get_flat_storage_manager().unwrap();
+        flat_storage_manager.create_flat_storage_for_shard(shard_uid);
+        let flat_storage_state =
+            flat_storage_manager.get_flat_storage_for_shard(shard_uid).unwrap();
+
+        for block_hash in block_hashes.drain(..).rev() {
+            let header = chain_store.get_block_header(&block_hash).unwrap();
+            // let delta = store_helper::get_delta(&store, shard_id, block_hash.clone())
+            //     .unwrap()
+            //     .unwrap()
+            //     .as_ref()
+            //     .clone();
+            eprintln!("apply {} {}", header.height(), header.hash());
+
+            let (_, apply_result) = apply_block(
+                block_hash,
+                shard_id,
+                epoch_manager.as_ref(),
+                runtime_adapter.as_ref(),
+                &mut chain_store,
+            );
+            let mut changes =
+                FlatStateChanges::from_state_changes(apply_result.trie_changes.state_changes());
+            // add fake delta items
+            // let delta_items = 50_000_000u32 / 1_000;
+            // for i in 0..delta_items {
+            //     // 50 MB / key length
+            //     let mut key = vec![100u8]; // start from non-existent byte
+            //     key.extend_from_slice(&(0..900).map(|_| rng.gen_range(0..20)).collect::<Vec<_>>()); // 900 B per length + 100 B approximate overhead
+            //     changes.insert(
+            //         key,
+            //         Some(FlatStateValue::Ref(ValueRef::new(&[
+            //             (i / 256 % 256) as u8,
+            //             (i % 256) as u8,
+            //         ]))),
+            //     );
+            // }
+            let delta = FlatStateDelta {
+                metadata: FlatStateDeltaMetadata {
+                    block: BlockInfo {
+                        hash: block_hash,
+                        height: header.height(),
+                        prev_hash: header.prev_hash().clone(),
+                    },
+                },
+                changes,
+            };
+            eprintln!("len = {}", delta.len());
+
+            let store_update = flat_storage_state.add_delta(delta).unwrap();
+            flat_storage_state.update_flat_head(&block_hash).unwrap();
+            store_update.commit().unwrap();
+
+            // let mut store_update = store.store_update();
+            // store_helper::set_flat_head(&mut store_update, shard_id, &block_hash);
+            // delta.apply_to_flat_state(&mut store_update);
+            // store_update.commit().unwrap();
+        }
+
+        if mode == 2 {
+            // move flat head forward
         }
     }
 }
