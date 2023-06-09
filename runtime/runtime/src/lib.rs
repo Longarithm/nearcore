@@ -1202,7 +1202,7 @@ impl Runtime {
             num_transactions = transactions.len())
         .entered();
 
-        let mut prefetcher = TriePrefetcher::new_if_enabled(&trie);
+        let prefetcher = TriePrefetcher::new_if_enabled(&trie);
         let mut state_update = TrieUpdate::new(trie);
 
         // Remove in favour of background PF
