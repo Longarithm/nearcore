@@ -41,7 +41,9 @@ use nearcore::{NearConfig, NightshadeRuntime};
 use node_runtime::adapter::ViewRuntimeAdapter;
 use serde_json::json;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::fs::{self, File};
+use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -705,11 +707,11 @@ pub(crate) fn state(home_dir: &Path, near_config: NearConfig, store: Store) {
     }
 }
 
-fn to_state_record(
+fn to_state_record_str(
     trie_storage: &dyn TrieStorage,
     key: Vec<u8>,
     value: Option<FlatStateValue>,
-) -> Option<StateRecord> {
+) -> String {
     match value {
         Some(value) => {
             let value = match value {
@@ -718,9 +720,9 @@ fn to_state_record(
                 }
                 FlatStateValue::Inlined(value) => value,
             };
-            Some(StateRecord::from_raw_key_value(key, value).unwrap())
+            format!("{}", StateRecord::from_raw_key_value(key, value).unwrap())
         }
-        None => None,
+        None => "None",
     }
 }
 
@@ -796,9 +798,9 @@ pub(crate) fn stress_test_flat_storage(
                     .unwrap()
                     .map(|value_ref| FlatStateValue::Ref(value_ref));
                 eprintln!(
-                    "{:?} -> {:?}",
-                    to_state_record(&trie_storage, key.to_vec(), prev_value.clone()),
-                    to_state_record(&trie_storage, key.to_vec(), value.clone())
+                    "{} -> {}",
+                    to_state_record_str(&trie_storage, key.to_vec(), prev_value.clone()),
+                    to_state_record_str(&trie_storage, key.to_vec(), value.clone())
                 );
 
                 old_delta.insert(key.to_vec(), prev_value);
