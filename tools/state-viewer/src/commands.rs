@@ -719,7 +719,10 @@ fn to_state_record_str(
                 }
                 FlatStateValue::Inlined(value) => value,
             };
-            format!("{}", StateRecord::from_raw_key_value(key, value).unwrap())
+            match StateRecord::from_raw_key_value(key, value) {
+                Some(sr) => format!("{}", sr),
+                None => "Undefined".to_string(),
+            }
         }
         None => "None".to_string(),
     }
@@ -833,9 +836,13 @@ pub(crate) fn stress_test_flat_storage(
         // simulate block processing
         let mut block_hashes = vec![];
         let mut block_hash = flat_head.hash;
-        for _ in 0..steps {
+        for i in 0..steps {
             block_hash = chain_store.get_next_block_hash(&block_hash).unwrap();
             block_hashes.push(block_hash);
+            if block_hash == start_hash {
+                eprintln!("CUT AT STEP {}", i);
+                break;
+            }
         }
         assert_eq!(block_hashes.last().unwrap(), &start_hash);
 
