@@ -803,8 +803,9 @@ impl Trie {
         key: &[u8],
         mode: KeyLookupMode,
     ) -> Result<Option<ValueRef>, StorageError> {
-        let use_flat_storage =
-            matches!(mode, KeyLookupMode::FlatStorage | KeyLookupMode::BackgroundTrieFetch);
+        let use_flat_storage = matches!(mode, KeyLookupMode::FlatStorage | KeyLookupMode::BackgroundTrieFetch)
+                // hack to make TriePrefetchingStorage work. figure out how to do without it
+                && self.storage.as_caching_storage().is_some();
 
         if use_flat_storage {
             if matches!(mode, KeyLookupMode::BackgroundTrieFetch) {
