@@ -728,6 +728,7 @@ pub(crate) fn stress_test_flat_storage(
     shard_id: Option<ShardId>,
     steps: Option<u64>,
     mode: u8,
+    bump_pv: bool,
     home_dir: &Path,
     near_config: NearConfig,
     store: Store,
@@ -742,7 +743,10 @@ pub(crate) fn stress_test_flat_storage(
     let final_head = chain_store.final_head().unwrap();
     let mut height = final_head.height;
     let start_hash = final_head.last_block_hash;
-    let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
+    // let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
+    let pv = if bump_pv { PROTOCOL_VERSION + 1 } else { PROTOCOL_VERSION };
+    let epoch_manager =
+        EpochManager::new_arc_handle_test(store.clone(), &near_config.genesis.config, pv);
     let runtime = NightshadeRuntime::from_config(
         home_dir,
         store.clone(),

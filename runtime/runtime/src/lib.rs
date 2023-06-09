@@ -6,6 +6,7 @@ use crate::config::{
 };
 use crate::genesis::{GenesisStateApplier, StorageComputer};
 // use crate::prefetch::TriePrefetcher;
+use crate::prefetch::TriePrefetcher;
 use crate::verifier::{check_storage_stake, validate_receipt, StorageStakingError};
 pub use crate::verifier::{
     validate_transaction, verify_and_charge_transaction, ZERO_BALANCE_ACCOUNT_STORAGE_LIMIT,
@@ -1201,7 +1202,7 @@ impl Runtime {
             num_transactions = transactions.len())
         .entered();
 
-        // let mut prefetcher = TriePrefetcher::new_if_enabled(&trie);
+        let mut prefetcher = TriePrefetcher::new_if_enabled(&trie);
         let mut state_update = TrieUpdate::new(trie);
 
         // Remove in favour of background PF
@@ -1448,12 +1449,6 @@ impl Runtime {
             }
         }
 
-        // Remove in favour of background PF
-        // No more receipts are executed on this trie, stop any pending prefetches on it.
-        // if let Some(prefetcher) = &prefetcher {
-        //     prefetcher.clear();
-        // }
-
         if delayed_receipts_indices != initial_delayed_receipt_indices {
             set(&mut state_update, TrieKey::DelayedReceiptIndices, &delayed_receipts_indices);
         }
@@ -1472,6 +1467,11 @@ impl Runtime {
         state_update.commit(StateChangeCause::UpdatedDelayedReceipts);
         self.apply_state_patch(&mut state_update, state_patch);
         let (trie, trie_changes, state_changes) = state_update.finalize()?;
+        // Realization: this is actually needed! Let's not have leftover stuff in the end.
+        // No more receipts are executed on this trie, stop any pending prefetches on it.
+        if let Some(prefetcher) = &prefetcher {
+            prefetcher.clear();
+        }
 
         // Dedup proposals from the same account.
         // The order is deterministically changed.

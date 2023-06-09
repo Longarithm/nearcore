@@ -565,6 +565,8 @@ pub struct StressTestFlatStorageCmd {
     steps: Option<u64>,
     #[clap(long)]
     mode: u8,
+    #[clap(long)]
+    bump_pv: bool,
     // 0: move flat storage backwards, write fake deltas
     // 1: apply blocks forward, simulate reading deltas
 }
@@ -575,6 +577,7 @@ impl StressTestFlatStorageCmd {
             self.shard_id,
             self.steps,
             self.mode,
+            self.bump_pv,
             home_dir,
             near_config,
             store,
