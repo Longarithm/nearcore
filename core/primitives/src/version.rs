@@ -254,8 +254,8 @@ impl ProtocolFeature {
             | ProtocolFeature::ZeroBalanceAccount
             | ProtocolFeature::DelegateAction => 59,
             ProtocolFeature::ComputeCosts | ProtocolFeature::FlatStorageReads => 61,
-            ProtocolFeature::PreparationV2 | ProtocolFeature::NearVmRuntime => 62,
-            ProtocolFeature::BackgroundReads => 63,
+            ProtocolFeature::BackgroundReads => 62,
+            ProtocolFeature::PreparationV2 | ProtocolFeature::NearVmRuntime => 63,
 
             // Nightly features
             #[cfg(feature = "protocol_feature_fix_staking_threshold")]

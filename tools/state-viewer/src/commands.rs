@@ -25,6 +25,7 @@ use near_primitives::state::FlatStateValue;
 use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
+use near_primitives::version::ProtocolFeature;
 #[allow(unused)]
 use near_primitives::version::PROTOCOL_VERSION;
 use near_primitives_core::types::Gas;
@@ -744,7 +745,8 @@ pub(crate) fn stress_test_flat_storage(
     let mut height = final_head.height;
     let start_hash = final_head.last_block_hash;
     // let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
-    let pv = if bump_pv { PROTOCOL_VERSION + 1 } else { PROTOCOL_VERSION };
+    let new_pv = ProtocolFeature::BackgroundReads.protocol_version();
+    let pv = if bump_pv { new_pv } else { new_pv - 1 };
     let epoch_manager =
         EpochManager::new_arc_handle_test(store.clone(), &near_config.genesis.config, pv);
     let runtime = NightshadeRuntime::from_config(
@@ -841,7 +843,7 @@ pub(crate) fn stress_test_flat_storage(
         flat_storage_manager.create_flat_storage_for_shard(shard_uid);
         let flat_storage = flat_storage_manager.get_flat_storage_for_shard(shard_uid).unwrap();
 
-        for block_hash in block_hashes.drain(..) {
+        for (i, block_hash) in block_hashes.drain(..).enumerate() {
             let header = chain_store.get_block_header(&block_hash).unwrap();
             eprintln!("apply {} {}", header.height(), header.hash());
 
@@ -852,18 +854,29 @@ pub(crate) fn stress_test_flat_storage(
                 runtime.as_ref(),
                 &mut chain_store,
             );
+            let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
+            for state_change in apply_result.trie_changes.state_changes() {
+                let key = state_change.trie_key.clone();
+                let value = state_change.changes.last().unwrap().data.clone();
+                let value = match value {
+                    Some(value) => Some(FlatStateValue::Inlined(value)),
+                    None => None,
+                };
+                eprintln!("{}", to_state_record_str(&trie_storage, key.to_vec(), value.clone()));
+            }
+            let changes =
+                FlatStateChanges::from_state_changes(apply_result.trie_changes.state_changes());
+            eprintln!("len = {}", changes.len());
+
             let existing_chunk_extra =
                 chain_store.get_chunk_extra(&block_hash, &shard_uid).unwrap();
             assert_eq!(
                 existing_chunk_extra.state_root(),
                 &apply_result.new_root,
-                "Critical failure, state roots didn't match"
+                "Critical failure, state roots didn't match. Executed {} steps",
+                i,
             );
 
-            let changes =
-                FlatStateChanges::from_state_changes(apply_result.trie_changes.state_changes());
-
-            eprintln!("len = {}", changes.len());
             let delta = FlatStateDelta {
                 metadata: FlatStateDeltaMetadata {
                     block: BlockInfo {
