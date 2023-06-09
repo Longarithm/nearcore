@@ -882,8 +882,8 @@ pub(crate) fn stress_test_flat_storage(
             };
 
             let store_update = flat_storage.add_delta(delta).unwrap();
-            flat_storage.update_flat_head(&block_hash).unwrap();
             store_update.commit().unwrap();
+            flat_storage.update_flat_head(&block_hash).unwrap();
 
             // let mut store_update = store.store_update();
             // store_helper::set_flat_head(&mut store_update, shard_id, &block_hash);
