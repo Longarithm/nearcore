@@ -804,16 +804,24 @@ impl Trie {
         mode: KeyLookupMode,
     ) -> Result<Option<ValueRef>, StorageError> {
         let use_flat_storage =
-            matches!(mode, KeyLookupMode::FlatStorage | KeyLookupMode::BackgroundTrieFetch)
-                && self.flat_storage_chunk_view.is_some();
+            matches!(mode, KeyLookupMode::FlatStorage | KeyLookupMode::BackgroundTrieFetch);
 
         if use_flat_storage {
             if matches!(mode, KeyLookupMode::BackgroundTrieFetch) {
                 self.fetch_trie_key(key);
             }
-            let flat_state_value =
-                self.flat_storage_chunk_view.as_ref().unwrap().get_value(&key)?;
-            Ok(flat_state_value.map(|value| value.to_value_ref()))
+            if self.flat_storage_chunk_view.is_some() {
+                let flat_state_value =
+                    self.flat_storage_chunk_view.as_ref().unwrap().get_value(&key)?;
+                Ok(flat_state_value.map(|value| value.to_value_ref()))
+            } else {
+                let caching_storage = self.storage.as_caching_storage().unwrap();
+                let store = caching_storage.store.clone();
+                let db_storage = TrieDBStorage::new(store, caching_storage.shard_uid);
+                let trie = Trie::new(Rc::new(db_storage), self.root, None);
+                let key_nibbles = NibbleSlice::new(key);
+                trie.lookup(key_nibbles)
+            }
         } else {
             let key_nibbles = NibbleSlice::new(key);
             self.lookup(key_nibbles)
