@@ -41,9 +41,7 @@ use nearcore::{NearConfig, NightshadeRuntime};
 use node_runtime::adapter::ViewRuntimeAdapter;
 use serde_json::json;
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::fs::{self, File};
-use std::io;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -722,7 +720,7 @@ fn to_state_record_str(
             };
             format!("{}", StateRecord::from_raw_key_value(key, value).unwrap())
         }
-        None => "None",
+        None => "None".to_string(),
     }
 }
 
