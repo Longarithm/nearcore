@@ -38,7 +38,6 @@ use near_vm_errors::{
 use near_vm_logic::types::PromiseResult;
 use near_vm_logic::{ActionCosts, VMContext, VMOutcome};
 use near_vm_runner::precompile_contract;
-use std::collections::VecDeque;
 
 /// Runs given function call with given context / apply state.
 pub(crate) fn execute_function_call(
@@ -183,7 +182,7 @@ pub(crate) fn action_function_call(
     let protocol_version = apply_state.current_protocol_version;
     // initialize node counts?
     let node_counts = if checked_feature!("stable", BackgroundReads, protocol_version) {
-        state_update.test_get_node_counts(receipt.receipt_id);
+        state_update.test_get_node_counts(receipt.receipt_id)
     } else {
         Default::default()
     };
