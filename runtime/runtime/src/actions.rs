@@ -216,8 +216,8 @@ pub(crate) fn action_function_call(
     if checked_feature!("stable", BackgroundReads, protocol_version) {
         assert!(runtime_ext.node_counts.borrow().is_empty());
     } else {
-        state_update
-            .test_put_node_counts(receipt.receipt_id, runtime_ext.node_counts.borrow().clone());
+        let node_counts = runtime_ext.node_counts.borrow().clone();
+        state_update.test_put_node_counts(receipt.receipt_id, node_counts);
     }
 
     let outcome = outcome_result?;
