@@ -13,8 +13,6 @@ use near_primitives::types::{ShardId, TrieCacheMode, TrieNodesCount};
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::fs;
-use std::io::Read;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
