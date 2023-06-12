@@ -655,14 +655,13 @@ impl TrieStorage for TrieCachingStorage {
     }
 
     fn test_get_node_counts(&self, receipt_id: CryptoHash) -> VecDeque<TrieNodesCount> {
-        self.
+        let guard = self.shard_cache.lock();
+        guard.node_counts.get(&receipt_id).unwrap().clone()
     }
 
-    fn test_put_node_counts(
-        &self,
-        _receipt_id: CryptoHash,
-        _node_counts: VecDeque<TrieNodesCount>,
-    ) {
+    fn test_put_node_counts(&self, receipt_id: CryptoHash, node_counts: VecDeque<TrieNodesCount>) {
+        let mut guard = self.shard_cache.lock();
+        guard.node_counts.insert(receipt_id, node_counts);
     }
 }
 
