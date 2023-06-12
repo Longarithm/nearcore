@@ -79,7 +79,7 @@ pub struct TrieCacheInner {
     // Counters tracking operations happening inside the shard cache.
     // Stored here to avoid overhead of looking them up on hot paths.
     metrics: TrieCacheMetrics,
-    node_counts: HashMap<CryptoHash, VecDeque<TrieNodesCount>>,
+    pub node_counts: HashMap<CryptoHash, VecDeque<TrieNodesCount>>,
 }
 
 struct TrieCacheMetrics {
@@ -241,7 +241,7 @@ impl TrieCacheInner {
 
 /// Wrapper over LruCache to handle concurrent access.
 #[derive(Clone)]
-pub struct TrieCache(pub(crate) Arc<Mutex<TrieCacheInner>>);
+pub struct TrieCache(pub Arc<Mutex<TrieCacheInner>>);
 
 impl TrieCache {
     pub fn new(config: &TrieConfig, shard_uid: ShardUId, is_view: bool) -> Self {
@@ -287,6 +287,13 @@ impl TrieCache {
 
     pub(crate) fn lock(&self) -> std::sync::MutexGuard<TrieCacheInner> {
         self.0.lock().expect(POISONED_LOCK_ERR)
+    }
+
+    pub fn test_put_node_counts(&self) {
+        let guard = self.lock();
+        let path_name = format!("/tmp/{}", guard.shard_id).to_string();
+        println!("Writing node counts for {} receipts", guard.node_counts.len());
+        std::fs::write(path_name, serde_json::to_string(&guard.node_counts).unwrap()).unwrap();
     }
 }
 
@@ -411,7 +418,7 @@ pub struct TrieCachingStorage {
 
     /// Caches ever requested items for the shard `shard_uid`. Used to speed up DB operations, presence of any item is
     /// not guaranteed.
-    pub(crate) shard_cache: TrieCache,
+    pub shard_cache: TrieCache,
     /// Caches all items requested in the mode `TrieCacheMode::CachingChunk`. It is created in
     /// `apply_transactions_with_optional_storage_proof` by calling `get_trie_for_shard`. Before we start to apply
     /// txs and receipts in the chunk, it must be empty, and all items placed here must remain until applying

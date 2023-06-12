@@ -20,7 +20,7 @@ struct ShardTriesInner {
     store: Store,
     trie_config: TrieConfig,
     /// Cache reserved for client actor to use
-    caches: RwLock<HashMap<ShardUId, TrieCache>>,
+    pub caches: RwLock<HashMap<ShardUId, TrieCache>>,
     /// Cache for readers.
     view_caches: RwLock<HashMap<ShardUId, TrieCache>>,
     flat_storage_manager: FlatStorageManager,

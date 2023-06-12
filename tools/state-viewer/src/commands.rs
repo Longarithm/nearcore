@@ -17,6 +17,7 @@ use near_epoch_manager::EpochManagerHandle;
 use near_epoch_manager::{EpochManager, EpochManagerAdapter};
 use near_primitives::account::id::AccountId;
 use near_primitives::block::{Block, BlockHeader};
+use near_primitives::checked_feature;
 use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardLayout;
 use near_primitives::shard_layout::ShardUId;
@@ -899,6 +900,12 @@ pub(crate) fn stress_test_flat_storage(
             store_update.commit().unwrap();
             flat_storage.update_flat_head(&block_hash).unwrap();
         }
+    }
+
+    if !checked_feature!("stable", BackgroundReads, pv) {
+        let trie = runtime.tries.get_trie_for_shard(shard_uid, CryptoHash::default());
+        let storage = trie.storage.as_caching_storage().unwrap();
+        storage.shard_cache.test_put_node_counts();
     }
 }
 

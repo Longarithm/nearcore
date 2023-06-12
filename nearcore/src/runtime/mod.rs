@@ -83,7 +83,7 @@ pub struct NightshadeRuntime {
     runtime_config_store: RuntimeConfigStore,
 
     store: Store,
-    tries: ShardTries,
+    pub tries: ShardTries,
     trie_viewer: TrieViewer,
     flat_storage_manager: FlatStorageManager,
     pub runtime: Runtime,
