@@ -186,6 +186,7 @@ pub(crate) fn action_function_call(
     } else {
         Default::default()
     };
+    println!("got {} node counts", node_counts.len());
 
     let mut runtime_ext = RuntimeExt::new(
         state_update,
@@ -217,6 +218,7 @@ pub(crate) fn action_function_call(
         assert!(runtime_ext.node_counts.borrow().is_empty());
     } else {
         let node_counts = runtime_ext.node_counts.borrow().clone();
+        println!("putting {} node counts", node_counts.len());
         state_update.test_put_node_counts(receipt.receipt_id, node_counts);
     }
 
