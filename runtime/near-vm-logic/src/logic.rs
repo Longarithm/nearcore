@@ -2503,18 +2503,17 @@ impl<'a> VMLogic<'a> {
             .into());
         }
         self.gas_counter.pay_per(storage_read_key_byte, key.len() as u64)?;
-        let nodes_before = self.ext.get_trie_nodes_count().clone();
+        let nodes_before = self.ext.get_trie_nodes_count();
         let read_mode =
             if checked_feature!("stable", FlatStorageReads, self.current_protocol_version) {
                 StorageGetMode::FlatStorage
             } else {
                 StorageGetMode::Trie
             };
-        let read = self.ext.storage_get(&key, read_mode).clone();
+        let read = self.ext.storage_get(&key, read_mode);
         let nodes_delta = self
             .ext
             .get_trie_nodes_count()
-            .clone()
             .checked_sub(&nodes_before)
             .ok_or(InconsistentStateError::IntegerOverflow)?;
         self.gas_counter.add_trie_fees(&nodes_delta)?;
