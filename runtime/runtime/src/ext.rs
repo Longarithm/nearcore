@@ -191,12 +191,12 @@ impl<'a> External for RuntimeExt<'a> {
     fn get_trie_nodes_count(&self) -> TrieNodesCount {
         if checked_feature!("stable", BackgroundReads, self.current_protocol_version) {
             let count = self.node_counts.borrow_mut().pop_front().unwrap();
-            println!("sub {}", self.node_counts.len());
+            println!("sub {}", self.node_counts.borrow().len());
             count
         } else {
             let count = self.trie_update.trie().get_trie_nodes_count();
             self.node_counts.borrow_mut().push_back(count.clone());
-            println!("add {}", self.node_counts.len());
+            println!("add {}", self.node_counts.borrow().len());
             count
         }
     }
