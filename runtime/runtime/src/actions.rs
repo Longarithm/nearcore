@@ -212,7 +212,7 @@ pub(crate) fn action_function_call(
         is_last_action,
         None,
     );
-
+    println!("{:?}", outcome_result);
     // gather node counts
     if checked_feature!("stable", BackgroundReads, protocol_version) {
         assert!(runtime_ext.node_counts.borrow().is_empty());
