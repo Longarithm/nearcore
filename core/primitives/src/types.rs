@@ -987,7 +987,7 @@ pub enum TrieCacheMode {
 }
 
 /// Counts trie nodes reads during tx/receipt execution for proper storage costs charging.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq)]
 pub struct TrieNodesCount {
     /// Potentially expensive trie node reads which are served from disk in the worst case.
     pub db_reads: u64,

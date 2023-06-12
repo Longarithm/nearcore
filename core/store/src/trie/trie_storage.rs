@@ -13,6 +13,9 @@ use near_primitives::types::{ShardId, TrieCacheMode, TrieNodesCount};
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fs;
+use std::io::Read;
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -78,6 +81,7 @@ pub struct TrieCacheInner {
     // Counters tracking operations happening inside the shard cache.
     // Stored here to avoid overhead of looking them up on hot paths.
     metrics: TrieCacheMetrics,
+    node_counts: HashMap<CryptoHash, VecDeque<TrieNodesCount>>,
 }
 
 struct TrieCacheMetrics {
@@ -106,6 +110,15 @@ impl TrieCacheInner {
         let mut buffer = itoa::Buffer::new();
         let shard_id_str = buffer.format(shard_id);
 
+        let path_name = format!("/tmp/{}", shard_id).to_string();
+        let file = Path::new(&path_name);
+        let node_counts = if file.exists() {
+            let input = std::fs::read_to_string(&path_name).unwrap();
+            serde_json::from_str::<_>(&input).unwrap()
+        } else {
+            Default::default()
+        };
+
         let metrics_labels: [&str; 2] = [&shard_id_str, if is_view { "1" } else { "0" }];
         let metrics = TrieCacheMetrics {
             shard_cache_too_large: metrics::SHARD_CACHE_TOO_LARGE
@@ -127,6 +140,7 @@ impl TrieCacheInner {
             shard_id,
             is_view,
             metrics,
+            node_counts,
         }
     }
 
@@ -302,6 +316,17 @@ pub trait TrieStorage {
     }
 
     fn get_trie_nodes_count(&self) -> TrieNodesCount;
+
+    fn test_get_node_counts(&self, _receipt_id: CryptoHash) -> VecDeque<TrieNodesCount> {
+        Default::default()
+    }
+
+    fn test_put_node_counts(
+        &self,
+        _receipt_id: CryptoHash,
+        _node_counts: VecDeque<TrieNodesCount>,
+    ) {
+    }
 }
 
 /// Records every value read by retrieve_raw_bytes.
@@ -627,6 +652,17 @@ impl TrieStorage for TrieCachingStorage {
 
     fn get_trie_nodes_count(&self) -> TrieNodesCount {
         TrieNodesCount { db_reads: self.db_read_nodes.get(), mem_reads: self.mem_read_nodes.get() }
+    }
+
+    fn test_get_node_counts(&self, receipt_id: CryptoHash) -> VecDeque<TrieNodesCount> {
+        self.
+    }
+
+    fn test_put_node_counts(
+        &self,
+        _receipt_id: CryptoHash,
+        _node_counts: VecDeque<TrieNodesCount>,
+    ) {
     }
 }
 

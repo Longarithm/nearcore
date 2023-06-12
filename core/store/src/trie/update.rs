@@ -162,16 +162,16 @@ impl TrieUpdate {
         }
     }
 
-    pub fn test_get_node_counts(&self, _receipt_id: CryptoHash) -> VecDeque<TrieNodesCount> {
-        Default::default()
+    pub fn test_get_node_counts(&self, receipt_id: CryptoHash) -> VecDeque<TrieNodesCount> {
+        self.trie.storage.test_get_node_counts(receipt_id)
     }
 
     pub fn test_put_node_counts(
         &self,
-        _receipt_id: CryptoHash,
-        _node_counts: VecDeque<TrieNodesCount>,
+        receipt_id: CryptoHash,
+        node_counts: VecDeque<TrieNodesCount>,
     ) {
-        todo!();
+        self.trie.storage.test_put_node_counts(receipt_id, node_counts);
     }
 }
 
