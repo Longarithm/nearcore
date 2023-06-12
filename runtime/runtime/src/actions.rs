@@ -180,7 +180,7 @@ pub(crate) fn action_function_call(
         .into());
     }
 
-    let protocol_version = runtime_ext.protocol_version();
+    let protocol_version = apply_state.current_protocol_version;
     // initialize node counts?
     let node_counts = if checked_feature!("stable", BackgroundReads, protocol_version) {
         // ext read
