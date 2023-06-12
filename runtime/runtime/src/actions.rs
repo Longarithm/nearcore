@@ -187,6 +187,7 @@ pub(crate) fn action_function_call(
         &apply_state.block_hash,
         epoch_info_provider,
         apply_state.current_protocol_version,
+        Default::default(),
     );
     let outcome = execute_function_call(
         apply_state,
