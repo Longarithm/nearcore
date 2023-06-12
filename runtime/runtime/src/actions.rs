@@ -183,8 +183,7 @@ pub(crate) fn action_function_call(
     let protocol_version = apply_state.current_protocol_version;
     // initialize node counts?
     let node_counts = if checked_feature!("stable", BackgroundReads, protocol_version) {
-        // ext read
-        VecDeque::new()
+        state_update.test_get_node_counts(receipt.receipt_id);
     } else {
         Default::default()
     };
@@ -218,7 +217,7 @@ pub(crate) fn action_function_call(
     if checked_feature!("stable", BackgroundReads, protocol_version) {
         assert!(runtime_ext.node_counts.borrow().is_empty());
     } else {
-        // gather
+        state_update.test_put_node_counts(receipt.receipt_id, runtime_ext.node_counts.take());
     }
 
     let outcome = outcome_result?;
