@@ -38,6 +38,7 @@ use near_vm_errors::{
 use near_vm_logic::types::PromiseResult;
 use near_vm_logic::{ActionCosts, VMContext, VMOutcome};
 use near_vm_runner::precompile_contract;
+use std::collections::VecDeque;
 
 /// Runs given function call with given context / apply state.
 pub(crate) fn execute_function_call(
@@ -178,6 +179,16 @@ pub(crate) fn action_function_call(
         )
         .into());
     }
+
+    let protocol_version = runtime_ext.protocol_version();
+    // initialize node counts?
+    let node_counts = if checked_feature!("stable", BackgroundReads, protocol_version) {
+        // ext read
+        VecDeque::new()
+    } else {
+        Default::default()
+    };
+
     let mut runtime_ext = RuntimeExt::new(
         state_update,
         account_id,
@@ -187,9 +198,9 @@ pub(crate) fn action_function_call(
         &apply_state.block_hash,
         epoch_info_provider,
         apply_state.current_protocol_version,
-        Default::default(),
+        node_counts,
     );
-    let outcome = execute_function_call(
+    let outcome_result = execute_function_call(
         apply_state,
         &mut runtime_ext,
         account,
@@ -201,7 +212,16 @@ pub(crate) fn action_function_call(
         config,
         is_last_action,
         None,
-    )?;
+    );
+
+    // gather node counts
+    if checked_feature!("stable", BackgroundReads, protocol_version) {
+        assert!(runtime_ext.node_counts.borrow().is_empty());
+    } else {
+        // gather
+    }
+
+    let outcome = outcome_result?;
 
     match &outcome.aborted {
         None => {
