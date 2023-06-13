@@ -748,7 +748,6 @@ pub(crate) fn stress_test_flat_storage(
         near_config.client_config.save_trie_changes,
     );
     let final_head = chain_store.final_head().unwrap();
-    let mut height = final_head.height;
     let start_hash = final_head.last_block_hash;
     let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
     let runtime = NightshadeRuntime::from_config(
@@ -765,6 +764,7 @@ pub(crate) fn stress_test_flat_storage(
             panic!("cannot create flat storage for shard {shard_id} with status {status:?}")
         }
     };
+    let mut height = flat_head.height;
     eprintln!("shard id = {} flat_head = {:?}", shard_id, flat_head);
     // let mut rng: ChaCha20Rng = SeedableRng::seed_from_u64(123);
 
