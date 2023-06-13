@@ -222,7 +222,7 @@ pub(crate) fn action_function_call(
     }
 
     let outcome = outcome_result?;
-    // println!("{} {:?}", receipt.receipt_id, outcome.profile);
+    println!("{} {:?} {:?}", receipt.receipt_id, outcome, outcome.profile);
 
     match &outcome.aborted {
         None => {
