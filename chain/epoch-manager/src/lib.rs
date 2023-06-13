@@ -167,16 +167,6 @@ impl EpochManager {
         Arc::new(Self::new_from_genesis_config(store, genesis_config).unwrap().into_handle())
     }
 
-    pub fn new_arc_handle_test(
-        store: Store,
-        genesis_config: &GenesisConfig,
-        enforced_protocol_version: ProtocolVersion,
-    ) -> Arc<EpochManagerHandle> {
-        let mut em = Self::new_from_genesis_config(store, genesis_config).unwrap();
-        em.enforced_protocol_version = Some(enforced_protocol_version);
-        Arc::new(em.into_handle())
-    }
-
     pub fn new(
         store: Store,
         config: AllEpochConfig,

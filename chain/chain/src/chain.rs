@@ -3977,6 +3977,7 @@ impl Chain {
                             is_first_block_with_chunk_of_version,
                             state_patch,
                             cares_about_shard_this_epoch,
+                            false,
                         ) {
                             Ok(apply_result) => {
                                 let apply_split_result_or_state_changes =
@@ -4038,6 +4039,7 @@ impl Chain {
                             false,
                             state_patch,
                             cares_about_shard_this_epoch,
+                            false,
                         ) {
                             Ok(apply_result) => {
                                 let apply_split_result_or_state_changes =
@@ -5459,6 +5461,7 @@ impl<'a> ChainUpdate<'a> {
             is_first_block_with_chunk_of_version,
             Default::default(),
             false,
+            false,
         )?;
 
         let (outcome_root, outcome_proofs) =
@@ -5550,6 +5553,7 @@ impl<'a> ChainUpdate<'a> {
             false,
             false,
             Default::default(),
+            false,
             false,
         )?;
         self.save_flat_state_changes(

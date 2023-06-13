@@ -55,6 +55,7 @@ pub(crate) fn apply_block(
     epoch_manager: &dyn EpochManagerAdapter,
     runtime: &dyn RuntimeAdapter,
     chain_store: &mut ChainStore,
+    new_feature: bool,
 ) -> (Block, ApplyTransactionResult) {
     let block = chain_store.get_block(&block_hash).unwrap();
     let height = block.header().height();
@@ -100,6 +101,7 @@ pub(crate) fn apply_block(
                 is_first_block_with_chunk_of_version,
                 Default::default(),
                 true,
+                new_feature,
             )
             .unwrap()
     } else {
@@ -125,6 +127,7 @@ pub(crate) fn apply_block(
                 false,
                 Default::default(),
                 true,
+                new_feature,
             )
             .unwrap()
     };
@@ -153,6 +156,7 @@ pub(crate) fn apply_block_at_height(
         epoch_manager.as_ref(),
         runtime.as_ref(),
         &mut chain_store,
+        false,
     );
     check_apply_block_result(
         &block,
@@ -733,7 +737,7 @@ pub(crate) fn stress_test_flat_storage(
     shard_id: Option<ShardId>,
     steps: Option<u64>,
     mode: u8,
-    bump_pv: bool,
+    new_feature: bool,
     home_dir: &Path,
     near_config: NearConfig,
     store: Store,
@@ -748,11 +752,7 @@ pub(crate) fn stress_test_flat_storage(
     let final_head = chain_store.final_head().unwrap();
     let mut height = final_head.height;
     let start_hash = final_head.last_block_hash;
-    // let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
-    let new_pv = ProtocolFeature::BackgroundReads.protocol_version();
-    let pv = if bump_pv { new_pv } else { new_pv - 1 };
-    let epoch_manager =
-        EpochManager::new_arc_handle_test(store.clone(), &near_config.genesis.config, pv);
+    let epoch_manager = EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
     let runtime = NightshadeRuntime::from_config(
         home_dir,
         store.clone(),
@@ -786,6 +786,7 @@ pub(crate) fn stress_test_flat_storage(
                 epoch_manager.as_ref(),
                 runtime.as_ref(),
                 &mut chain_store,
+                new_feature,
             );
 
             let chunk_extra = chain_store.get_chunk_extra(&prev_hash, &shard_uid).unwrap();
@@ -861,6 +862,7 @@ pub(crate) fn stress_test_flat_storage(
                 epoch_manager.as_ref(),
                 runtime.as_ref(),
                 &mut chain_store,
+                new_feature,
             );
             let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
             for state_change in apply_result.trie_changes.state_changes() {
@@ -902,7 +904,7 @@ pub(crate) fn stress_test_flat_storage(
         }
     }
 
-    if !checked_feature!("stable", BackgroundReads, pv) {
+    if !new_feature {
         let trie = runtime.tries.get_trie_for_shard(shard_uid, CryptoHash::default());
         let storage = trie.storage.as_caching_storage().unwrap();
         storage.shard_cache.test_put_node_counts();
