@@ -162,16 +162,16 @@ impl TrieUpdate {
         }
     }
 
-    pub fn test_get_node_counts(&self, receipt_id: CryptoHash) -> VecDeque<TrieNodesCount> {
-        self.trie.storage.test_get_node_counts(receipt_id)
+    pub fn test_get_node_counts(&self, action_hash: &CryptoHash) -> VecDeque<TrieNodesCount> {
+        self.trie.storage.test_get_node_counts(action_hash)
     }
 
     pub fn test_put_node_counts(
         &self,
-        receipt_id: CryptoHash,
+        action_hash: &CryptoHash,
         node_counts: VecDeque<TrieNodesCount>,
     ) {
-        self.trie.storage.test_put_node_counts(receipt_id, node_counts);
+        self.trie.storage.test_put_node_counts(action_hash, node_counts);
     }
 }
 

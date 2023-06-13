@@ -322,13 +322,13 @@ pub trait TrieStorage {
 
     fn get_trie_nodes_count(&self) -> TrieNodesCount;
 
-    fn test_get_node_counts(&self, _receipt_id: CryptoHash) -> VecDeque<TrieNodesCount> {
+    fn test_get_node_counts(&self, _action_hash: &CryptoHash) -> VecDeque<TrieNodesCount> {
         Default::default()
     }
 
     fn test_put_node_counts(
         &self,
-        _receipt_id: CryptoHash,
+        _action_hash: &CryptoHash,
         _node_counts: VecDeque<TrieNodesCount>,
     ) {
     }
@@ -659,14 +659,18 @@ impl TrieStorage for TrieCachingStorage {
         TrieNodesCount { db_reads: self.db_read_nodes.get(), mem_reads: self.mem_read_nodes.get() }
     }
 
-    fn test_get_node_counts(&self, receipt_id: CryptoHash) -> VecDeque<TrieNodesCount> {
+    fn test_get_node_counts(&self, action_hash: &CryptoHash) -> VecDeque<TrieNodesCount> {
         let guard = self.shard_cache.lock();
-        guard.node_counts.get(&receipt_id).unwrap().clone()
+        guard.node_counts.get(action_hash).unwrap().clone()
     }
 
-    fn test_put_node_counts(&self, receipt_id: CryptoHash, node_counts: VecDeque<TrieNodesCount>) {
+    fn test_put_node_counts(
+        &self,
+        action_hash: &CryptoHash,
+        node_counts: VecDeque<TrieNodesCount>,
+    ) {
         let mut guard = self.shard_cache.lock();
-        guard.node_counts.insert(receipt_id, node_counts);
+        guard.node_counts.insert(*action_hash, node_counts);
     }
 }
 

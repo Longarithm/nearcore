@@ -181,7 +181,7 @@ pub(crate) fn action_function_call(
 
     // initialize node counts?
     let node_counts = if apply_state.new_feature {
-        state_update.test_get_node_counts(receipt.receipt_id)
+        state_update.test_get_node_counts(action_hash)
     } else {
         Default::default()
     };
@@ -218,11 +218,11 @@ pub(crate) fn action_function_call(
     } else {
         let node_counts = runtime_ext.node_counts.borrow().clone();
         println!("putting {} node counts", node_counts.len());
-        state_update.test_put_node_counts(receipt.receipt_id, node_counts);
+        state_update.test_put_node_counts(action_hash, node_counts);
     }
 
     let outcome = outcome_result?;
-    println!("{} {:?} {:?}", receipt.receipt_id, outcome, outcome.profile);
+    println!("{} {:?} {:?}", action_hash, outcome, outcome.profile);
 
     match &outcome.aborted {
         None => {
