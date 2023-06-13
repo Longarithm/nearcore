@@ -1,4 +1,3 @@
-use near_primitives::checked_feature;
 use near_primitives::contract::ContractCode;
 use near_primitives::errors::{EpochError, StorageError};
 use near_primitives::hash::CryptoHash;
@@ -11,7 +10,6 @@ use near_primitives::version::ProtocolVersion;
 use near_store::{get_code, KeyLookupMode, TrieUpdate, TrieUpdateValuePtr};
 use near_vm_errors::{AnyError, VMLogicError};
 use near_vm_logic::{External, StorageGetMode, ValuePtr};
-use sha2::digest::Key;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 
@@ -153,8 +151,13 @@ impl<'a> External for RuntimeExt<'a> {
         let storage_key = self.create_storage_key(key);
         let mode = match mode {
             StorageGetMode::FlatStorage => KeyLookupMode::FlatStorage,
-            StorageGetMode::Trie => KeyLookupMode::Trie,
-            StorageGetMode::BackgroundTrieFetch => KeyLookupMode::BackgroundTrieFetch,
+            StorageGetMode::Trie => {
+                if self.new_feature {
+                    KeyLookupMode::BackgroundTrieFetch
+                } else {
+                    KeyLookupMode::Trie
+                }
+            }
         };
         self.trie_update
             .get_ref(&storage_key, mode)
