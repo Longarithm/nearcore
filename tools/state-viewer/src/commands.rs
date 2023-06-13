@@ -709,27 +709,27 @@ pub(crate) fn state(home_dir: &Path, near_config: NearConfig, store: Store) {
     }
 }
 
-fn to_state_record_str(
-    trie_storage: &dyn TrieStorage,
-    key: Vec<u8>,
-    value: Option<FlatStateValue>,
-) -> String {
-    match value {
-        Some(value) => {
-            let value = match value {
-                FlatStateValue::Ref(value_ref) => {
-                    trie_storage.retrieve_raw_bytes(&value_ref.hash).unwrap().to_vec()
-                }
-                FlatStateValue::Inlined(value) => value,
-            };
-            match StateRecord::from_raw_key_value(key, value) {
-                Some(sr) => format!("{}", sr),
-                None => "Undefined".to_string(),
-            }
-        }
-        None => "None".to_string(),
-    }
-}
+// fn to_state_record_str(
+//     trie_storage: &dyn TrieStorage,
+//     key: Vec<u8>,
+//     value: Option<FlatStateValue>,
+// ) -> String {
+//     match value {
+//         Some(value) => {
+//             let value = match value {
+//                 FlatStateValue::Ref(value_ref) => {
+//                     trie_storage.retrieve_raw_bytes(&value_ref.hash).unwrap().to_vec()
+//                 }
+//                 FlatStateValue::Inlined(value) => value,
+//             };
+//             match StateRecord::from_raw_key_value(key, value) {
+//                 Some(sr) => format!("{}", sr),
+//                 None => "Undefined".to_string(),
+//             }
+//         }
+//         None => "None".to_string(),
+//     }
+// }
 
 pub(crate) fn stress_test_flat_storage(
     shard_id: Option<ShardId>,
@@ -795,11 +795,11 @@ pub(crate) fn stress_test_flat_storage(
             let mut old_delta = FlatStateChanges::default();
             for state_change in apply_result.trie_changes.state_changes() {
                 let key = state_change.trie_key.clone();
-                let value = state_change.changes.last().unwrap().data.clone();
                 let prev_value = prev_trie
                     .get_ref(&key.to_vec(), KeyLookupMode::Trie)
                     .unwrap()
                     .map(|value_ref| FlatStateValue::Ref(value_ref));
+                // let value = state_change.changes.last().unwrap().data.clone();
                 // let value = match value {
                 //     Some(value) => Some(FlatStateValue::Inlined(value)),
                 //     None => None,
