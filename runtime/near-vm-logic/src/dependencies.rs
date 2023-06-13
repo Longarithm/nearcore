@@ -99,7 +99,6 @@ pub trait MemoryLike {
 pub enum StorageGetMode {
     FlatStorage,
     Trie,
-    BackgroundTrieFetch,
 }
 
 pub type Result<T, E = VMLogicError> = ::std::result::Result<T, E>;

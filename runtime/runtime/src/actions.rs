@@ -181,7 +181,7 @@ pub(crate) fn action_function_call(
 
     let protocol_version = apply_state.current_protocol_version;
     // initialize node counts?
-    let node_counts = if checked_feature!("stable", BackgroundReads, protocol_version) {
+    let node_counts = if apply_state.new_feature {
         state_update.test_get_node_counts(receipt.receipt_id)
     } else {
         Default::default()
@@ -198,6 +198,7 @@ pub(crate) fn action_function_call(
         epoch_info_provider,
         apply_state.current_protocol_version,
         node_counts,
+        apply_state.new_feature,
     );
     let outcome_result = execute_function_call(
         apply_state,
@@ -213,7 +214,7 @@ pub(crate) fn action_function_call(
         None,
     );
     // gather node counts
-    if checked_feature!("stable", BackgroundReads, protocol_version) {
+    if apply_state.new_feature {
         assert!(runtime_ext.node_counts.borrow().is_empty());
     } else {
         let node_counts = runtime_ext.node_counts.borrow().clone();

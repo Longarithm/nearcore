@@ -2398,13 +2398,7 @@ impl<'a> VMLogic<'a> {
         let nodes_before = self.ext.get_trie_nodes_count();
         // For storage write, we need to first perform a read on the key to calculate the TTN cost.
         // This storage_get must be performed through trie instead of through FlatStorage
-        let read_mode =
-            if checked_feature!("stable", BackgroundReads, self.current_protocol_version) {
-                StorageGetMode::BackgroundTrieFetch
-            } else {
-                StorageGetMode::Trie
-            };
-        let evicted_ptr = self.ext.storage_get(&key, read_mode)?;
+        let evicted_ptr = self.ext.storage_get(&key, StorageGetMode::Trie)?;
         let evicted =
             Self::deref_value(&mut self.gas_counter, storage_write_evicted_byte, evicted_ptr)?;
         let nodes_delta = self
@@ -2580,13 +2574,7 @@ impl<'a> VMLogic<'a> {
         let nodes_before = self.ext.get_trie_nodes_count();
         // To delete a key, we need to first perform a read on the key to calculate the TTN cost.
         // This storage_get must be performed through trie instead of through FlatStorage
-        let read_mode =
-            if checked_feature!("stable", BackgroundReads, self.current_protocol_version) {
-                StorageGetMode::BackgroundTrieFetch
-            } else {
-                StorageGetMode::Trie
-            };
-        let removed_ptr = self.ext.storage_get(&key, read_mode)?;
+        let removed_ptr = self.ext.storage_get(&key, StorageGetMode::Trie)?;
         let removed =
             Self::deref_value(&mut self.gas_counter, storage_remove_ret_value_byte, removed_ptr)?;
 

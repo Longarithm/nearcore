@@ -17,7 +17,6 @@ use near_epoch_manager::EpochManagerHandle;
 use near_epoch_manager::{EpochManager, EpochManagerAdapter};
 use near_primitives::account::id::AccountId;
 use near_primitives::block::{Block, BlockHeader};
-use near_primitives::checked_feature;
 use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardLayout;
 use near_primitives::shard_layout::ShardUId;
@@ -26,7 +25,6 @@ use near_primitives::state::FlatStateValue;
 use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
-use near_primitives::version::ProtocolFeature;
 #[allow(unused)]
 use near_primitives::version::PROTOCOL_VERSION;
 use near_primitives_core::types::Gas;

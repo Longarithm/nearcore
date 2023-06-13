@@ -185,6 +185,7 @@ impl TrieViewer {
             epoch_info_provider,
             view_state.current_protocol_version,
             Default::default(),
+            false,
         );
         let config_store = RuntimeConfigStore::new(None);
         let config = config_store.get_config(PROTOCOL_VERSION);
