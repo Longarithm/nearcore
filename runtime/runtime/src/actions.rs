@@ -179,7 +179,6 @@ pub(crate) fn action_function_call(
         .into());
     }
 
-    let protocol_version = apply_state.current_protocol_version;
     // initialize node counts?
     let node_counts = if apply_state.new_feature {
         state_update.test_get_node_counts(receipt.receipt_id)
