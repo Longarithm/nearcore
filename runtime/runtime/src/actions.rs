@@ -222,7 +222,7 @@ pub(crate) fn action_function_call(
     }
 
     let outcome = outcome_result?;
-    println!("{} {:?} {:?}", action_hash, outcome, outcome.profile);
+    // println!("{} {:?} {:?}", action_hash, outcome, outcome.profile);
 
     match &outcome.aborted {
         None => {

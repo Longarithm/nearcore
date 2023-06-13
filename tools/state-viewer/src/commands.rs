@@ -791,24 +791,24 @@ pub(crate) fn stress_test_flat_storage(
             let state_root = chunk_extra.state_root().clone();
             let prev_trie =
                 runtime.get_trie_for_shard(shard_id, &block_hash, state_root, false).unwrap();
-            let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
+            // let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
             let mut old_delta = FlatStateChanges::default();
             for state_change in apply_result.trie_changes.state_changes() {
                 let key = state_change.trie_key.clone();
                 let value = state_change.changes.last().unwrap().data.clone();
-                let value = match value {
-                    Some(value) => Some(FlatStateValue::Inlined(value)),
-                    None => None,
-                };
                 let prev_value = prev_trie
                     .get_ref(&key.to_vec(), KeyLookupMode::Trie)
                     .unwrap()
                     .map(|value_ref| FlatStateValue::Ref(value_ref));
-                eprintln!(
-                    "{} -> {}",
-                    to_state_record_str(&trie_storage, key.to_vec(), prev_value.clone()),
-                    to_state_record_str(&trie_storage, key.to_vec(), value.clone())
-                );
+                // let value = match value {
+                //     Some(value) => Some(FlatStateValue::Inlined(value)),
+                //     None => None,
+                // };
+                // eprintln!(
+                //     "{} -> {}",
+                //     to_state_record_str(&trie_storage, key.to_vec(), prev_value.clone()),
+                //     to_state_record_str(&trie_storage, key.to_vec(), value.clone())
+                // );
 
                 old_delta.insert(key.to_vec(), prev_value);
             }
@@ -862,16 +862,16 @@ pub(crate) fn stress_test_flat_storage(
                 &mut chain_store,
                 new_feature,
             );
-            let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
-            for state_change in apply_result.trie_changes.state_changes() {
-                let key = state_change.trie_key.clone();
-                let value = state_change.changes.last().unwrap().data.clone();
-                let value = match value {
-                    Some(value) => Some(FlatStateValue::Inlined(value)),
-                    None => None,
-                };
-                eprintln!("{}", to_state_record_str(&trie_storage, key.to_vec(), value.clone()));
-            }
+            // let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
+            // for state_change in apply_result.trie_changes.state_changes() {
+            //     let key = state_change.trie_key.clone();
+            //     let value = state_change.changes.last().unwrap().data.clone();
+            //     let value = match value {
+            //         Some(value) => Some(FlatStateValue::Inlined(value)),
+            //         None => None,
+            //     };
+            //     eprintln!("{}", to_state_record_str(&trie_storage, key.to_vec(), value.clone()));
+            // }
             let changes =
                 FlatStateChanges::from_state_changes(apply_result.trie_changes.state_changes());
             eprintln!("len = {}", changes.len());
