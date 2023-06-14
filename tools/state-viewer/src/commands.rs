@@ -905,11 +905,12 @@ pub(crate) fn stress_test_flat_storage(
         }
     }
 
+    let trie = runtime.tries.get_trie_for_shard(shard_uid, CryptoHash::default());
+    let storage = trie.storage.as_caching_storage().unwrap();
     if !new_feature {
-        let trie = runtime.tries.get_trie_for_shard(shard_uid, CryptoHash::default());
-        let storage = trie.storage.as_caching_storage().unwrap();
         storage.shard_cache.test_put_node_counts();
     }
+    storage.shard_cache.print_latencies();
 }
 
 pub(crate) fn view_chain(

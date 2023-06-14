@@ -247,7 +247,7 @@ impl TrieCacheInner {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub enum LatencyType {
     ChunkCacheGet,
     ShardCacheGet,
@@ -314,6 +314,12 @@ impl TrieCache {
     pub fn update_latency(&self, value: u128, latency_type: LatencyType) {
         let mut guard = self.lock();
         guard.update_latency(value, latency_type);
+    }
+
+    pub fn print_latencies(&self) {
+        let guard = self.lock();
+        print!("{:?}", guard.latency_sum);
+        print!("sum = {:?}", guard.latency_sum.values().cloned().sum::<u128>());
     }
 }
 
