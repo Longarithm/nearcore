@@ -619,6 +619,7 @@ impl TrieStorage for TrieCachingStorage {
                             std::thread::yield_now();
                             // If data is already being prefetched, wait for that instead of sending a new request.
                             match prefetcher.prefetching.blocking_get(*hash) {
+                                // not sure if this is db get. but shouldn't matter much
                                 Some(value) => (value, LatencyType::DBGet),
                                 // Only main thread (this one) removes values from staging area,
                                 // therefore blocking read will usually not return empty unless there
