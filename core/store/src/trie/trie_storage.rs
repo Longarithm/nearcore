@@ -578,8 +578,7 @@ impl TrieStorage for TrieCachingStorage {
             Some(val) => {
                 self.metrics.shard_cache_hits.inc();
                 near_o11y::io_trace!(count: "shard_cache_hit");
-                self.shard_cache
-                    .update_latency(start_time.elapsed().as_micros(), LatencyType::ShardCacheGet);
+                guard.update_latency(start_time.elapsed().as_micros(), LatencyType::ShardCacheGet);
                 val
             }
             None => {
