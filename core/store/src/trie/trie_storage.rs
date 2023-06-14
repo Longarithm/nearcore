@@ -141,6 +141,7 @@ impl TrieCacheInner {
             is_view,
             metrics,
             node_counts,
+            latency_sum: Default::default(),
         }
     }
 
