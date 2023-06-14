@@ -252,6 +252,7 @@ pub enum LatencyType {
     ChunkCacheGet,
     ShardCacheGet,
     DBGet,
+    PrefetchGet,
 }
 
 /// Wrapper over LruCache to handle concurrent access.

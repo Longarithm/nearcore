@@ -1,4 +1,5 @@
 use crate::sync_utils::Monitor;
+use crate::trie::trie_storage::LatencyType;
 use crate::{
     metrics, DBCol, StorageError, Store, Trie, TrieCache, TrieCachingStorage, TrieConfig,
     TrieStorage,
@@ -477,6 +478,7 @@ impl PrefetchApi {
                             Trie::new(Rc::new(prefetcher_storage.clone()), trie_root, None);
                         let storage_key = trie_key;
                         metric_prefetch_sent.inc();
+                        let start_time = std::time::Instant::now();
                         if let Ok(_maybe_value) = prefetcher_trie.get(&storage_key) {
                             near_o11y::io_trace!(count: "prefetch");
                         } else {
@@ -485,6 +487,10 @@ impl PrefetchApi {
                             near_o11y::io_trace!(count: "prefetch_failure");
                             metric_prefetch_fail.inc();
                         }
+                        prefetcher_storage.shard_cache.update_latency(
+                            start_time.elapsed().as_micros(),
+                            LatencyType::PrefetchGet,
+                        );
                     }
                 }
             }
