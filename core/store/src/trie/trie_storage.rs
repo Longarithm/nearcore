@@ -13,6 +13,7 @@ use near_primitives::types::{ShardId, TrieCacheMode, TrieNodesCount};
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::ops::AddAssign;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -80,6 +81,7 @@ pub struct TrieCacheInner {
     // Stored here to avoid overhead of looking them up on hot paths.
     metrics: TrieCacheMetrics,
     pub node_counts: HashMap<CryptoHash, VecDeque<TrieNodesCount>>,
+    pub latency_sum: HashMap<LatencyType, u128>,
 }
 
 struct TrieCacheMetrics {
@@ -237,6 +239,18 @@ impl TrieCacheInner {
     fn entry_size(len: usize) -> u64 {
         len as u64 + Self::PER_ENTRY_OVERHEAD
     }
+
+    pub fn update_latency(&mut self, value: u128, latency_type: LatencyType) {
+        let old_value = self.latency_sum.entry(latency_type).or_insert(0);
+        old_value.add_assign(value);
+    }
+}
+
+#[derive(PartialEq, Eq, Hash)]
+pub enum LatencyType {
+    ChunkCacheGet,
+    ShardCacheGet,
+    DBGet,
 }
 
 /// Wrapper over LruCache to handle concurrent access.
@@ -294,6 +308,11 @@ impl TrieCache {
         let path_name = format!("/tmp/{}", guard.shard_id).to_string();
         println!("Writing node counts for {} receipts", guard.node_counts.len());
         std::fs::write(path_name, serde_json::to_string(&guard.node_counts).unwrap()).unwrap();
+    }
+
+    pub fn update_latency(&self, value: u128, latency_type: LatencyType) {
+        let mut guard = self.lock();
+        guard.update_latency(value, latency_type);
     }
 }
 
@@ -530,12 +549,15 @@ impl TrieCachingStorage {
 
 impl TrieStorage for TrieCachingStorage {
     fn retrieve_raw_bytes(&self, hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError> {
+        let start_time = std::time::Instant::now();
         self.metrics.chunk_cache_size.set(self.chunk_cache.borrow().len() as i64);
         // Try to get value from chunk cache containing nodes with cheaper access. We can do it for any `TrieCacheMode`,
         // because we charge for reading nodes only when `CachingChunk` mode is enabled anyway.
         if let Some(val) = self.chunk_cache.borrow_mut().get(hash) {
             self.metrics.chunk_cache_hits.inc();
             self.inc_mem_read_nodes();
+            self.shard_cache
+                .update_latency(start_time.elapsed().as_micros(), LatencyType::ChunkCacheGet);
             return Ok(val.clone());
         }
         self.metrics.chunk_cache_misses.inc();
@@ -548,25 +570,28 @@ impl TrieStorage for TrieCachingStorage {
             Some(val) => {
                 self.metrics.shard_cache_hits.inc();
                 near_o11y::io_trace!(count: "shard_cache_hit");
+                self.shard_cache
+                    .update_latency(start_time.elapsed().as_micros(), LatencyType::ShardCacheGet);
                 val
             }
             None => {
                 self.metrics.shard_cache_misses.inc();
                 near_o11y::io_trace!(count: "shard_cache_miss");
                 let val;
+                let latency_type;
                 if let Some(prefetcher) = &self.prefetch_api {
                     let prefetch_state = prefetcher.prefetching.get_or_set_fetching(*hash);
                     // Keep lock until here to avoid race condition between shard cache lookup and reserving prefetch slot.
                     std::mem::drop(guard);
 
-                    val = match prefetch_state {
+                    let (val2, latency_type2) = match prefetch_state {
                         // Slot reserved for us, the main thread.
                         // `SlotReserved` for the main thread means, either we have not submitted a prefetch request for
                         // this value, or maybe it is just still queued up. Either way, prefetching is not going to help
                         // so the main thread should fetch data from DB on its own.
                         PrefetcherResult::SlotReserved => {
                             self.metrics.prefetch_not_requested.inc();
-                            self.read_from_db(hash)?
+                            (self.read_from_db(hash)?, LatencyType::DBGet)
                         }
                         // `MemoryLimitReached` is not really relevant for the main thread,
                         // we always have to go to DB even if we could not stage a new prefetch.
@@ -574,12 +599,12 @@ impl TrieStorage for TrieCachingStorage {
                         // a prefetcher trying to fetch the same value before we can put it in the shard cache.
                         PrefetcherResult::MemoryLimitReached => {
                             self.metrics.prefetch_memory_limit_reached.inc();
-                            self.read_from_db(hash)?
+                            (self.read_from_db(hash)?, LatencyType::DBGet)
                         }
                         PrefetcherResult::Prefetched(value) => {
                             near_o11y::io_trace!(count: "prefetch_hit");
                             self.metrics.prefetch_hits.inc();
-                            value
+                            (value, LatencyType::ShardCacheGet)
                         }
                         PrefetcherResult::Pending => {
                             near_o11y::io_trace!(count: "prefetch_pending");
@@ -587,7 +612,7 @@ impl TrieStorage for TrieCachingStorage {
                             std::thread::yield_now();
                             // If data is already being prefetched, wait for that instead of sending a new request.
                             match prefetcher.prefetching.blocking_get(*hash) {
-                                Some(value) => value,
+                                Some(value) => (value, LatencyType::DBGet),
                                 // Only main thread (this one) removes values from staging area,
                                 // therefore blocking read will usually not return empty unless there
                                 // was a storage error. Or in the case of forks and parallel chunk
@@ -598,19 +623,23 @@ impl TrieStorage for TrieCachingStorage {
                                 None => {
                                     if let Some(value) = self.shard_cache.get(hash) {
                                         self.metrics.prefetch_conflict.inc();
-                                        value
+                                        (value, LatencyType::ShardCacheGet)
                                     } else {
                                         self.metrics.prefetch_retry.inc();
-                                        self.read_from_db(hash)?
+                                        (self.read_from_db(hash)?, LatencyType::DBGet)
                                     }
                                 }
                             }
                         }
                     };
+                    val = val2;
+                    latency_type = latency_type2;
                 } else {
                     std::mem::drop(guard);
                     val = self.read_from_db(hash)?;
+                    latency_type = LatencyType::DBGet;
                 }
+                self.shard_cache.update_latency(start_time.elapsed().as_micros(), latency_type);
 
                 // Insert value to shard cache, if its size is small enough.
                 // It is fine to have a size limit for shard cache and **not** have a limit for chunk cache, because key

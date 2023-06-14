@@ -898,6 +898,10 @@ pub(crate) fn stress_test_flat_storage(
             let store_update = flat_storage.add_delta(delta).unwrap();
             store_update.commit().unwrap();
             flat_storage.update_flat_head(&block_hash).unwrap();
+
+            let mut fake_store_update = store.store_update();
+            apply_result.trie_changes.insertions_into(&mut fake_store_update);
+            apply_result.trie_changes.deletions_into(&mut fake_store_update);
         }
     }
 
