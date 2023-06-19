@@ -128,7 +128,7 @@ impl<'a> External for RuntimeExt<'a> {
         let mode = match mode {
             StorageGetMode::FlatStorage => KeyLookupMode::FlatStorage,
             StorageGetMode::Trie => {
-                println!("{:?}", storage_key.to_vec());
+                // println!("{:?}", storage_key.to_vec());
                 if self.new_feature {
                     KeyLookupMode::BackgroundTrieFetch
                 } else {

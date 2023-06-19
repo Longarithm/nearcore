@@ -8,7 +8,7 @@ use borsh::BorshSerialize;
 use near_crypto::PublicKey;
 use near_primitives::account::{AccessKey, AccessKeyPermission, Account};
 use near_primitives::checked_feature;
-use near_primitives::config::ViewConfig;
+use near_primitives::config::{ExtCosts, ViewConfig};
 use near_primitives::contract::ContractCode;
 use near_primitives::delegate_action::{DelegateAction, SignedDelegateAction};
 use near_primitives::errors::{ActionError, ActionErrorKind, InvalidAccessKeyError, RuntimeError};
@@ -38,6 +38,7 @@ use near_vm_errors::{
 use near_vm_logic::types::PromiseResult;
 use near_vm_logic::{ActionCosts, VMContext, VMOutcome};
 use near_vm_runner::precompile_contract;
+use num_traits::Pow;
 
 /// Runs given function call with given context / apply state.
 pub(crate) fn execute_function_call(
@@ -224,7 +225,21 @@ pub(crate) fn action_function_call(
     }
 
     let outcome = outcome_result?;
-    // println!("{} {:?} {:?}", action_hash, outcome, outcome.profile);
+    let old_used_gas = outcome.used_gas;
+    let mut new_used_gas = old_used_gas;
+    new_used_gas -= outcome.profile.get_ext_cost(ExtCosts::touching_trie_node);
+    new_used_gas -= outcome.profile.get_ext_cost(ExtCosts::read_cached_trie_node);
+    let write_bytes = outcome.profile.get_ext_cost(ExtCosts::storage_write_key_byte)
+        / config.wasm_config.ext_costs.gas_cost(ExtCosts::storage_write_key_byte);
+    new_used_gas += write_bytes * 74_000_000_000;
+    println!(
+        "GAS {} {} {} {} {}",
+        action_hash,
+        write_bytes,
+        old_used_gas / 10f64.pow(9),
+        new_used_gas / 10f64.pow(9),
+        outcome.profile.total_compute_usage(&config.wasm_config.ext_costs)
+    );
 
     match &outcome.aborted {
         None => {

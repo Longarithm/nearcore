@@ -308,7 +308,7 @@ impl TrieCache {
     pub fn test_put_node_counts(&self) {
         let guard = self.lock();
         let path_name = format!("/tmp/{}", guard.shard_id).to_string();
-        println!("Writing node counts for {} receipts", guard.node_counts.len());
+        println!("Writing node counts for {} actions", guard.node_counts.len());
         std::fs::write(path_name, serde_json::to_string(&guard.node_counts).unwrap()).unwrap();
     }
 
