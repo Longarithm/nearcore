@@ -236,8 +236,8 @@ pub(crate) fn action_function_call(
         "GAS {} {} {} {} {}",
         action_hash,
         write_bytes,
-        old_used_gas / 10f64.pow(9),
-        new_used_gas / 10f64.pow(9),
+        (old_used_gas as f64) / 10f64.pow(9),
+        (new_used_gas as f64) / 10f64.pow(9),
         outcome.profile.total_compute_usage(&config.wasm_config.ext_costs)
     );
 
