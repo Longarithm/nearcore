@@ -13,6 +13,7 @@ use near_primitives::types::{ShardId, TrieCacheMode, TrieNodesCount};
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::Hash;
 use std::ops::AddAssign;
 use std::path::Path;
 use std::rc::Rc;
@@ -82,6 +83,7 @@ pub struct TrieCacheInner {
     metrics: TrieCacheMetrics,
     pub node_counts: HashMap<CryptoHash, VecDeque<TrieNodesCount>>,
     pub latency_sum: HashMap<LatencyType, u128>,
+    pub fetched_keys: HashSet<Vec<u8>>,
 }
 
 struct TrieCacheMetrics {
@@ -142,6 +144,7 @@ impl TrieCacheInner {
             metrics,
             node_counts,
             latency_sum: Default::default(),
+            fetched_keys: Default::default(),
         }
     }
 
@@ -321,6 +324,16 @@ impl TrieCache {
         let guard = self.lock();
         print!("{:?}", guard.latency_sum);
         print!("sum = {:?}", guard.latency_sum.values().cloned().sum::<u128>());
+    }
+
+    pub fn test_push_key(&self, trie_key: Vec<u8>) {
+        let mut guard = self.lock();
+        guard.fetched_keys.insert(trie_key);
+    }
+
+    pub fn test_extract_keys(&self) -> HashSet<Vec<u8>> {
+        let mut guard = self.lock();
+        guard.fetched_keys.drain().collect()
     }
 }
 

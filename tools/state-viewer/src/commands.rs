@@ -40,7 +40,7 @@ use near_store::{
 use nearcore::{NearConfig, NightshadeRuntime};
 use node_runtime::adapter::ViewRuntimeAdapter;
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -777,6 +777,8 @@ pub(crate) fn stress_test_flat_storage(
     let mut height = flat_head.height;
     eprintln!("shard id = {} flat_head = {:?}", shard_id, flat_head);
     // let mut rng: ChaCha20Rng = SeedableRng::seed_from_u64(123);
+    let trie = runtime.tries.get_trie_for_shard(shard_uid, CryptoHash::default());
+    let storage = trie.storage.as_caching_storage().unwrap();
 
     if mode == 0 {
         for _ in 0..steps {
@@ -877,18 +879,13 @@ pub(crate) fn stress_test_flat_storage(
                     trie_key_parsers::get_raw_prefix_for_contract_data(&input_account_id, &[]);
                 let storage_key = KeyForStateChanges::from_raw_key(&block_hash, &data_key);
                 let changes_per_key_prefix = storage_key.find_iter(&store);
-                let keys: Vec<_> = changes_per_key_prefix
-                    .map(|it| match it.unwrap().trie_key {
-                        TrieKey::ContractData { account_id, key } => {
-                            assert_eq!(account_id, input_account_id);
-                            key
-                        }
-                        key @ _ => {
-                            panic!("Wrong key: {:?}", key);
-                        }
-                    })
-                    .collect();
-                println!("KEYS: {:?}", keys);
+                let state_changes_keys: HashSet<_> =
+                    changes_per_key_prefix.map(|it| it.unwrap().trie_key.to_vec()).collect();
+                // println!("KEYS: {:?}", keys);
+                let fetched_keys = storage.shard_cache.test_extract_keys();
+                let not_in_changes = fetched_keys.difference(&state_changes_keys).count();
+                let not_fetched = state_changes_keys.difference(&fetched_keys).count();
+                println!("{not_in_changes} {not_fetched}");
             }
             // let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
             // for state_change in apply_result.trie_changes.state_changes() {
@@ -934,8 +931,6 @@ pub(crate) fn stress_test_flat_storage(
         }
     }
 
-    let trie = runtime.tries.get_trie_for_shard(shard_uid, CryptoHash::default());
-    let storage = trie.storage.as_caching_storage().unwrap();
     if !new_feature {
         storage.shard_cache.test_put_node_counts();
     }

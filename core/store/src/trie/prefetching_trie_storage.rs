@@ -487,6 +487,7 @@ impl PrefetchApi {
                             near_o11y::io_trace!(count: "prefetch_failure");
                             metric_prefetch_fail.inc();
                         }
+                        prefetcher_storage.shard_cache.test_push_key(storage_key);
                         prefetcher_storage.shard_cache.update_latency(
                             start_time.elapsed().as_micros(),
                             LatencyType::PrefetchGet,
