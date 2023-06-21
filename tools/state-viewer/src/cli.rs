@@ -609,6 +609,8 @@ pub struct StressTestFlatStorageCmd {
     #[clap(long)]
     shard_id: Option<ShardId>,
     #[clap(long)]
+    account_ids: Option<AccountId>,
+    #[clap(long)]
     steps: Option<u64>,
     #[clap(long)]
     mode: u8,
@@ -622,6 +624,7 @@ impl StressTestFlatStorageCmd {
     pub fn run(self, home_dir: &Path, near_config: NearConfig, store: Store) {
         stress_test_flat_storage(
             self.shard_id,
+            self.account_ids,
             self.steps,
             self.mode,
             self.new_feature,

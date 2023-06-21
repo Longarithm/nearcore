@@ -23,7 +23,7 @@ use near_primitives::shard_layout::ShardUId;
 use near_primitives::sharding::ChunkHash;
 use near_primitives::state::FlatStateValue;
 use near_primitives::state_record::StateRecord;
-use near_primitives::trie_key::TrieKey;
+use near_primitives::trie_key::{trie_key_parsers, TrieKey};
 use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
 #[allow(unused)]
 use near_primitives::version::PROTOCOL_VERSION;
@@ -34,7 +34,8 @@ use near_store::flat::{
 };
 use near_store::test_utils::create_test_store;
 use near_store::{
-    DBCol, KeyLookupMode, Store, Trie, TrieCache, TrieCachingStorage, TrieConfig, TrieDBStorage,
+    DBCol, KeyForStateChanges, KeyLookupMode, Store, Trie, TrieCache, TrieCachingStorage,
+    TrieConfig, TrieDBStorage,
 };
 use nearcore::{NearConfig, NightshadeRuntime};
 use node_runtime::adapter::ViewRuntimeAdapter;
@@ -741,6 +742,7 @@ pub(crate) fn state(home_dir: &Path, near_config: NearConfig, store: Store) {
 
 pub(crate) fn stress_test_flat_storage(
     shard_id: Option<ShardId>,
+    account_ids: Option<AccountId>,
     steps: Option<u64>,
     mode: u8,
     new_feature: bool,
@@ -870,6 +872,24 @@ pub(crate) fn stress_test_flat_storage(
                 &mut chain_store,
                 new_feature,
             );
+            if let Some(input_account_id) = account_ids.clone() {
+                let data_key =
+                    trie_key_parsers::get_raw_prefix_for_contract_data(&input_account_id, &[]);
+                let storage_key = KeyForStateChanges::from_raw_key(&block_hash, &data_key);
+                let changes_per_key_prefix = storage_key.find_iter(&store);
+                let keys: Vec<_> = changes_per_key_prefix
+                    .map(|it| match it.unwrap().trie_key {
+                        TrieKey::ContractData { account_id, key } => {
+                            assert_eq!(account_id, input_account_id);
+                            key
+                        }
+                        key @ _ => {
+                            panic!("Wrong key: {:?}", key);
+                        }
+                    })
+                    .collect();
+                println!("KEYS: {:?}", keys);
+            }
             // let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
             // for state_change in apply_result.trie_changes.state_changes() {
             //     let key = state_change.trie_key.clone();
