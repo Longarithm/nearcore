@@ -437,7 +437,7 @@ impl PrefetchApi {
         root: StateRoot,
         trie_key: Vec<u8>,
     ) -> Result<(), PrefetchError> {
-        // println!("fetch {:?}", trie_key);
+        println!("fetch {:?}", trie_key);
         self.work_queue_tx.try_send((root, trie_key)).map_err(|e| match e {
             crossbeam::channel::TrySendError::Full(_) => PrefetchError::QueueFull,
             crossbeam::channel::TrySendError::Disconnected(_) => PrefetchError::QueueDisconnected,

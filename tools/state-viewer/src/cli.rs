@@ -10,10 +10,8 @@ use near_primitives::hash::CryptoHash;
 use near_primitives::sharding::ChunkHash;
 
 use near_primitives::types::{BlockHeight, ShardId};
-use near_store::{Mode, NodeStorage, ShardUId, Store, Temperature, Trie, TrieDBStorage};
+use near_store::{Mode, NodeStorage, Store, Temperature};
 use nearcore::{load_config, migrations, NearConfig};
-use std::cell::RefCell;
-use std::collections::HashMap;
 
 use std::path::{Path, PathBuf};
 
