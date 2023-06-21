@@ -885,7 +885,8 @@ pub(crate) fn stress_test_flat_storage(
                 let fetched_keys = storage.shard_cache.test_extract_keys();
                 let not_in_changes = fetched_keys.difference(&state_changes_keys).count();
                 let not_fetched = state_changes_keys.difference(&fetched_keys).count();
-                println!("{not_in_changes} {not_fetched}");
+                println!("DIFF: {not_in_changes} {not_fetched}");
+                assert_eq!(not_in_changes, 0);
             }
             // let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
             // for state_change in apply_result.trie_changes.state_changes() {
