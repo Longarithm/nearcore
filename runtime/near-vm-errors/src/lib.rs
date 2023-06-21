@@ -49,6 +49,39 @@ impl TrieNodesCount {
         })
     }
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum ParseCount {
+    #[error("error")]
+    Format,
+}
+
+impl serde::Serialize for TrieNodesCount {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&format!("{},{}", self.db_reads, self.mem_reads))
+    }
+}
+
+impl<'a> serde::Deserialize<'a> for TrieNodesCount {
+    fn deserialize<D: serde::Deserializer<'a>>(d: D) -> Result<Self, D::Error> {
+        <String as serde::Deserialize>::deserialize(d)?.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl std::str::FromStr for TrieNodesCount {
+    type Err = ParseCount;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<_> = s.split(',').collect();
+        if parts.len() != 2 {
+            return Err(Self::Err::Format);
+        }
+        Ok(TrieNodesCount {
+            db_reads: parts[0].parse().map_err(|_| Self::Err::Format)?,
+            mem_reads: parts[1].parse().map_err(|_| Self::Err::Format)?,
+        })
+    }
+}
 // ---------->8----------
 
 /// For bugs in the runtime itself, crash and die is the usual response.
