@@ -813,11 +813,18 @@ impl Trie {
         if use_flat_storage {
             let flat_state_value =
                 self.flat_storage_chunk_view.as_ref().unwrap().get_value(&key)?;
-            Ok(flat_state_value.map(|value| value.to_value_ref()))
-        } else {
-            let key_nibbles = NibbleSlice::new(key);
-            self.lookup(key_nibbles)
+            return Ok(flat_state_value.map(|value| value.to_value_ref()));
         }
+
+        let trie = match mode {
+            KeyLookupMode::FlatStorage => {
+                self.storage.
+            },
+            _ => self,
+        };
+
+        let key_nibbles = NibbleSlice::new(key);
+        trie.lookup(key_nibbles)
     }
 
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
