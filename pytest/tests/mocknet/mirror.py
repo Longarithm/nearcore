@@ -472,6 +472,10 @@ if __name__ == '__main__':
     reset_parser.set_defaults(func=reset_cmd)
 
     args = parser.parse_args()
+    with open('/tmp/.neard-runner.log', 'a') as f:
+        for arg in vars(args):
+            f.write(f'{arg}={getattr(args, arg)} ')
+        f.write('\n')
 
     traffic_generator, nodes = get_nodes(args)
     args.func(args, traffic_generator, nodes)
