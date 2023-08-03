@@ -3,6 +3,7 @@
 
 """
 import argparse
+import datetime
 import pathlib
 import random
 from rc import pmap, run
@@ -473,8 +474,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     with open('/tmp/.neard-runner.log', 'a') as f:
+        f.write(f'{datetime.datetime.now()}')
         for arg in vars(args):
-            f.write(f'{arg}={getattr(args, arg)} ')
+            f.write(f' {arg}={getattr(args, arg)}')
         f.write('\n')
 
     traffic_generator, nodes = get_nodes(args)
