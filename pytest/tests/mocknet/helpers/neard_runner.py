@@ -50,6 +50,8 @@ class JSONHandler(http.server.BaseHTTPRequestHandler):
                                    name="new_test")
         self.dispatcher.add_method(server.neard_runner.do_network_init,
                                    name="network_init")
+        self.dispatcher.add_method(server.neard_runner.do_modify_config,
+                                   name="modify_config")
         self.dispatcher.add_method(server.neard_runner.do_ready, name="ready")
         self.dispatcher.add_method(server.neard_runner.do_start, name="start")
         self.dispatcher.add_method(server.neard_runner.do_stop, name="stop")
@@ -354,6 +356,8 @@ class NeardRunner:
             if len(validators) < 3:
                 with open(self.target_near_home_path('config.json'), 'r') as f:
                     config = json.load(f)
+                config['rpc']['addr'] = "0.0.0.0:3030"
+                config['rpc']['enable_debug_rpc'] = True
                 config['consensus']['min_num_peers'] = len(validators) - 1
                 with open(self.target_near_home_path('config.json'), 'w') as f:
                     json.dump(config, f)
@@ -366,6 +370,16 @@ class NeardRunner:
                         'epoch_length': epoch_length,
                         'num_seats': num_seats
                     }, f)
+
+    def do_modify_config(self, background_fetching_enabled):
+        with self.lock:
+            with open(self.target_near_home_path('config.json'), 'r') as f:
+                config = json.load(f)
+            config['rpc']['addr'] = "0.0.0.0:3030"
+            config['rpc']['enable_debug_rpc'] = True
+            config['background_fetching_enabled'] = background_fetching_enabled
+            with open(self.target_near_home_path('config.json'), 'w') as f:
+                json.dump(config, f)
 
     def do_start(self):
         with self.lock:
