@@ -34,8 +34,9 @@ pub fn get_all_deltas_metadata(
     store: &Store,
     shard_uid: ShardUId,
 ) -> FlatStorageResult<Vec<FlatStateDeltaMetadata>> {
-    store
-        .iter_prefix_ser(DBCol::FlatStateDeltaMetadata, &shard_uid.to_bytes())
+    let entries = store.iter_prefix_ser(DBCol::FlatStateDeltaMetadata, &shard_uid.to_bytes());
+
+    entries
         .map(|res| {
             res.map(|(_, value)| value).map_err(|err| {
                 FlatStorageError::StorageInternalError(format!(

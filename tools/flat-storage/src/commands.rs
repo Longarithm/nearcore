@@ -1,10 +1,12 @@
 /// Tools for modifying flat storage - should be used only for experimentation & debugging.
-use borsh::BorshDeserialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 use clap::Parser;
 use near_chain::flat_storage_creator::FlatStorageShardCreator;
 use near_chain::types::RuntimeAdapter;
 use near_chain::{ChainStore, ChainStoreAccess};
 use near_epoch_manager::{EpochManager, EpochManagerAdapter, EpochManagerHandle};
+use near_primitives::hash::CryptoHash;
+use near_primitives::types::BlockHeight;
 use near_store::flat::{
     inline_flat_state_values, store_helper, FlatStateDelta, FlatStateDeltaMetadata,
     FlatStorageManager, FlatStorageStatus,
@@ -47,6 +49,7 @@ enum SubCommand {
     /// Construct and store trie in a separate directory from flat storage state for a given shard.
     /// The trie is constructed for the block height equal to flat_head
     ConstructTrieFromFlat(ConstructTriedFromFlatCmd),
+    FixDeltas(FixDeltasCmd),
 }
 
 #[derive(Parser)]
@@ -66,6 +69,12 @@ pub struct SetStoreVersionCmd {
 
 #[derive(Parser)]
 pub struct ResetCmd {
+    shard_id: u64,
+}
+
+#[derive(Parser)]
+#[allow(unused)]
+pub struct FixDeltasCmd {
     shard_id: u64,
 }
 
@@ -366,6 +375,44 @@ impl FlatStorageCommand {
                 let shard_uid = epoch_manager.shard_id_to_uid(cmd.shard_id, &tip.epoch_id)?;
 
                 construct_trie_from_flat(store, write_store, shard_uid);
+            }
+            SubCommand::FixDeltas(_cmd) => {
+                #[derive(
+                    borsh::BorshSerialize,
+                    borsh::BorshDeserialize,
+                    Debug,
+                    Clone,
+                    Copy,
+                    serde::Serialize,
+                )]
+                pub struct BlockWithChangesInfo {
+                    pub(crate) hash: CryptoHash,
+                    pub(crate) height: BlockHeight,
+                }
+
+                #[derive(borsh::BorshDeserialize)]
+                struct LegacyFlatStateDeltaMetadata {
+                    pub block: near_store::flat::BlockInfo,
+                    pub prev_block_with_changes: Option<BlockWithChangesInfo>,
+                }
+
+                let (_, _, _, _, store) = Self::get_db(
+                    &opener,
+                    home_dir,
+                    &near_config,
+                    near_store::Mode::ReadWriteExisting,
+                );
+                let mut update = store.store_update();
+                update.delete_all(DBCol::FlatStateDeltaMetadata);
+                for result in store.iter(DBCol::FlatStateDeltaMetadata) {
+                    let (key, old_value) = result?;
+                    let LegacyFlatStateDeltaMetadata { block, .. } =
+                        LegacyFlatStateDeltaMetadata::try_from_slice(&old_value)?;
+                    let new_value = near_store::flat::FlatStateDeltaMetadata { block };
+                    update.set(DBCol::FlatStateDeltaMetadata, &key, &new_value.try_to_vec()?);
+                }
+                update.commit()?;
+                Ok(())
             }
         }
 
