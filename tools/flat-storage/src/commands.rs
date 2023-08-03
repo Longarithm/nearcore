@@ -391,6 +391,7 @@ impl FlatStorageCommand {
                 }
 
                 #[derive(borsh::BorshDeserialize)]
+                #[allow(unused)]
                 struct LegacyFlatStateDeltaMetadata {
                     pub block: near_store::flat::BlockInfo,
                     pub prev_block_with_changes: Option<BlockWithChangesInfo>,
