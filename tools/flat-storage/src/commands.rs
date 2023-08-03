@@ -412,7 +412,6 @@ impl FlatStorageCommand {
                     update.set(DBCol::FlatStateDeltaMetadata, &key, &new_value.try_to_vec()?);
                 }
                 update.commit()?;
-                Ok(())
             }
         }
 

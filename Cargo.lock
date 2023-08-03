@@ -3683,6 +3683,8 @@ dependencies = [
  "near-store",
  "nearcore",
  "rayon",
+ "serde",
+ "serde_json",
  "tqdm",
 ]
 
