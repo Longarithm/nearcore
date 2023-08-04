@@ -186,15 +186,20 @@ class NeardRunner:
     # tries to download the binaries specified in config.json, saving them in $home/binaries/
     def download_binaries(self):
         binaries = self.parse_binaries_config()
+        logging.info(binaries)
 
         try:
             os.mkdir(self.home_path('binaries'))
         except FileExistsError:
             pass
 
+        # (logunov) ALWAYS download new binary
         with self.lock:
-            num_binaries_saved = len(self.data['binaries'])
+            num_binaries_saved = 0
+            self.data['binaries'] = []
+            # num_binaries_saved = len(self.data['binaries'])
 
+        logging.info(num_binaries_saved)
         # for now we assume that the binaries recorded in data.json as having been
         # dowloaded are still valid and were not touched. Also this assumes that their
         # filenames are neard0, neard1, etc. in the right order and with nothing skipped
@@ -781,10 +786,13 @@ def main():
     # only let one instance of this code run at a time
     _fd = get_lock(args.home)
 
+    logging.info('Starting...')
     runner = NeardRunner(args)
 
+    logging.info('Downloading...')
     runner.download_binaries()
 
+    logging.info('Serving...')
     runner.serve(args.port)
 
 
