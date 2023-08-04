@@ -112,7 +112,7 @@ impl<'a> near_store::StoreMigrator for Migrator<'a> {
                 Ok(())
             }
             36 => near_store::migrations::migrate_36_to_37(store),
-            37 => unreachable!(),
+            37 => Ok(()),
             DB_VERSION.. => unreachable!(),
         }
     }
