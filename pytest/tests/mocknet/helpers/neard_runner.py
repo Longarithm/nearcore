@@ -378,9 +378,10 @@ class NeardRunner:
                 config = json.load(f)
             config['rpc']['addr'] = "0.0.0.0:3030"
             config['rpc']['enable_debug_rpc'] = True
-            config['background_fetching_enabled'] = background_fetching_enabled
+            config['background_fetching_enabled'] = True if background_fetching_enabled else False
             with open(self.target_near_home_path('config.json'), 'w') as f:
                 json.dump(config, f, indent=4)
+        return True
 
     def do_start(self):
         with self.lock:

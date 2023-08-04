@@ -355,7 +355,7 @@ def neard_runner_network_init(node, validators, boot_nodes, epoch_length,
                                 })
 
 def neard_modify_config(node, background_fetching_enabled):
-    neard_runner_jsonrpc(node,
+    return neard_runner_jsonrpc(node,
                          'modify_config',
                          params={
                              'background_fetching_enabled': background_fetching_enabled,
@@ -364,10 +364,8 @@ def neard_modify_config(node, background_fetching_enabled):
 def modify_config_cmd(args, traffic_generator, nodes):
     background_fetching_enabled = args.background_fetching_enabled
     nodes = nodes + [traffic_generator]
-    if not all(pmap(
-        lambda node: neard_modify_config(node, background_fetching_enabled),
-            nodes)
-    ):
+    results = pmap(lambda node: neard_modify_config(node, background_fetching_enabled), nodes)
+    if not all(results):
         logger.warn(
             'failed to modify configs for some nodes'
         )
@@ -433,7 +431,7 @@ if __name__ == '__main__':
     Sets up the helper servers on each of the nodes. Doesn't start initializing the test
     state, which is done with the `new-test` command.
     ''')
-    modify_config_parser.add_argument('--background-fetching-enabled', type=bool)
+    modify_config_parser.add_argument('--background-fetching-enabled', action=argparse.BooleanOptionalAction)
     modify_config_parser.set_defaults(func=modify_config_cmd)
 
     restart_parser = subparsers.add_parser('restart-neard-runner',
