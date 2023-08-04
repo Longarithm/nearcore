@@ -363,6 +363,7 @@ class NeardRunner:
                     config = json.load(f)
                 config['rpc']['addr'] = "0.0.0.0:3030"
                 config['rpc']['enable_debug_rpc'] = True
+                config['store']['trie_cache']['per_shard_max_bytes'] = {}
                 config['consensus']['min_num_peers'] = len(validators) - 1
                 with open(self.target_near_home_path('config.json'), 'w') as f:
                     json.dump(config, f)
@@ -383,6 +384,7 @@ class NeardRunner:
                 config = json.load(f)
             config['rpc']['addr'] = "0.0.0.0:3030"
             config['rpc']['enable_debug_rpc'] = True
+            config['store']['trie_cache']['per_shard_max_bytes'] = {}
             config['background_fetching_enabled'] = True if background_fetching_enabled else False
             with open(self.target_near_home_path('config.json'), 'w') as f:
                 json.dump(config, f, indent=4)
