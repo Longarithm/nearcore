@@ -739,6 +739,8 @@ class NeardRunner:
         shutil.copytree(self.home_path('backups', 'start'),
                         self.target_near_home_path('data'))
         logging.info('data dir restored')
+        subprocess.check_call("echo 3 | sudo tee /proc/sys/vm/drop_caches && free -m", shell=True)
+        logging.info('caches dropped')
         self.set_state(TestState.STOPPED)
         self.save_data()
 
