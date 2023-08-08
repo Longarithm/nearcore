@@ -19,8 +19,10 @@ from configured_logger import logger
 
 
 def get_nodes(args):
-    pattern = args.chain_id + '-' + str(
-        args.start_height) + '-' + args.unique_id
+    # pattern = args.chain_id + '-' + str(args.start_height) + '-' + args.unique_id
+    # CUT node names to avoid future long account id issues
+    pattern = args.chain_id[:2] + '-' + str(args.start_height)[:2] + '-' + args.unique_id
+
     all_nodes = mocknet.get_nodes(pattern=pattern)
     if len(all_nodes) < 1:
         sys.exit(f'no known nodes matching {pattern}')
