@@ -1479,23 +1479,30 @@ impl Runtime {
         state_update.commit(StateChangeCause::UpdatedDelayedReceipts);
         self.apply_state_patch(&mut state_update, state_patch);
 
+        let shard_id = if let Some(chunk_view) = &state_update.trie.flat_storage_chunk_view {
+            chunk_view.flat_storage.shard_uid().shard_id
+        } else {
+            0
+        };
         if let Some(storage) = state_update.trie.storage.as_caching_storage() {
-            let retrieve_raw_bytes_ms = (storage.retrieve_raw_bytes_us.get() as f64) / 1000f64;
+            let retrieve_raw_bytes_ms = storage.retrieve_raw_bytes_us.get() / 1000;
+            metrics::TIME_RETRIEVE_RAW_BYTES_MS
+                .with_label_values(&[&shard_id.to_string()])
+                .set(retrieve_raw_bytes_ms as i64);
             tracing::info!(target: "runtime", retrieve_raw_bytes_ms);
         }
+
         let start_finalize = Instant::now();
         let (trie, trie_changes, state_changes) = state_update.finalize()?;
         let took_finalize = start_finalize.elapsed();
         let took_apply = start_apply.elapsed();
-        if let Some(chunk_view) = &trie.flat_storage_chunk_view {
-            let shard_id = chunk_view.flat_storage.shard_uid().shard_id;
-            metrics::TIME_FINALIZE_MS
-                .with_label_values(&[&shard_id.to_string()])
-                .set(took_finalize.as_millis() as i64);
-            metrics::TIME_APPLY_MS
-                .with_label_values(&[&shard_id.to_string()])
-                .set(took_apply.as_millis() as i64);
-        }
+
+        metrics::TIME_FINALIZE_MS
+            .with_label_values(&[&shard_id.to_string()])
+            .set(took_finalize.as_millis() as i64);
+        metrics::TIME_APPLY_MS
+            .with_label_values(&[&shard_id.to_string()])
+            .set(took_apply.as_millis() as i64);
         tracing::info!(target: "runtime", ?took_finalize, ?took_apply);
 
         // (logunov) moved:

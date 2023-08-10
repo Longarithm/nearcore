@@ -196,6 +196,14 @@ static CHUNK_TX_TGAS: Lazy<HistogramVec> = Lazy::new(|| {
     )
     .unwrap()
 });
+pub static TIME_RETRIEVE_RAW_BYTES_MS: Lazy<IntGaugeVec> = Lazy::new(|| {
+    try_create_int_gauge_vec(
+        "near_time_retrieve_raw_bytes_ms",
+        "near_time_retrieve_raw_bytes_ms",
+        &["shard_id"],
+    )
+    .unwrap()
+});
 pub static TIME_FINALIZE_MS: Lazy<IntGaugeVec> = Lazy::new(|| {
     try_create_int_gauge_vec("near_time_finalize_ms", "near_time_finalize_ms", &["shard_id"])
         .unwrap()
