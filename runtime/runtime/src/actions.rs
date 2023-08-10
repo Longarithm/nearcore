@@ -36,6 +36,7 @@ use near_vm_runner::logic::errors::{
 use near_vm_runner::logic::types::PromiseResult;
 use near_vm_runner::logic::{ActionCosts, VMContext, VMOutcome};
 use near_vm_runner::precompile_contract;
+use tracing::info;
 
 /// Runs given function call with given context / apply state.
 pub(crate) fn execute_function_call(
@@ -117,6 +118,8 @@ pub(crate) fn execute_function_call(
         apply_state.current_protocol_version,
         apply_state.cache.as_deref(),
     );
+    let storage_get_ms = (runtime_ext.storage_get_us.get() as f64) / 1000f64;
+    info!(target: "runtime", storage_get_ms);
     if checked_feature!("stable", ChunkNodesCache, protocol_version) {
         runtime_ext.set_trie_cache_mode(TrieCacheMode::CachingShard);
     }
