@@ -1201,6 +1201,7 @@ impl Runtime {
         .entered();
 
         let prefetcher = TriePrefetcher::new_if_enabled(&trie);
+
         let mut state_update = TrieUpdate::new(trie);
 
         // if let Some(prefetcher) = &mut prefetcher {
