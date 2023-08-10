@@ -1483,7 +1483,7 @@ impl Runtime {
         let (trie, trie_changes, state_changes) = state_update.finalize()?;
         let took_finalize = start_finalize.elapsed();
         let took_apply = start_apply.elapsed();
-        if let Some(chunk_view) = trie.flat_storage_chunk_view {
+        if let Some(chunk_view) = &trie.flat_storage_chunk_view {
             let shard_id = chunk_view.flat_storage.shard_uid().shard_id;
             metrics::TIME_FINALIZE_MS
                 .with_label_values(&[&shard_id.to_string()])
