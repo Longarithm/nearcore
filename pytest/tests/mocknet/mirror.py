@@ -19,9 +19,9 @@ from configured_logger import logger
 
 
 def get_nodes(args):
-    # pattern = args.chain_id + '-' + str(args.start_height) + '-' + args.unique_id
+    pattern = args.chain_id + '-' + str(args.start_height) + '-' + args.unique_id
     # CUT node names to avoid future long account id issues
-    pattern = args.chain_id[:2] + '-' + str(args.start_height)[:2] + '-' + args.unique_id
+    # pattern = args.chain_id[:2] + '-' + str(args.start_height)[:2] + '-' + args.unique_id
 
     all_nodes = mocknet.get_nodes(pattern=pattern)
     if len(all_nodes) < 1:
@@ -356,17 +356,19 @@ def neard_runner_network_init(node, validators, boot_nodes, epoch_length,
                                     'num_seats': num_seats,
                                 })
 
-def neard_modify_config(node, background_fetching_enabled):
+def neard_modify_config(node, background_fetching_enabled, shard_cache_size_mb):
     return neard_runner_jsonrpc(node,
                          'modify_config',
                          params={
                              'background_fetching_enabled': background_fetching_enabled,
+                             'shard_cache_size_mb': shard_cache_size_mb,
                          })
 
 def modify_config_cmd(args, traffic_generator, nodes):
     background_fetching_enabled = args.background_fetching_enabled
+    shard_cache_size_mb = args.shard_cache_size_mb
     nodes = nodes + [traffic_generator]
-    results = pmap(lambda node: neard_modify_config(node, background_fetching_enabled), nodes)
+    results = pmap(lambda node: neard_modify_config(node, background_fetching_enabled, shard_cache_size_mb), nodes)
     if not all(results):
         logger.warn(
             'failed to modify configs for some nodes'
@@ -434,6 +436,7 @@ if __name__ == '__main__':
     state, which is done with the `new-test` command.
     ''')
     modify_config_parser.add_argument('--background-fetching-enabled', action=argparse.BooleanOptionalAction)
+    modify_config_parser.add_argument('--shard_cache_size_mb', type=int)
     modify_config_parser.set_defaults(func=modify_config_cmd)
 
     restart_parser = subparsers.add_parser('restart-neard-runner',

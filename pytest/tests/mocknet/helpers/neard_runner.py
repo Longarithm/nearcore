@@ -377,14 +377,17 @@ class NeardRunner:
                         'num_seats': num_seats
                     }, f)
 
-    def do_modify_config(self, background_fetching_enabled):
+    def do_modify_config(self, background_fetching_enabled, shard_cache_size_mb):
         with self.lock:
-            logging.info(f'modify config with {background_fetching_enabled}')
+            logging.info(f'modify config with {background_fetching_enabled} and {shard_cache_size_mb}')
             with open(self.target_near_home_path('config.json'), 'r') as f:
                 config = json.load(f)
             config['rpc']['addr'] = "0.0.0.0:3030"
             config['rpc']['enable_debug_rpc'] = True
             config['store']['trie_cache']['per_shard_max_bytes'] = {}
+            if shard_cache_size_mb is not None:
+                for i in range(4):
+                    config['store']['trie_cache']['per_shard_max_bytes'][f's{i}.v1'] = shard_cache_size_mb * 10**6
             config['background_fetching_enabled'] = True if background_fetching_enabled else False
             with open(self.target_near_home_path('config.json'), 'w') as f:
                 json.dump(config, f, indent=4)
