@@ -436,7 +436,7 @@ if __name__ == '__main__':
     state, which is done with the `new-test` command.
     ''')
     modify_config_parser.add_argument('--background-fetching-enabled', action=argparse.BooleanOptionalAction)
-    modify_config_parser.add_argument('--shard_cache_size_mb', type=int)
+    modify_config_parser.add_argument('--shard-cache-size-mb', type=int)
     modify_config_parser.set_defaults(func=modify_config_cmd)
 
     restart_parser = subparsers.add_parser('restart-neard-runner',
