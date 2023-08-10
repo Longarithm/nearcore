@@ -1457,9 +1457,9 @@ impl Runtime {
         metrics.incoming_receipts_done(total_gas_burnt, total_compute_usage);
 
         // No more receipts are executed on this trie, stop any pending prefetches on it.
-        if let Some(prefetcher) = &prefetcher {
-            prefetcher.clear();
-        }
+        // if let Some(prefetcher) = &prefetcher {
+        //     prefetcher.clear();
+        // }
 
         if delayed_receipts_indices != initial_delayed_receipt_indices {
             set(&mut state_update, TrieKey::DelayedReceiptIndices, &delayed_receipts_indices);
@@ -1493,6 +1493,12 @@ impl Runtime {
                 .set(took_apply.as_millis() as i64);
         }
         tracing::info!(target: "runtime", ?took_finalize, ?took_apply);
+
+        // (logunov) moved:
+        // Finalize ended, everything is read
+        if let Some(prefetcher) = &prefetcher {
+            prefetcher.clear();
+        }
 
         // Dedup proposals from the same account.
         // The order is deterministically changed.
