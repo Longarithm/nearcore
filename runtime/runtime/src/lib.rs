@@ -51,6 +51,7 @@ pub use near_vm_runner::with_ext_cost_counter;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Instant;
 use tracing::debug;
 
 mod actions;
@@ -1200,6 +1201,8 @@ impl Runtime {
             num_transactions = transactions.len())
         .entered();
 
+        let start_apply = Instant::now();
+
         let prefetcher = TriePrefetcher::new_if_enabled(&trie);
 
         let mut state_update = TrieUpdate::new(trie);
@@ -1475,7 +1478,21 @@ impl Runtime {
 
         state_update.commit(StateChangeCause::UpdatedDelayedReceipts);
         self.apply_state_patch(&mut state_update, state_patch);
+
+        let start_finalize = Instant::now();
         let (trie, trie_changes, state_changes) = state_update.finalize()?;
+        let took_finalize = start_finalize.elapsed();
+        let took_apply = start_apply.elapsed();
+        if let Some(chunk_view) = trie.flat_storage_chunk_view {
+            let shard_id = chunk_view.flat_storage.shard_uid().shard_id;
+            metrics::TIME_FINALIZE_MS
+                .with_label_values(&[&shard_id.to_string()])
+                .set(took_finalize.as_millis() as i64);
+            metrics::TIME_APPLY_MS
+                .with_label_values(&[&shard_id.to_string()])
+                .set(took_apply.as_millis() as i64);
+        }
+        tracing::info!(target: "runtime", ?took_finalize, ?took_apply);
 
         // Dedup proposals from the same account.
         // The order is deterministically changed.

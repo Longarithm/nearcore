@@ -326,7 +326,7 @@ impl FlatStorage {
         guard.flat_head.hash
     }
 
-    pub(crate) fn shard_uid(&self) -> ShardUId {
+    pub fn shard_uid(&self) -> ShardUId {
         let guard = self.0.read().expect(super::POISONED_LOCK_ERR);
         guard.shard_uid
     }

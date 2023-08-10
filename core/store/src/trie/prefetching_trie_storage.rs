@@ -241,9 +241,9 @@ impl TrieStorage for TriePrefetchingStorage {
                 match self.store.get(DBCol::State, key.as_ref()) {
                     Ok(Some(value)) => {
                         let value: Arc<[u8]> = value.into();
-                        let mut shard_cache_guard = self.shard_cache.lock();
+                        // let mut shard_cache_guard = self.shard_cache.lock();
                         self.prefetching.insert_fetched(*hash, value.clone());
-                        shard_cache_guard.put(*hash, value.clone());
+                        // shard_cache_guard.put(*hash, value.clone());
                         Ok(value)
                     }
                     Ok(None) => {
