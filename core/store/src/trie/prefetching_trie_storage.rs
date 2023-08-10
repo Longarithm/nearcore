@@ -468,9 +468,9 @@ impl PrefetchApi {
                 match selected {
                     None => return,
                     Some((trie_root, trie_key)) => {
-                        let _span =
-                            tracing::debug_span!(target: "runtime", "prefetching", ?trie_key)
-                                .entered();
+                        // let _span =
+                        //     tracing::debug_span!(target: "runtime", "prefetching", ?trie_key)
+                        //         .entered();
                         // Since the trie root can change,and since the root is
                         // not known at the time when the IO threads starts,
                         // we need to redefine the trie before each request.
