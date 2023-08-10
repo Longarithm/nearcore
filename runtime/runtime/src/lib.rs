@@ -1479,6 +1479,10 @@ impl Runtime {
         state_update.commit(StateChangeCause::UpdatedDelayedReceipts);
         self.apply_state_patch(&mut state_update, state_patch);
 
+        if let Some(storage) = state_update.trie.storage.as_caching_storage() {
+            let retrieve_raw_bytes_ms = (storage.retrieve_raw_bytes_us.get() as f64) / 1000f64;
+            tracing::info!(target: "runtime", retrieve_raw_bytes_ms);
+        }
         let start_finalize = Instant::now();
         let (trie, trie_changes, state_changes) = state_update.finalize()?;
         let took_finalize = start_finalize.elapsed();

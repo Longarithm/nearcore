@@ -14,6 +14,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 pub(crate) struct BoundedQueue<T> {
     queue: VecDeque<T>,
@@ -408,6 +409,7 @@ pub struct TrieCachingStorage {
     // Counters tracking operations happening inside the shard cache.
     // Stored here to avoid overhead of looking them up on hot paths.
     metrics: TrieCacheInnerMetrics,
+    pub retrieve_raw_bytes_us: Cell<u64>,
 }
 
 struct TrieCacheInnerMetrics {
@@ -470,6 +472,7 @@ impl TrieCachingStorage {
             db_read_nodes: Cell::new(0),
             mem_read_nodes: Cell::new(0),
             metrics,
+            retrieve_raw_bytes_us: Cell::new(0),
         }
     }
 
@@ -499,12 +502,15 @@ impl TrieCachingStorage {
 
 impl TrieStorage for TrieCachingStorage {
     fn retrieve_raw_bytes(&self, hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError> {
+        let t = Instant::now();
         self.metrics.chunk_cache_size.set(self.chunk_cache.borrow().len() as i64);
         // Try to get value from chunk cache containing nodes with cheaper access. We can do it for any `TrieCacheMode`,
         // because we charge for reading nodes only when `CachingChunk` mode is enabled anyway.
         if let Some(val) = self.chunk_cache.borrow_mut().get(hash) {
             self.metrics.chunk_cache_hits.inc();
             self.inc_mem_read_nodes();
+            let x = self.retrieve_raw_bytes_us.get();
+            self.retrieve_raw_bytes_us.set(x + t.elapsed().as_millis() as u64);
             return Ok(val.clone());
         }
         self.metrics.chunk_cache_misses.inc();
@@ -617,6 +623,8 @@ impl TrieStorage for TrieCachingStorage {
             self.chunk_cache.borrow_mut().insert(*hash, val.clone());
         };
 
+        let x = self.retrieve_raw_bytes_us.get();
+        self.retrieve_raw_bytes_us.set(x + t.elapsed().as_millis() as u64);
         Ok(val)
     }
 
