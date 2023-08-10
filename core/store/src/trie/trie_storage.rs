@@ -510,7 +510,7 @@ impl TrieStorage for TrieCachingStorage {
             self.metrics.chunk_cache_hits.inc();
             self.inc_mem_read_nodes();
             let x = self.retrieve_raw_bytes_us.get();
-            self.retrieve_raw_bytes_us.set(x + t.elapsed().as_millis() as u64);
+            self.retrieve_raw_bytes_us.set(x + t.elapsed().as_micros() as u64);
             return Ok(val.clone());
         }
         self.metrics.chunk_cache_misses.inc();
@@ -624,7 +624,7 @@ impl TrieStorage for TrieCachingStorage {
         };
 
         let x = self.retrieve_raw_bytes_us.get();
-        self.retrieve_raw_bytes_us.set(x + t.elapsed().as_millis() as u64);
+        self.retrieve_raw_bytes_us.set(x + t.elapsed().as_micros() as u64);
         Ok(val)
     }
 
