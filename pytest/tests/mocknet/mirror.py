@@ -356,19 +356,27 @@ def neard_runner_network_init(node, validators, boot_nodes, epoch_length,
                                     'num_seats': num_seats,
                                 })
 
-def neard_modify_config(node, background_fetching_enabled, shard_cache_size_mb):
+def neard_modify_config(node,
+                        background_fetching_enabled,
+                        shard_cache_size_mb,
+                        max_block_production_delay,
+                        max_block_wait_delay):
     return neard_runner_jsonrpc(node,
                          'modify_config',
                          params={
                              'background_fetching_enabled': background_fetching_enabled,
                              'shard_cache_size_mb': shard_cache_size_mb,
+                             'max_block_production_delay': max_block_production_delay,
+                             'max_block_wait_delay': max_block_wait_delay,
                          })
 
 def modify_config_cmd(args, traffic_generator, nodes):
-    background_fetching_enabled = args.background_fetching_enabled
-    shard_cache_size_mb = args.shard_cache_size_mb
     nodes = nodes + [traffic_generator]
-    results = pmap(lambda node: neard_modify_config(node, background_fetching_enabled, shard_cache_size_mb), nodes)
+    results = pmap(lambda node: neard_modify_config(node,
+                                                    args.background_fetching_enabled,
+                                                    args.shard_cache_size_mb,
+                                                    args.max_block_production_delay,
+                                                    args.max_block_wait_delay), nodes)
     if not all(results):
         logger.warn(
             'failed to modify configs for some nodes'
@@ -437,6 +445,8 @@ if __name__ == '__main__':
     ''')
     modify_config_parser.add_argument('--background-fetching-enabled', action=argparse.BooleanOptionalAction)
     modify_config_parser.add_argument('--shard-cache-size-mb', type=int)
+    modify_config_parser.add_argument('--max-block-production-delay', type=int, default=2)
+    modify_config_parser.add_argument('--max-block-wait-delay', type=int, default=6)
     modify_config_parser.set_defaults(func=modify_config_cmd)
 
     restart_parser = subparsers.add_parser('restart-neard-runner',

@@ -377,7 +377,12 @@ class NeardRunner:
                         'num_seats': num_seats
                     }, f)
 
-    def do_modify_config(self, background_fetching_enabled, shard_cache_size_mb):
+    def do_modify_config(self,
+                         background_fetching_enabled,
+                         shard_cache_size_mb,
+                         max_block_production_delay,
+                         max_block_wait_delay,
+                         ):
         with self.lock:
             logging.info(f'modify config with {background_fetching_enabled} and {shard_cache_size_mb}')
             with open(self.target_near_home_path('config.json'), 'r') as f:
@@ -388,6 +393,12 @@ class NeardRunner:
             if shard_cache_size_mb is not None:
                 for i in range(4):
                     config['store']['trie_cache']['per_shard_max_bytes'][f's{i}.v1'] = shard_cache_size_mb * 10**6
+
+            if max_block_production_delay is not None:
+                config['max_block_production_delay']['secs'] = max_block_production_delay
+            if max_block_wait_delay is not None:
+                config['max_block_wait_delay']['secs'] = max_block_wait_delay
+
             config['background_fetching_enabled'] = True if background_fetching_enabled else False
             with open(self.target_near_home_path('config.json'), 'w') as f:
                 json.dump(config, f, indent=4)
