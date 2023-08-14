@@ -379,7 +379,10 @@ class NeardRunner:
                         'protocol_version': protocol_version,
                     }, f)
 
-    def do_update_config(self, state_cache_size_mb):
+    def do_update_config(self, state_cache_size_mb,
+                         background_fetching_enabled,
+                         max_block_production_delay,
+                         max_block_wait_delay,):
         with self.lock:
             logging.info(f'updating config with {state_cache_size_mb}')
             with open(self.target_near_home_path('config.json'), 'r') as f:
@@ -390,6 +393,13 @@ class NeardRunner:
                 for i in range(4):
                     config['store']['trie_cache']['per_shard_max_bytes'][
                         f's{i}.v1'] = state_cache_size_mb * 10**6
+
+            if max_block_production_delay is not None:
+                config['consensus']['max_block_production_delay']['secs'] = max_block_production_delay
+            if max_block_wait_delay is not None:
+                config['consensus']['max_block_wait_delay']['secs'] = max_block_wait_delay
+
+            config['background_fetching_enabled'] = True if background_fetching_enabled else False
 
             with open(self.target_near_home_path('config.json'), 'w') as f:
                 json.dump(config, f, indent=2)

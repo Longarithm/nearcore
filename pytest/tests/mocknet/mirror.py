@@ -448,9 +448,9 @@ if __name__ == '__main__':
         Update config.json with given flags for all nodes.
         ''')
     update_config_parser.add_argument('--state-cache-size-mb', type=int)
-    modify_config_parser.add_argument('--background-fetching-enabled', action=argparse.BooleanOptionalAction)
-    modify_config_parser.add_argument('--max-block-production-delay', type=int, default=2)
-    modify_config_parser.add_argument('--max-block-wait-delay', type=int, default=6)
+    update_config_parser.add_argument('--background-fetching-enabled', action=argparse.BooleanOptionalAction)
+    update_config_parser.add_argument('--max-block-production-delay', type=int, default=2)
+    update_config_parser.add_argument('--max-block-wait-delay', type=int, default=6)
     update_config_parser.set_defaults(func=update_config_cmd)
 
     restart_parser = subparsers.add_parser('restart-neard-runner',
