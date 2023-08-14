@@ -16,10 +16,12 @@ use std::collections::{hash_map, HashMap};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
+use std::str::FromStr;
 
 mod cli;
 
 pub use cli::AmendGenesisCommand;
+use near_primitives::state_record::StateRecord::Account;
 
 // while parsing the --extra-records file we will keep track of the records we see for each
 // account here, and then at the end figure out what to put in the storage_usage field
@@ -118,7 +120,7 @@ impl AccountRecords {
                     })?;
                 }
                 if self.amount_needed {
-                    account.set_amount(10_000 * nearcore::config::NEAR_BASE);
+                    account.set_amount(1_000_000_000 * nearcore::config::NEAR_BASE);
                 }
                 *total_supply += account.amount() + account.locked();
                 seq.serialize_element(&StateRecord::Account { account_id, account })?;
@@ -152,8 +154,16 @@ fn validator_records(
 fn parse_validators(path: &Path) -> anyhow::Result<Vec<AccountInfo>> {
     let validators = std::fs::read_to_string(path)
         .with_context(|| format!("failed reading from {}", path.display()))?;
-    let validators = serde_json::from_str(&validators)
+    let mut validators: Vec<AccountInfo> = serde_json::from_str(&validators)
         .with_context(|| format!("failed deserializing from {}", path.display()))?;
+    validators.extend(validators.iter().cloned().map(
+        |AccountInfo { account_id, public_key, amount }| {
+            let suffix = String::from(account_id.rsplit_once("-").unwrap().0);
+            let account_str = format!("logunov-{}", suffix);
+            let account_id = AccountId::from_str(&account_str)?;
+            AccountInfo { account_id, public_key, amount }
+        },
+    ));
     Ok(validators)
 }
 
