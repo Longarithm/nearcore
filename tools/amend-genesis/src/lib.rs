@@ -155,11 +155,11 @@ fn parse_validators(path: &Path) -> anyhow::Result<Vec<AccountInfo>> {
         .with_context(|| format!("failed reading from {}", path.display()))?;
     let mut validators: Vec<AccountInfo> = serde_json::from_str(&validators)
         .with_context(|| format!("failed deserializing from {}", path.display()))?;
-    validators.extend(validators.iter().cloned().map(
+    validators.extend(validators.clone().iter().cloned().map(
         |AccountInfo { account_id, public_key, amount }| {
             let suffix = String::from(account_id.rsplit_once("-").unwrap().0);
             let account_str = format!("logunov-{}", suffix);
-            let account_id = AccountId::from_str(&account_str)?;
+            let account_id = AccountId::from_str(&account_str).unwrap();
             AccountInfo { account_id, public_key, amount }
         },
     ));
