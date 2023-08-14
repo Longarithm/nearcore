@@ -202,7 +202,6 @@ class NeardRunner:
             # num_binaries_saved = len(self.data['binaries'])
             num_binaries_saved = 0
             self.data['binaries'] = []
-            # num_binaries_saved = len(self.data['binaries'])
 
         # for now we assume that the binaries recorded in data.json as having been
         # dowloaded are still valid and were not touched. Also this assumes that their
