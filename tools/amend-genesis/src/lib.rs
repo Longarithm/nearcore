@@ -21,7 +21,6 @@ use std::str::FromStr;
 mod cli;
 
 pub use cli::AmendGenesisCommand;
-use near_primitives::state_record::StateRecord::Account;
 
 // while parsing the --extra-records file we will keep track of the records we see for each
 // account here, and then at the end figure out what to put in the storage_usage field
