@@ -395,9 +395,9 @@ class NeardRunner:
                     config['store']['trie_cache']['per_shard_max_bytes'][f's{i}.v1'] = shard_cache_size_mb * 10**6
 
             if max_block_production_delay is not None:
-                config['max_block_production_delay']['secs'] = max_block_production_delay
+                config['consensus']['max_block_production_delay']['secs'] = max_block_production_delay
             if max_block_wait_delay is not None:
-                config['max_block_wait_delay']['secs'] = max_block_wait_delay
+                config['consensus']['max_block_wait_delay']['secs'] = max_block_wait_delay
 
             config['background_fetching_enabled'] = True if background_fetching_enabled else False
             with open(self.target_near_home_path('config.json'), 'w') as f:
