@@ -197,8 +197,12 @@ class NeardRunner:
         except FileExistsError:
             pass
 
+        # (logunov) ALWAYS download new binary
         with self.lock:
-            num_binaries_saved = len(self.data['binaries'])
+            # num_binaries_saved = len(self.data['binaries'])
+            num_binaries_saved = 0
+            self.data['binaries'] = []
+            # num_binaries_saved = len(self.data['binaries'])
 
         # for now we assume that the binaries recorded in data.json as having been
         # dowloaded are still valid and were not touched. Also this assumes that their
@@ -764,6 +768,8 @@ class NeardRunner:
         shutil.copytree(self.home_path('backups', 'start'),
                         self.target_near_home_path('data'))
         logging.info('data dir restored')
+        subprocess.check_call("echo 3 | sudo tee /proc/sys/vm/drop_caches && free -m", shell=True)
+        logging.info('caches dropped')
         self.set_state(TestState.STOPPED)
         self.save_data()
 
@@ -813,10 +819,13 @@ def main():
     # only let one instance of this code run at a time
     _fd = get_lock(args.home)
 
+    logging.info('Starting...')
     runner = NeardRunner(args)
 
+    logging.info('Downloading...')
     runner.download_binaries()
 
+    logging.info('Serving...')
     runner.serve(args.port)
 
 

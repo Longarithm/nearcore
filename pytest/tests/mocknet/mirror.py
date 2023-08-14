@@ -362,18 +362,27 @@ def neard_runner_network_init(node, validators, boot_nodes, epoch_length,
                                 })
 
 
-def neard_update_config(node, state_cache_size_mb):
+def neard_update_config(node, state_cache_size_mb,
+                        background_fetching_enabled,
+                        max_block_production_delay,
+                        max_block_wait_delay):
     return neard_runner_jsonrpc(node,
                                 'update_config',
                                 params={
                                     'state_cache_size_mb': state_cache_size_mb,
+                                    'background_fetching_enabled': background_fetching_enabled,
+                                    'max_block_production_delay': max_block_production_delay,
+                                    'max_block_wait_delay': max_block_wait_delay,
                                 })
 
 
 def update_config_cmd(args, traffic_generator, nodes):
     nodes = nodes + [traffic_generator]
     results = pmap(
-        lambda node: neard_update_config(node, args.state_cache_size_mb), nodes)
+        lambda node: neard_update_config(node, args.state_cache_size_mb,
+                                         args.background_fetching_enabled,
+                                         args.max_block_production_delay,
+                                         args.max_block_wait_delay), nodes)
     if not all(results):
         logger.warn('failed to update configs for some nodes')
         return
@@ -439,6 +448,9 @@ if __name__ == '__main__':
         Update config.json with given flags for all nodes.
         ''')
     update_config_parser.add_argument('--state-cache-size-mb', type=int)
+    modify_config_parser.add_argument('--background-fetching-enabled', action=argparse.BooleanOptionalAction)
+    modify_config_parser.add_argument('--max-block-production-delay', type=int, default=2)
+    modify_config_parser.add_argument('--max-block-wait-delay', type=int, default=6)
     update_config_parser.set_defaults(func=update_config_cmd)
 
     restart_parser = subparsers.add_parser('restart-neard-runner',
@@ -505,6 +517,11 @@ if __name__ == '__main__':
     reset_parser.set_defaults(func=reset_cmd)
 
     args = parser.parse_args()
+    with open('/tmp/.neard-runner.log', 'a') as f:
+        f.write(f'{datetime.datetime.now()}')
+        for arg in vars(args):
+            f.write(f' {arg}={getattr(args, arg)}')
+        f.write('\n')
 
     traffic_generator, nodes = get_nodes(args)
     args.func(args, traffic_generator, nodes)
