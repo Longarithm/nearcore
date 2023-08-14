@@ -382,7 +382,7 @@ class NeardRunner:
     def do_update_config(self, state_cache_size_mb,
                          background_fetching_enabled,
                          max_block_production_delay,
-                         max_block_wait_delay,):
+                         max_block_wait_delay):
         with self.lock:
             logging.info(f'updating config with {state_cache_size_mb}')
             with open(self.target_near_home_path('config.json'), 'r') as f:
