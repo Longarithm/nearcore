@@ -2332,7 +2332,7 @@ impl Chain {
         let bp_time_sec = StaticClock::instant()
             .saturating_duration_since(block_start_processing_time)
             .as_secs_f64();
-        info!(target: "chain", %bp_time_sec, %block_height, %block_hash)
+        info!(target: "chain", %bp_time_sec, %block_height, %block_hash);
         metrics::BLOCK_PROCESSED_TOTAL.inc();
         metrics::BLOCK_PROCESSING_TIME.observe(bp_time_sec);
         self.blocks_delay_tracker.finish_block_processing(&block_hash, new_head.clone());
