@@ -2366,11 +2366,11 @@ impl Chain {
         };
 
         metrics::BLOCK_PROCESSED_TOTAL.inc();
-        metrics::BLOCK_PROCESSING_TIME.observe(
-            StaticClock::instant()
-                .saturating_duration_since(block_start_processing_time)
-                .as_secs_f64(),
-        );
+        let block_processing_time = StaticClock::instant()
+            .saturating_duration_since(block_start_processing_time)
+            .as_secs_f64();
+        metrics::BLOCK_PROCESSING_TIME.observe(block_processing_time);
+        metrics::BLOCK_PROCESSING_TIME_EXACT.set(block_processing_time);
         self.blocks_delay_tracker.finish_block_processing(&block_hash, new_head.clone());
 
         timer.observe_duration();
