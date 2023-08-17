@@ -2329,6 +2329,7 @@ impl Chain {
             self.last_time_head_updated = StaticClock::instant();
         };
 
+        metrics::BLOCK_PROCESSED_TOTAL.inc();
         let block_processing_time = StaticClock::instant()
             .saturating_duration_since(block_start_processing_time)
             .as_secs_f64();
