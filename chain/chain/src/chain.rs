@@ -2329,12 +2329,12 @@ impl Chain {
             self.last_time_head_updated = StaticClock::instant();
         };
 
-        let bp_time_sec = StaticClock::instant()
+        let block_processing_time = StaticClock::instant()
             .saturating_duration_since(block_start_processing_time)
             .as_secs_f64();
-        info!(target: "chain", %bp_time_sec, %block_height, %block_hash);
-        metrics::BLOCK_PROCESSED_TOTAL.inc();
-        metrics::BLOCK_PROCESSING_TIME.observe(bp_time_sec);
+        info!(target: "chain", %block_processing_time, %block_height, %block_hash);
+        metrics::BLOCK_PROCESSING_TIME.observe(block_processing_time);
+        metrics::BLOCK_PROCESSING_TIME_EXACT.set(block_processing_time);
         self.blocks_delay_tracker.finish_block_processing(&block_hash, new_head.clone());
 
         timer.observe_duration();
