@@ -884,8 +884,17 @@ impl CompiledContractCache for StoreCompiledContractCache {
     }
 
     fn get(&self, key: &CryptoHash) -> io::Result<Option<CompiledContract>> {
-        match self.db.get_raw_bytes(DBCol::CachedContractCode, key.as_ref()) {
-            Ok(Some(bytes)) => Ok(Some(CompiledContract::try_from_slice(&bytes)?)),
+        let raw_bytes = {
+            let _span = tracing::debug_span!(target: "vm", "Wasmer2VM::get_raw_bytes").entered();
+            self.db.get_raw_bytes(DBCol::CachedContractCode, key.as_ref())
+        };
+
+        match raw_bytes {
+            Ok(Some(bytes)) => {
+                let _span =
+                    tracing::debug_span!(target: "vm", "Wasmer2VM::try_from_slice").entered();
+                Ok(Some(CompiledContract::try_from_slice(&bytes)?))
+            }
             Ok(None) => Ok(None),
             Err(err) => Err(err),
         }

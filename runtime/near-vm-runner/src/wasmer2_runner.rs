@@ -335,11 +335,14 @@ impl Wasmer2VM {
         let compile_or_read_from_cache = || -> VMResult<Result<VMArtifact, CompilationError>> {
             let _span = tracing::debug_span!(target: "vm", "Wasmer2VM::compile_or_read_from_cache")
                 .entered();
-            let cache_record = cache
-                .map(|cache| cache.get(&key))
-                .transpose()
-                .map_err(CacheError::ReadError)?
-                .flatten();
+            {
+                let _span = tracing::debug_span!(target: "vm", "Wasmer2VM::cache_get").entered();
+                let cache_record = cache
+                    .map(|cache| cache.get(&key))
+                    .transpose()
+                    .map_err(CacheError::ReadError)?
+                    .flatten();
+            }
 
             let stored_artifact: Option<VMArtifact> = match cache_record {
                 None => None,
