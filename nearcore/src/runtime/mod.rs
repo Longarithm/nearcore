@@ -425,7 +425,7 @@ impl NightshadeRuntime {
         };
 
         let epoch_height = self.epoch_manager.get_epoch_height_from_prev_block(prev_block_hash)?;
-        let prev_block_epoch_id = self.epoch_manager.get_epoch_id(prev_block_hash)?;
+        // let prev_block_epoch_id = self.epoch_manager.get_epoch_id(prev_block_hash)?;
         let current_protocol_version = PROTOCOL_VERSION; // self.epoch_manager.get_epoch_protocol_version(&epoch_id)?;
         let prev_block_protocol_version = PROTOCOL_VERSION; // self.epoch_manager.get_epoch_protocol_version(&prev_block_epoch_id)?;
         let is_first_block_of_version = current_protocol_version != prev_block_protocol_version;
