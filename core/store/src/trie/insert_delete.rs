@@ -12,7 +12,7 @@ use crate::trie::{
 };
 use crate::{StorageError, Trie, TrieChanges};
 
-pub(crate) struct NodesStorage {
+pub struct NodesStorage {
     nodes: Vec<Option<TrieNodeWithSize>>,
     values: Vec<Option<Vec<u8>>>,
     pub(crate) refcount_changes: HashMap<CryptoHash, (Vec<u8>, i32)>,

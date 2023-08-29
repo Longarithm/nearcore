@@ -63,10 +63,10 @@ pub struct PartialStorage {
 }
 
 #[derive(Clone, Hash, Debug, Copy)]
-pub(crate) struct StorageHandle(usize);
+pub struct StorageHandle(usize);
 
 #[derive(Clone, Hash, Debug, Copy)]
-pub(crate) struct StorageValueHandle(usize);
+pub struct StorageValueHandle(usize);
 
 pub struct TrieCosts {
     pub byte_of_key: u64,
