@@ -1,7 +1,4 @@
-use std::borrow::Borrow;
-use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
-use std::hash::Hash;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;

@@ -318,7 +318,7 @@ impl Eq for InMemoryTrieNodeRef {}
 
 #[derive(Default)]
 pub struct InMemoryTrieNodeSet {
-    nodes: HashSet<InMemoryTrieNodeRef>,
+    pub nodes: HashSet<InMemoryTrieNodeRef>,
 }
 
 impl InMemoryTrieNodeSet {
@@ -341,6 +341,8 @@ impl InMemoryTrieNodeSet {
     pub fn insert_if_not_exists(&mut self, node: Arc<InMemoryTrieNodeLite>) -> bool {
         self.nodes.insert(InMemoryTrieNodeRef(node))
     }
+
+    pub fn
 }
 
 pub trait TrieStorage {
