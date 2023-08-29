@@ -43,7 +43,7 @@ mod shard_tries;
 pub mod split_state;
 mod state_parts;
 mod trie_recording;
-mod trie_storage;
+pub mod trie_storage;
 #[cfg(test)]
 mod trie_tests;
 pub mod update;
@@ -52,6 +52,7 @@ use self::accounting_cache::TrieAccountingCache;
 use self::trie_recording::TrieRecorder;
 use self::trie_storage::TrieMemoryPartialStorage;
 pub use from_flat::construct_trie_from_flat;
+pub use trie_storage::*;
 
 const POISONED_LOCK_ERR: &str = "The lock was poisoned.";
 
@@ -326,7 +327,7 @@ impl std::fmt::Debug for TrieNode {
 }
 
 pub struct Trie {
-    storage: Rc<dyn TrieStorage>,
+    pub storage: Rc<dyn TrieStorage>,
     root: StateRoot,
     /// If present, flat storage is used to look up keys (if asked for).
     /// Otherwise, we would crawl through the trie.

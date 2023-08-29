@@ -9,9 +9,12 @@ use near_o11y::metrics::prometheus::core::{GenericCounter, GenericGauge};
 use near_primitives::challenge::PartialState;
 use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardUId;
+use near_primitives::state::ValueRef;
 use near_primitives::types::ShardId;
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 
 pub(crate) struct BoundedQueue<T> {
@@ -276,6 +279,69 @@ impl TrieCache {
     }
 }
 
+pub struct InMemoryTrieNodeLite {
+    pub hash: CryptoHash,
+    pub size: u64,
+    pub kind: InMemoryTrieNodeKindLite,
+}
+
+#[allow(unused)]
+pub enum InMemoryTrieNodeKindLite {
+    Leaf { extension: Box<[u8]>, value: ValueRef },
+    Extension { extension: Box<[u8]>, child: Arc<InMemoryTrieNodeLite> },
+    Branch([Option<Arc<InMemoryTrieNodeLite>>; 16]),
+    BranchWithLeaf { children: [Option<Arc<InMemoryTrieNodeLite>>; 16], value: ValueRef },
+}
+
+#[derive(Clone)]
+struct InMemoryTrieNodeRef(Arc<InMemoryTrieNodeLite>);
+
+impl Hash for InMemoryTrieNodeRef {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash.hash(state);
+    }
+}
+
+impl Borrow<CryptoHash> for InMemoryTrieNodeRef {
+    fn borrow(&self) -> &CryptoHash {
+        &self.0.hash
+    }
+}
+
+impl PartialEq for InMemoryTrieNodeRef {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.hash == other.0.hash
+    }
+}
+
+impl Eq for InMemoryTrieNodeRef {}
+
+pub struct InMemoryTrieNodeSet {
+    nodes: HashSet<InMemoryTrieNodeRef>,
+}
+
+impl InMemoryTrieNodeSet {
+    pub fn new() -> Self {
+        Self { nodes: HashSet::new() }
+    }
+
+    pub fn insert_with_dedup(
+        &mut self,
+        node: Arc<InMemoryTrieNodeLite>,
+    ) -> Arc<InMemoryTrieNodeLite> {
+        if let Some(existing) = self.nodes.get(&node.hash) {
+            existing.clone().0
+        } else {
+            self.nodes.insert(InMemoryTrieNodeRef(node.clone()));
+            node
+        }
+    }
+
+    pub fn insert_if_not_exists(&mut self, node: Arc<InMemoryTrieNodeLite>) -> bool {
+        self.nodes.insert(InMemoryTrieNodeRef(node))
+    }
+}
+
 pub trait TrieStorage {
     /// Get bytes of a serialized `TrieNode`.
     ///
@@ -292,6 +358,10 @@ pub trait TrieStorage {
     }
 
     fn as_partial_storage(&self) -> Option<&TrieMemoryPartialStorage> {
+        None
+    }
+
+    fn as_in_memory_set(&self) -> Option<&InMemoryTrieNodeSet> {
         None
     }
 }

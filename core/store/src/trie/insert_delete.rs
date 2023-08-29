@@ -83,7 +83,7 @@ enum FlattenNodesCrumb {
 impl Trie {
     /// Allowed to mutate nodes in NodesStorage.
     /// Insert while holding StorageHandles to NodesStorage is unsafe
-    pub(crate) fn insert(
+    pub fn insert(
         &self,
         memory: &mut NodesStorage,
         node: StorageHandle,

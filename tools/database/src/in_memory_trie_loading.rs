@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::path::Path;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -11,27 +12,16 @@ use near_epoch_manager::EpochManager;
 use near_primitives::block_header::BlockHeader;
 use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::state::ValueRef;
-use near_primitives::types::ShardId;
+use near_primitives::types::{ShardId, StateRoot};
 use near_store::flat::store_helper::iter_flat_state_entries;
-use near_store::{DBCol, NibbleSlice, RawTrieNode, RawTrieNodeWithSize, ShardUId, Store};
+use near_store::{
+    DBCol, InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet, NibbleSlice,
+    RawTrieNode, RawTrieNodeWithSize, ShardUId, Store, Trie, TrieMemoryPartialStorage,
+};
 use nearcore::NearConfig;
 
 use crate::flat_nodes::FlatNodeNibbles;
 use crate::utils::{flat_head, flat_head_state_root, open_rocksdb};
-
-pub struct InMemoryTrieNodeLite {
-    pub hash: CryptoHash,
-    pub size: u64,
-    pub kind: InMemoryTrieNodeKindLite,
-}
-
-#[allow(unused)]
-pub enum InMemoryTrieNodeKindLite {
-    Leaf { extension: Box<[u8]>, value: ValueRef },
-    Extension { extension: Box<[u8]>, child: Arc<InMemoryTrieNodeLite> },
-    Branch([Option<Arc<InMemoryTrieNodeLite>>; 16]),
-    BranchWithLeaf { children: [Option<Arc<InMemoryTrieNodeLite>>; 16], value: ValueRef },
-}
 
 struct InMemoryTrieNodeBuilder {
     path: FlatNodeNibbles,
@@ -43,55 +33,6 @@ struct InMemoryTrieNodeBuilder {
     next_child_index: usize,
     placeholder_length: Option<usize>,
     pending_children: Vec<Arc<InMemoryTrieNodeLite>>,
-}
-
-#[derive(Clone)]
-struct InMemoryTrieNodeRef(Arc<InMemoryTrieNodeLite>);
-
-impl Hash for InMemoryTrieNodeRef {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash.hash(state);
-    }
-}
-
-impl Borrow<CryptoHash> for InMemoryTrieNodeRef {
-    fn borrow(&self) -> &CryptoHash {
-        &self.0.hash
-    }
-}
-
-impl PartialEq for InMemoryTrieNodeRef {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.hash == other.0.hash
-    }
-}
-
-impl Eq for InMemoryTrieNodeRef {}
-
-pub struct InMemoryTrieNodeSet {
-    nodes: HashSet<InMemoryTrieNodeRef>,
-}
-
-impl InMemoryTrieNodeSet {
-    pub fn new() -> Self {
-        Self { nodes: HashSet::new() }
-    }
-
-    pub fn insert_with_dedup(
-        &mut self,
-        node: Arc<InMemoryTrieNodeLite>,
-    ) -> Arc<InMemoryTrieNodeLite> {
-        if let Some(existing) = self.nodes.get(&node.hash) {
-            existing.clone().0
-        } else {
-            self.nodes.insert(InMemoryTrieNodeRef(node.clone()));
-            node
-        }
-    }
-
-    pub fn insert_if_not_exists(&mut self, node: Arc<InMemoryTrieNodeLite>) -> bool {
-        self.nodes.insert(InMemoryTrieNodeRef(node))
-    }
 }
 
 impl InMemoryTrieNodeBuilder {
@@ -483,6 +424,10 @@ pub fn load_trie_in_memory_new(
     // let mut node_stack = BuilderStack::new();
     let mut last_print = Instant::now();
     let mut nodes_iterated = 0;
+
+    let trie = Trie::new(Rc::new(TrieMemoryPartialStorage::default()), StateRoot::new(), None);
+    // let root1 = new_trie.update(items.into_iter())?.new_root;
+
     for item in iter_flat_state_entries(shard_uid, store, None, None) {
         let (key, value) = item.unwrap();
         nodes_iterated += 1;

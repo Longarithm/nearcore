@@ -31,6 +31,7 @@ use near_vm_runner::logic::{CompiledContract, CompiledContractCache};
 
 use crate::db::{refcount, DBIterator, DBOp, DBSlice, DBTransaction, Database, StoreStatistics};
 pub use crate::trie::iterator::{TrieIterator, TrieTraversalItem};
+pub use crate::trie::trie_storage::*;
 pub use crate::trie::update::{TrieUpdate, TrieUpdateIterator, TrieUpdateValuePtr};
 pub use crate::trie::{
     estimator, split_state, ApplyStatePartResult, KeyForStateChanges, KeyLookupMode, NibbleSlice,
@@ -38,7 +39,6 @@ pub use crate::trie::{
     StateSnapshot, StateSnapshotConfig, Trie, TrieAccess, TrieCache, TrieCachingStorage,
     TrieChanges, TrieConfig, TrieDBStorage, TrieStorage, WrappedTrieChanges,
 };
-
 pub mod cold_storage;
 mod columns;
 pub mod config;
