@@ -3,7 +3,7 @@ pub use crate::trie::config::TrieConfig;
 pub(crate) use crate::trie::config::{
     DEFAULT_SHARD_CACHE_DELETIONS_QUEUE_CAPACITY, DEFAULT_SHARD_CACHE_TOTAL_SIZE_LIMIT,
 };
-use crate::trie::insert_delete::NodesStorage;
+pub use crate::trie::insert_delete::NodesStorage;
 use crate::trie::iterator::TrieIterator;
 pub use crate::trie::nibble_slice::NibbleSlice;
 pub use crate::trie::prefetching_trie_storage::{PrefetchApi, PrefetchError};
@@ -83,7 +83,7 @@ pub enum KeyLookupMode {
 const TRIE_COSTS: TrieCosts = TrieCosts { byte_of_key: 2, byte_of_value: 1, node_cost: 50 };
 
 #[derive(Clone, Hash)]
-enum NodeHandle {
+pub enum NodeHandle {
     InMemory(StorageHandle),
     Hash(CryptoHash),
 }
@@ -107,7 +107,7 @@ impl std::fmt::Debug for NodeHandle {
 }
 
 #[derive(Clone, Hash)]
-enum ValueHandle {
+pub enum ValueHandle {
     InMemory(StorageValueHandle),
     HashAndSize(ValueRef),
 }
@@ -122,7 +122,7 @@ impl std::fmt::Debug for ValueHandle {
 }
 
 #[derive(Clone, Hash)]
-enum TrieNode {
+pub enum TrieNode {
     /// Null trie node. Could be an empty root or an empty branch entry.
     Empty,
     /// Key and value of the leaf node.
@@ -142,6 +142,26 @@ pub struct TrieNodeWithSize {
 impl TrieNodeWithSize {
     fn from_raw(rc_node: RawTrieNodeWithSize) -> TrieNodeWithSize {
         TrieNodeWithSize::new(TrieNode::new(rc_node.node), rc_node.memory_usage)
+    }
+
+    fn from_lite(node: Arc<InMemoryTrieNodeLite>) -> TrieNodeWithSize {
+        let raw_trie_node = match &node.kind {
+            InMemoryTrieNodeKindLite::Branch(children) => {
+                let raw_children = children.clone().map(|c| c.map(|node| node.hash));
+                RawTrieNode::branch(Children(raw_children), None)
+            }
+            InMemoryTrieNodeKindLite::Leaf { extension, value } => {
+                RawTrieNode::Leaf(extension.to_vec(), value.clone())
+            }
+            InMemoryTrieNodeKindLite::Extension { extension, child } => {
+                RawTrieNode::Extension(extension.to_vec(), child.hash)
+            }
+            InMemoryTrieNodeKindLite::BranchWithLeaf { children, value } => {
+                let raw_children = children.clone().map(|c| c.map(|node| node.hash));
+                RawTrieNode::branch(Children(raw_children), Some(value.clone()))
+            }
+        };
+        TrieNodeWithSize::new(TrieNode::new(raw_trie_node), node.size)
     }
 
     fn new(node: TrieNode, memory_usage: u64) -> TrieNodeWithSize {
@@ -797,11 +817,21 @@ impl Trie {
         }
     }
 
-    fn move_node_to_mutable(
+    pub fn move_node_to_mutable(
         &self,
         memory: &mut NodesStorage,
         hash: &CryptoHash,
     ) -> Result<StorageHandle, StorageError> {
+        if let Some(in_memory_set) = self.storage.as_in_memory_set() {
+            if hash == &Self::EMPTY_ROOT {
+                return Ok(memory.store(TrieNodeWithSize::empty()));
+            }
+            let node = in_memory_set.get(hash);
+            let result = memory.store(TrieNodeWithSize::from_lite(node));
+            // ignore refcount changes for now...
+            return Ok(result);
+        }
+
         match self.retrieve_raw_node(hash, true)? {
             None => Ok(memory.store(TrieNodeWithSize::empty())),
             Some((bytes, node)) => {

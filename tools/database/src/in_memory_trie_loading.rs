@@ -8,12 +8,12 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use near_epoch_manager::EpochManager;
 use near_primitives::block_header::BlockHeader;
 use near_primitives::hash::{hash, CryptoHash};
-use near_primitives::state::ValueRef;
+use near_primitives::state::{FlatStateValue, ValueRef};
 use near_primitives::types::{ShardId, StateRoot};
 use near_store::flat::store_helper::iter_flat_state_entries;
 use near_store::{
     DBCol, InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet, NibbleSlice,
-    RawTrieNode, RawTrieNodeWithSize, ShardUId, Store, Trie,
+    NodesStorage, RawTrieNode, RawTrieNodeWithSize, ShardUId, Store, Trie, TrieCachingStorage,
 };
 use nearcore::NearConfig;
 
@@ -422,11 +422,32 @@ pub fn load_trie_in_memory_new(
     let mut last_print = Instant::now();
     let mut nodes_iterated = 0;
 
-    let trie = Trie::new(Rc::new(InMemoryTrieNodeSet::default()), StateRoot::new(), None);
-    // let root1 = new_trie.update(items.into_iter())?.new_root;
+    let mut root = StateRoot::new();
+    let trie = Trie::new(Rc::new(InMemoryTrieNodeSet::default()), root, None);
+    // let root1 = trie.update(items.into_iter())?.new_root;
 
     for item in iter_flat_state_entries(shard_uid, store, None, None) {
         let (key, value) = item.unwrap();
+
+        let mut memory = NodesStorage::new();
+        let mut root_node = trie.move_node_to_mutable(&mut memory, &root)?;
+        let key = NibbleSlice::new(&key);
+        let value = match value {
+            FlatStateValue::Ref(value_ref) => store
+                .get(
+                    DBCol::State,
+                    &TrieCachingStorage::get_key_from_shard_uid_and_hash(
+                        shard_uid,
+                        &value_ref.hash,
+                    ),
+                )
+                .unwrap()
+                .unwrap()
+                .to_vec(),
+            FlatStateValue::Inlined(value) => value,
+        };
+        root_node = trie.insert(&mut memory, root_node, key, value).unwrap();
+        // recompute root?
         nodes_iterated += 1;
 
         if last_print.elapsed() > Duration::from_secs(10) {
@@ -439,7 +460,7 @@ pub fn load_trie_in_memory_new(
     }
     // let trie = node_stack.finalize();
     println!("Loaded {} nodes ({} after dedup)", nodes_iterated, nodes_iterated);
-    assert_eq!(trie.root.hash, state_root);
+    assert_eq!(root, state_root);
     Ok(trie)
 }
 

@@ -379,6 +379,10 @@ impl TrieStorage for InMemoryTrieNodeSet {
     fn retrieve_raw_bytes(&self, _hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError> {
         Err(StorageError::StorageInternalError)
     }
+
+    fn as_in_memory_set(&self) -> Option<&InMemoryTrieNodeSet> {
+        Some(self)
+    }
 }
 
 /// Storage for validating recorded partial storage.
