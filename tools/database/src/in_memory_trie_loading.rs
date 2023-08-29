@@ -12,6 +12,7 @@ use near_primitives::block_header::BlockHeader;
 use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::state::ValueRef;
 use near_primitives::types::ShardId;
+use near_store::flat::store_helper::iter_flat_state_entries;
 use near_store::{DBCol, NibbleSlice, RawTrieNode, RawTrieNodeWithSize, ShardUId, Store};
 use nearcore::NearConfig;
 
@@ -480,28 +481,20 @@ pub fn load_trie_in_memory_new(
     let mut node_stack = BuilderStack::new();
     let mut last_print = Instant::now();
     let mut nodes_iterated = 0;
-    // for item in store.iter_prefix(DBCol::FlatNodes, &shard_uid.try_to_vec().unwrap()) {
-    // placeholder
-    for item in store.iter_prefix(DBCol::FlatState, &shard_uid.try_to_vec().unwrap()) {
-        let item = item?;
-        let key = FlatNodeNibbles::from_encoded_key(&item.0.as_ref()[8..]);
-        let node = RawTrieNodeWithSize::try_from_slice(item.1.as_ref())?;
-        // println!("Adding node: {:?} -> {:?}", key, node);
-        node_stack.add_node(key, node);
-
+    for item in iter_flat_state_entries(shard_uid, store, None, None) {
+        let (key, value) = item.unwrap();
         nodes_iterated += 1;
+
         if last_print.elapsed() > Duration::from_secs(10) {
             println!(
-                "Loaded {} nodes ({} after dedup), current stack:",
-                nodes_iterated,
-                node_stack.set.nodes.len()
+                "Loaded {} nodes ({} after dedup), current key: {:?}",
+                nodes_iterated, nodes_iterated, key,
             );
-            node_stack.print();
             last_print = Instant::now();
         }
     }
     let trie = node_stack.finalize();
-    println!("Loaded {} nodes ({} after dedup)", nodes_iterated, trie.set.nodes.len());
+    println!("Loaded {} nodes ({} after dedup)", nodes_iterated, nodes_iterated);
     assert_eq!(trie.root.hash, state_root);
     Ok(trie)
 }
@@ -530,7 +523,7 @@ impl InMemoryTrieCmd {
         let shard_uid = ShardUId::from_shard_id_and_layout(self.shard_id, &shard_layout);
         let state_root = flat_head_state_root(&store, &shard_uid);
 
-        let trie = if flat_nodes {
+        let trie = if self.flat_nodes {
             load_trie_in_memory(&store, shard_uid, state_root)?
         } else {
             load_trie_in_memory_new(&store, shard_uid, state_root)?
