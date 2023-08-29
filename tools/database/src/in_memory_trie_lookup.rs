@@ -7,6 +7,7 @@ use near_store::{NibbleSlice, ShardUId, Store};
 
 use crate::in_memory_trie_loading::{InMemoryTrieNodeLite, InMemoryTrieNodeSet};
 
+#[allow(unused)]
 pub struct InMemoryTrie {
     shard_uid: ShardUId,
     store: Store,
@@ -87,6 +88,7 @@ impl InMemoryTrie {
         }
     }
 
+    #[cfg(test)]
     pub fn get_nodes_count(&self) -> TrieNodesCount {
         self.nodes_count.borrow().clone()
     }

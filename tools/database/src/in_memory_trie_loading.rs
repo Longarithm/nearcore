@@ -236,6 +236,7 @@ impl InMemoryTrieNodeBuilder {
         }
     }
 
+    #[allow(unused)]
     pub fn is_complete(&self) -> bool {
         self.next_child_index == self.expected_children.len()
     }
