@@ -446,7 +446,9 @@ pub fn load_trie_in_memory(
     let mut node_stack = BuilderStack::new();
     let mut last_print = Instant::now();
     let mut nodes_iterated = 0;
-    for item in store.iter_prefix(DBCol::FlatNodes, &shard_uid.try_to_vec().unwrap()) {
+    // for item in store.iter_prefix(DBCol::FlatNodes, &shard_uid.try_to_vec().unwrap()) {
+    // placeholder
+    for item in store.iter_prefix(DBCol::FlatState, &shard_uid.try_to_vec().unwrap()) {
         let item = item?;
         let key = FlatNodeNibbles::from_encoded_key(&item.0.as_ref()[8..]);
         let node = RawTrieNodeWithSize::try_from_slice(item.1.as_ref())?;

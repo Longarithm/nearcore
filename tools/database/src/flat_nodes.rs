@@ -319,7 +319,8 @@ pub mod creator {
             );
             self.store_update
                 .set_ser(
-                    near_store::DBCol::SmallState,
+                    // near_store::DBCol::SmallState,
+                    near_store::DBCol::FlatState, // placeholder
                     &TrieCachingStorage::get_key_from_shard_uid_and_hash(
                         self.shard_uid,
                         &CryptoHash::hash_borsh(&node),
@@ -510,7 +511,8 @@ impl FlatNodesTrie {
                 LookupMode::SmallState => self
                     .store
                     .get(
-                        near_store::DBCol::SmallState,
+                        // near_store::DBCol::SmallState,
+                        near_store::DBCol::FlatState, // placeholder
                         &TrieCachingStorage::get_key_from_shard_uid_and_hash(self.shard_uid, &hash),
                     )
                     .unwrap()

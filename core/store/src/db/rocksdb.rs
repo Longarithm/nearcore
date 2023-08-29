@@ -497,10 +497,11 @@ fn rocksdb_column_options(col: DBCol, store_config: &StoreConfig, temp: Temperat
     opts.set_block_based_table_factory(&rocksdb_block_based_options(
         store_config.block_size,
         cache_size,
-        match col {
-            DBCol::SmallState | DBCol::FlatNodes => false,
-            _ => true
-        }
+        true,
+        // match col {
+        //     DBCol::SmallState | DBCol::FlatNodes => false,
+        //     _ => true
+        // }
     ));
 
     // Note that this function changes a lot of rustdb parameters including:
