@@ -318,7 +318,7 @@ impl Eq for InMemoryTrieNodeRef {}
 
 #[derive(Default)]
 pub struct InMemoryTrieNodeSet {
-    pub nodes: HashSet<InMemoryTrieNodeRef>,
+    nodes: HashSet<InMemoryTrieNodeRef>,
 }
 
 impl InMemoryTrieNodeSet {
@@ -342,7 +342,13 @@ impl InMemoryTrieNodeSet {
         self.nodes.insert(InMemoryTrieNodeRef(node))
     }
 
-    pub fn
+    pub fn get(&self, hash: &CryptoHash) -> Arc<InMemoryTrieNodeLite> {
+        self.nodes.get(hash).unwrap().0.clone()
+    }
+
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
 }
 
 pub trait TrieStorage {

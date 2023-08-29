@@ -401,14 +401,14 @@ pub fn load_trie_in_memory(
             println!(
                 "Loaded {} nodes ({} after dedup), current stack:",
                 nodes_iterated,
-                node_stack.set.nodes.len()
+                node_stack.set.len()
             );
             node_stack.print();
             last_print = Instant::now();
         }
     }
     let trie = node_stack.finalize();
-    println!("Loaded {} nodes ({} after dedup)", nodes_iterated, trie.set.nodes.len());
+    println!("Loaded {} nodes ({} after dedup)", nodes_iterated, trie.set.len());
     assert_eq!(trie.root.hash, state_root);
     Ok(trie)
 }
