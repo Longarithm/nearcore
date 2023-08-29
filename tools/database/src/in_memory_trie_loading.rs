@@ -472,10 +472,46 @@ pub fn load_trie_in_memory(
     Ok(trie)
 }
 
+pub fn load_trie_in_memory_new(
+    store: &Store,
+    shard_uid: ShardUId,
+    state_root: CryptoHash,
+) -> anyhow::Result<LoadedInMemoryTrie> {
+    let mut node_stack = BuilderStack::new();
+    let mut last_print = Instant::now();
+    let mut nodes_iterated = 0;
+    // for item in store.iter_prefix(DBCol::FlatNodes, &shard_uid.try_to_vec().unwrap()) {
+    // placeholder
+    for item in store.iter_prefix(DBCol::FlatState, &shard_uid.try_to_vec().unwrap()) {
+        let item = item?;
+        let key = FlatNodeNibbles::from_encoded_key(&item.0.as_ref()[8..]);
+        let node = RawTrieNodeWithSize::try_from_slice(item.1.as_ref())?;
+        // println!("Adding node: {:?} -> {:?}", key, node);
+        node_stack.add_node(key, node);
+
+        nodes_iterated += 1;
+        if last_print.elapsed() > Duration::from_secs(10) {
+            println!(
+                "Loaded {} nodes ({} after dedup), current stack:",
+                nodes_iterated,
+                node_stack.set.nodes.len()
+            );
+            node_stack.print();
+            last_print = Instant::now();
+        }
+    }
+    let trie = node_stack.finalize();
+    println!("Loaded {} nodes ({} after dedup)", nodes_iterated, trie.set.nodes.len());
+    assert_eq!(trie.root.hash, state_root);
+    Ok(trie)
+}
+
 #[derive(clap::Parser)]
 pub struct InMemoryTrieCmd {
     #[clap(long)]
     shard_id: ShardId,
+    #[clap(long)]
+    flat_nodes: bool,
 }
 
 impl InMemoryTrieCmd {
@@ -494,7 +530,11 @@ impl InMemoryTrieCmd {
         let shard_uid = ShardUId::from_shard_id_and_layout(self.shard_id, &shard_layout);
         let state_root = flat_head_state_root(&store, &shard_uid);
 
-        let trie = load_trie_in_memory(&store, shard_uid, state_root)?;
+        let trie = if flat_nodes {
+            load_trie_in_memory(&store, shard_uid, state_root)?
+        } else {
+            load_trie_in_memory_new(&store, shard_uid, state_root)?
+        };
         for _ in 0..1000000 {
             std::thread::sleep(Duration::from_secs(100));
         }

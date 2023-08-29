@@ -267,7 +267,7 @@ pub enum DBCol {
     /// Column that stores the Trie state.
     /// - *Rows*: node hash (CryptoHash)
     /// - *Content type*: Serializd RawTrieNodeWithSize
-    SmallState,
+    // SmallState,
     /// Changes for flat state delta. Stores how flat state should be updated for the given shard and block.
     /// - *Rows*: `KeyForFlatStateDelta { shard_uid, block_hash }`
     /// - *Column type*: `FlatStateChanges`
