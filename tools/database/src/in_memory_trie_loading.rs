@@ -16,7 +16,7 @@ use near_primitives::types::{ShardId, StateRoot};
 use near_store::flat::store_helper::iter_flat_state_entries;
 use near_store::{
     DBCol, InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet, NibbleSlice,
-    RawTrieNode, RawTrieNodeWithSize, ShardUId, Store, Trie, TrieMemoryPartialStorage,
+    RawTrieNode, RawTrieNodeWithSize, ShardUId, Store, Trie,
 };
 use nearcore::NearConfig;
 
@@ -425,7 +425,7 @@ pub fn load_trie_in_memory_new(
     let mut last_print = Instant::now();
     let mut nodes_iterated = 0;
 
-    let trie = Trie::new(Rc::new(TrieMemoryPartialStorage::default()), StateRoot::new(), None);
+    let trie = Trie::new(Rc::new(InMemoryTrieNodeSet::default()), StateRoot::new(), None);
     // let root1 = new_trie.update(items.into_iter())?.new_root;
 
     for item in iter_flat_state_entries(shard_uid, store, None, None) {

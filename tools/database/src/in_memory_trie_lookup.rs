@@ -3,9 +3,10 @@ use std::sync::Arc;
 
 use near_primitives::state::ValueRef;
 use near_primitives::types::TrieNodesCount;
-use near_store::{NibbleSlice, ShardUId, Store};
-
-use crate::in_memory_trie_loading::{InMemoryTrieNodeLite, InMemoryTrieNodeSet};
+use near_store::{
+    InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet, NibbleSlice, ShardUId,
+    Store,
+};
 
 #[allow(unused)]
 pub struct InMemoryTrie {
@@ -37,20 +38,14 @@ impl InMemoryTrie {
                 self.nodes_count.borrow_mut().mem_reads += 1;
             }
             match &node.kind {
-                crate::in_memory_trie_loading::InMemoryTrieNodeKindLite::Leaf {
-                    extension,
-                    value,
-                } => {
+                InMemoryTrieNodeKindLite::Leaf { extension, value } => {
                     if nibbles == NibbleSlice::from_encoded(extension).0 {
                         return Some(value.clone());
                     } else {
                         return None;
                     }
                 }
-                crate::in_memory_trie_loading::InMemoryTrieNodeKindLite::Extension {
-                    extension,
-                    child,
-                } => {
+                InMemoryTrieNodeKindLite::Extension { extension, child } => {
                     let extension_nibbles = NibbleSlice::from_encoded(extension).0;
                     if nibbles.starts_with(&extension_nibbles) {
                         nibbles = nibbles.mid(extension_nibbles.len());
@@ -59,7 +54,7 @@ impl InMemoryTrie {
                         return None;
                     }
                 }
-                crate::in_memory_trie_loading::InMemoryTrieNodeKindLite::Branch(children) => {
+                InMemoryTrieNodeKindLite::Branch(children) => {
                     if nibbles.is_empty() {
                         return None;
                     }
@@ -70,10 +65,7 @@ impl InMemoryTrie {
                         None => return None,
                     };
                 }
-                crate::in_memory_trie_loading::InMemoryTrieNodeKindLite::BranchWithLeaf {
-                    children,
-                    value,
-                } => {
+                InMemoryTrieNodeKindLite::BranchWithLeaf { children, value } => {
                     if nibbles.is_empty() {
                         return Some(value.clone());
                     }

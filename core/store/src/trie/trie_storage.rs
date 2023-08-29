@@ -316,6 +316,7 @@ impl PartialEq for InMemoryTrieNodeRef {
 
 impl Eq for InMemoryTrieNodeRef {}
 
+#[derive(Default)]
 pub struct InMemoryTrieNodeSet {
     nodes: HashSet<InMemoryTrieNodeRef>,
 }
@@ -363,6 +364,12 @@ pub trait TrieStorage {
 
     fn as_in_memory_set(&self) -> Option<&InMemoryTrieNodeSet> {
         None
+    }
+}
+
+impl TrieStorage for InMemoryTrieNodeSet {
+    fn retrieve_raw_bytes(&self, _hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError> {
+        Err(StorageError::StorageInternalError)
     }
 }
 
