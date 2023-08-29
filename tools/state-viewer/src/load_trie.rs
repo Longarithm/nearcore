@@ -271,12 +271,14 @@ impl InMemoryTrieBuilder {
     }
 }
 
+#[allow(unused)]
 struct PendingValue {
     value: Box<[u8]>,
     in_memory_node: Option<Rc<InMemoryTrieNode>>,
     in_memory_value: Option<Rc<InMemoryTrieValue>>,
 }
 
+#[allow(unused)]
 struct InMemoryTrieNode {
     hash: CryptoHash,
     size: u64,
@@ -290,6 +292,7 @@ enum InMemoryTrieNodeKind {
     BranchWithLeaf { children: [Option<Rc<InMemoryTrieNode>>; 16], value: Rc<InMemoryTrieValue> },
 }
 
+#[allow(unused)]
 struct InMemoryTrieValue {
     size: usize,
     hash: CryptoHash,

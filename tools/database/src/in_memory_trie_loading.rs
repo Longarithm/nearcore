@@ -25,6 +25,7 @@ pub struct InMemoryTrieNodeLite {
     pub kind: InMemoryTrieNodeKindLite,
 }
 
+#[allow(unused)]
 pub enum InMemoryTrieNodeKindLite {
     Leaf { extension: Box<[u8]>, value: ValueRef },
     Extension { extension: Box<[u8]>, child: Arc<InMemoryTrieNodeLite> },
@@ -479,7 +480,7 @@ pub fn load_trie_in_memory_new(
     shard_uid: ShardUId,
     state_root: CryptoHash,
 ) -> anyhow::Result<LoadedInMemoryTrie> {
-    let mut node_stack = BuilderStack::new();
+    // let mut node_stack = BuilderStack::new();
     let mut last_print = Instant::now();
     let mut nodes_iterated = 0;
     for item in iter_flat_state_entries(shard_uid, store, None, None) {
@@ -494,7 +495,7 @@ pub fn load_trie_in_memory_new(
             last_print = Instant::now();
         }
     }
-    let trie = node_stack.finalize();
+    // let trie = node_stack.finalize();
     println!("Loaded {} nodes ({} after dedup)", nodes_iterated, nodes_iterated);
     assert_eq!(trie.root.hash, state_root);
     Ok(trie)
