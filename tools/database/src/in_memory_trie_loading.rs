@@ -449,7 +449,7 @@ pub fn load_trie_in_memory_new(
             FlatStateValue::Inlined(value) => value,
         };
         root_node = trie.insert(&mut memory, root_node, key, value).unwrap();
-        let TrieChangesLite { old_root, new_root, insertions, deletions } =
+        let TrieChangesLite { new_root, .. } =
             trie.flatten_nodes_lite(&root, memory, root_node).unwrap();
         root = new_root;
 
