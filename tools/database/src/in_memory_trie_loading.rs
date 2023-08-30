@@ -456,7 +456,7 @@ pub fn load_trie_in_memory_new(
         nodes_iterated += 1;
         let nodes_len = set.0.lock().unwrap().len();
 
-        if last_print.elapsed() > Duration::from_secs(10) {
+        if last_print.elapsed() > Duration::from_secs(0) {
             println!(
                 "Loaded {} nodes ({} after dedup), root: {}, key: {:?}",
                 nodes_iterated, nodes_len, root, key,
