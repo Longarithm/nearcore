@@ -321,7 +321,7 @@ pub struct InMemoryTrieNodeSet {
     nodes: HashSet<InMemoryTrieNodeRef>,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SyncInMemoryTrieNodeSet(pub Arc<Mutex<InMemoryTrieNodeSet>>);
 
 impl InMemoryTrieNodeSet {

@@ -16,7 +16,6 @@ use near_store::trie::TrieChangesLite;
 use near_store::{
     DBCol, InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet, NibbleSlice,
     NodesStorage, RawTrieNode, RawTrieNodeWithSize, ShardUId, Store, Trie, TrieCachingStorage,
-    TrieChanges,
 };
 use nearcore::NearConfig;
 
@@ -426,12 +425,12 @@ pub fn load_trie_in_memory_new(
     let mut nodes_iterated = 0;
 
     let mut root = StateRoot::new();
-    let mut set = SyncInMemoryTrieNodeSet::default();
+    let set = SyncInMemoryTrieNodeSet::default();
 
     for item in iter_flat_state_entries(shard_uid, store, None, None) {
         let (key, value) = item.unwrap();
 
-        let trie = Trie::new(Rc::clone(&set), root, None);
+        let trie = Trie::new(Rc::new(set.clone()), root, None);
         let mut memory = NodesStorage::new();
         let mut root_node = trie.move_node_to_mutable(&mut memory, &root)?;
         let key = NibbleSlice::new(&key);
