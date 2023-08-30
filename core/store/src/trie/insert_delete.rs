@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use borsh::BorshSerialize;
 
@@ -8,9 +9,9 @@ use near_primitives::state::ValueRef;
 use crate::trie::nibble_slice::NibbleSlice;
 use crate::trie::{
     Children, NodeHandle, RawTrieNode, RawTrieNodeWithSize, StorageHandle, StorageValueHandle,
-    TrieNode, TrieNodeWithSize, ValueHandle,
+    TrieChangesLite, TrieNode, TrieNodeWithSize, ValueHandle,
 };
-use crate::{StorageError, Trie, TrieChanges};
+use crate::{InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, StorageError, Trie, TrieChanges};
 
 pub struct NodesStorage {
     nodes: Vec<Option<TrieNodeWithSize>>,
@@ -283,6 +284,8 @@ impl Trie {
             let child = path.get(i + 1).unwrap();
             let child_memory_usage = memory.node_ref(*child).memory_usage;
             memory.node_mut(*node).memory_usage += child_memory_usage;
+            let raw_node = memory.node_ref(*node);
+            raw_node
         }
         Ok(root_handle)
     }
@@ -533,7 +536,7 @@ impl Trie {
         Ok(())
     }
 
-    pub(crate) fn flatten_nodes(
+    pub fn flatten_nodes(
         old_root: &CryptoHash,
         memory: NodesStorage,
         node: StorageHandle,
@@ -613,6 +616,132 @@ impl Trie {
         let (insertions, deletions) =
             Trie::convert_to_insertions_and_deletions(memory.refcount_changes);
         Ok(TrieChanges { old_root: *old_root, new_root: last_hash, insertions, deletions })
+    }
+
+    pub fn flatten_nodes_lite(
+        &self,
+        old_root: &CryptoHash,
+        memory: NodesStorage,
+        node: StorageHandle,
+    ) -> Result<TrieChangesLite, StorageError> {
+        let mut stack: Vec<(StorageHandle, FlattenNodesCrumb)> = Vec::new();
+        stack.push((node, FlattenNodesCrumb::Entering));
+        let mut last_hash = CryptoHash::default();
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut memory = memory;
+        let mut lite_node_stack = vec![];
+
+        'outer: while let Some((node, position)) = stack.pop() {
+            let node_with_size = memory.node_ref(node);
+            let memory_usage = node_with_size.memory_usage;
+            let raw_node = match &node_with_size.node {
+                TrieNode::Empty => {
+                    last_hash = Trie::EMPTY_ROOT;
+                    continue;
+                }
+                TrieNode::Branch(children, value) => match position {
+                    FlattenNodesCrumb::Entering => {
+                        stack.push((node, FlattenNodesCrumb::AtChild(Default::default(), 0)));
+                        continue;
+                    }
+                    FlattenNodesCrumb::AtChild(mut new_children, mut i) => {
+                        if i > 0 && children[i - 1].is_some() {
+                            new_children[i - 1] = Some(last_hash);
+                        }
+                        while i < 16 {
+                            match children[i].clone() {
+                                Some(NodeHandle::InMemory(handle)) => {
+                                    stack.push((
+                                        node,
+                                        FlattenNodesCrumb::AtChild(new_children, i + 1),
+                                    ));
+                                    stack.push((handle, FlattenNodesCrumb::Entering));
+                                    continue 'outer;
+                                }
+                                Some(NodeHandle::Hash(hash)) => new_children[i] = Some(hash),
+                                None => {}
+                            }
+                            i += 1;
+                        }
+                        let new_value =
+                            value.clone().map(|value| Trie::flatten_value(&mut memory, value));
+                        RawTrieNode::branch(*new_children, new_value)
+                    }
+                    FlattenNodesCrumb::Exiting => unreachable!(),
+                },
+                TrieNode::Extension(key, child) => match position {
+                    FlattenNodesCrumb::Entering => match child {
+                        NodeHandle::InMemory(child) => {
+                            stack.push((node, FlattenNodesCrumb::Exiting));
+                            stack.push((*child, FlattenNodesCrumb::Entering));
+                            continue;
+                        }
+                        NodeHandle::Hash(hash) => RawTrieNode::Extension(key.clone(), *hash),
+                    },
+                    FlattenNodesCrumb::Exiting => RawTrieNode::Extension(key.clone(), last_hash),
+                    _ => unreachable!(),
+                },
+                TrieNode::Leaf(key, value) => {
+                    let key = key.clone();
+                    let value = value.clone();
+                    let value = Trie::flatten_value(&mut memory, value);
+                    RawTrieNode::Leaf(key, value)
+                }
+            };
+
+            let raw_node_with_size = RawTrieNodeWithSize { node: raw_node, memory_usage };
+            raw_node_with_size.serialize(&mut buffer).unwrap();
+            let key = hash(&buffer);
+            lite_node_stack.push((key, raw_node_with_size));
+
+            let (_value, rc) =
+                memory.refcount_changes.entry(key).or_insert_with(|| (buffer.clone(), 0));
+            *rc += 1;
+            buffer.clear();
+            last_hash = key;
+        }
+
+        if let Some(in_memory_set) = self.storage.as_in_memory_set() {
+            let mut set = in_memory_set.0.lock().unwrap();
+            for (node_hash, raw_node) in lite_node_stack.into_iter().rev() {
+                let lite_node_kind = match raw_node.node {
+                    RawTrieNode::Leaf(key, value_ref) => InMemoryTrieNodeKindLite::Leaf {
+                        extension: key.into_boxed_slice(),
+                        value: value_ref,
+                    },
+                    RawTrieNode::BranchNoValue(children) => {
+                        let raw_children = children.0.map(|opt_h| opt_h.map(|h| set.get(&h)));
+                        InMemoryTrieNodeKindLite::Branch(raw_children)
+                    }
+                    RawTrieNode::BranchWithValue(value, children) => {
+                        let raw_children = children.0.map(|opt_h| opt_h.map(|h| set.get(&h)));
+                        InMemoryTrieNodeKindLite::BranchWithLeaf { children: raw_children, value }
+                    }
+                    RawTrieNode::Extension(key, hash) => {
+                        let child = set.get(&hash);
+                        InMemoryTrieNodeKindLite::Extension {
+                            extension: key.into_boxed_slice(),
+                            child,
+                        }
+                    }
+                };
+                let lite_node = Arc::new(InMemoryTrieNodeLite {
+                    hash: node_hash,
+                    size: raw_node.memory_usage,
+                    kind: lite_node_kind,
+                });
+                set.insert_with_dedup(lite_node);
+            }
+        }
+
+        // let (insertions, deletions) =
+        //     Trie::convert_to_insertions_and_deletions(memory.refcount_changes);
+        Ok(TrieChangesLite {
+            old_root: *old_root,
+            new_root: last_hash,
+            insertions: vec![],
+            deletions: vec![],
+        })
     }
 
     fn flatten_value(memory: &mut NodesStorage, value: ValueHandle) -> ValueRef {

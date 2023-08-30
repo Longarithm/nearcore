@@ -11,9 +11,12 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::state::{FlatStateValue, ValueRef};
 use near_primitives::types::{ShardId, StateRoot};
 use near_store::flat::store_helper::iter_flat_state_entries;
+use near_store::trie::trie_storage::SyncInMemoryTrieNodeSet;
+use near_store::trie::TrieChangesLite;
 use near_store::{
     DBCol, InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet, NibbleSlice,
     NodesStorage, RawTrieNode, RawTrieNodeWithSize, ShardUId, Store, Trie, TrieCachingStorage,
+    TrieChanges,
 };
 use nearcore::NearConfig;
 
@@ -417,18 +420,18 @@ pub fn load_trie_in_memory_new(
     store: &Store,
     shard_uid: ShardUId,
     state_root: CryptoHash,
-) -> anyhow::Result<LoadedInMemoryTrie> {
+) -> anyhow::Result<SyncInMemoryTrieNodeSet> {
     // let mut node_stack = BuilderStack::new();
     let mut last_print = Instant::now();
     let mut nodes_iterated = 0;
 
     let mut root = StateRoot::new();
-    let trie = Trie::new(Rc::new(InMemoryTrieNodeSet::default()), root, None);
-    // let root1 = trie.update(items.into_iter())?.new_root;
+    let mut set = SyncInMemoryTrieNodeSet::default();
 
     for item in iter_flat_state_entries(shard_uid, store, None, None) {
         let (key, value) = item.unwrap();
 
+        let trie = Trie::new(Rc::clone(&set), root, None);
         let mut memory = NodesStorage::new();
         let mut root_node = trie.move_node_to_mutable(&mut memory, &root)?;
         let key = NibbleSlice::new(&key);
@@ -447,21 +450,25 @@ pub fn load_trie_in_memory_new(
             FlatStateValue::Inlined(value) => value,
         };
         root_node = trie.insert(&mut memory, root_node, key, value).unwrap();
-        // recompute root?
+        let TrieChangesLite { old_root, new_root, insertions, deletions } =
+            trie.flatten_nodes_lite(&root, memory, root_node).unwrap();
+        root = new_root;
+
         nodes_iterated += 1;
+        let nodes_len = set.0.lock().unwrap().len();
 
         if last_print.elapsed() > Duration::from_secs(10) {
             println!(
                 "Loaded {} nodes ({} after dedup), current key: {:?}",
-                nodes_iterated, nodes_iterated, key,
+                nodes_iterated, nodes_len, key,
             );
             last_print = Instant::now();
         }
     }
-    // let trie = node_stack.finalize();
-    println!("Loaded {} nodes ({} after dedup)", nodes_iterated, nodes_iterated);
+    let nodes_len = set.0.lock().unwrap().len();
+    println!("Loaded {} nodes ({} after dedup)", nodes_iterated, nodes_len);
     assert_eq!(root, state_root);
-    Ok(trie)
+    Ok(set)
 }
 
 #[derive(clap::Parser)]
@@ -488,11 +495,11 @@ impl InMemoryTrieCmd {
         let shard_uid = ShardUId::from_shard_id_and_layout(self.shard_id, &shard_layout);
         let state_root = flat_head_state_root(&store, &shard_uid);
 
-        let trie = if self.flat_nodes {
-            load_trie_in_memory(&store, shard_uid, state_root)?
+        if self.flat_nodes {
+            let _ = load_trie_in_memory(&store, shard_uid, state_root)?;
         } else {
-            load_trie_in_memory_new(&store, shard_uid, state_root)?
-        };
+            let _ = load_trie_in_memory_new(&store, shard_uid, state_root)?;
+        }
         for _ in 0..1000000 {
             std::thread::sleep(Duration::from_secs(100));
         }

@@ -399,6 +399,15 @@ pub struct TrieRefcountChange {
     rc: std::num::NonZeroU32,
 }
 
+pub struct TrieRefcountChangeLite {
+    /// DB value. Can be either serialized RawTrieNodeWithSize or value corresponding to
+    /// some TrieKey.
+    node: InMemoryTrieNodeLite,
+    /// Reference count difference which will be added to the total refcount if it corresponds to
+    /// insertion and subtracted from it in the case of deletion.
+    rc: std::num::NonZeroU32,
+}
+
 impl TrieRefcountChange {
     pub fn hash(&self) -> &CryptoHash {
         &self.trie_node_or_value_hash
@@ -442,8 +451,15 @@ impl Hash for TrieRefcountChange {
 pub struct TrieChanges {
     pub old_root: StateRoot,
     pub new_root: StateRoot,
-    insertions: Vec<TrieRefcountChange>,
-    deletions: Vec<TrieRefcountChange>,
+    pub insertions: Vec<TrieRefcountChange>,
+    pub deletions: Vec<TrieRefcountChange>,
+}
+
+pub struct TrieChangesLite {
+    pub old_root: StateRoot,
+    pub new_root: StateRoot,
+    pub insertions: Vec<TrieRefcountChangeLite>,
+    pub deletions: Vec<TrieRefcountChangeLite>,
 }
 
 impl TrieChanges {

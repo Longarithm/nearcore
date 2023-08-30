@@ -15,7 +15,8 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
-use std::sync::{Arc, Mutex};
+use std::ops::DerefMut;
+use std::sync::{Arc, Mutex, RwLock};
 
 pub(crate) struct BoundedQueue<T> {
     queue: VecDeque<T>,
@@ -321,6 +322,9 @@ pub struct InMemoryTrieNodeSet {
     nodes: HashSet<InMemoryTrieNodeRef>,
 }
 
+#[derive(Default)]
+pub struct SyncInMemoryTrieNodeSet(pub Arc<Mutex<InMemoryTrieNodeSet>>);
+
 impl InMemoryTrieNodeSet {
     pub fn new() -> Self {
         Self { nodes: HashSet::new() }
@@ -370,17 +374,17 @@ pub trait TrieStorage {
         None
     }
 
-    fn as_in_memory_set(&self) -> Option<&InMemoryTrieNodeSet> {
+    fn as_in_memory_set(&self) -> Option<&SyncInMemoryTrieNodeSet> {
         None
     }
 }
 
-impl TrieStorage for InMemoryTrieNodeSet {
+impl TrieStorage for SyncInMemoryTrieNodeSet {
     fn retrieve_raw_bytes(&self, _hash: &CryptoHash) -> Result<Arc<[u8]>, StorageError> {
         Err(StorageError::StorageInternalError)
     }
 
-    fn as_in_memory_set(&self) -> Option<&InMemoryTrieNodeSet> {
+    fn as_in_memory_set(&self) -> Option<&SyncInMemoryTrieNodeSet> {
         Some(self)
     }
 }
