@@ -107,6 +107,7 @@ impl InMemoryTrieNodeBuilder {
         Arc::new(InMemoryTrieNodeLite {
             hash: self.hash_and_size.unwrap().0,
             size: self.hash_and_size.unwrap().1,
+            rc: 0,
             kind: match (self.leaf, self.extension) {
                 (Some(value), Some(extension)) => {
                     InMemoryTrieNodeKindLite::Leaf { extension, value }
@@ -424,7 +425,8 @@ pub fn load_trie_in_memory_new(
     let mut last_print = Instant::now();
     let mut keys_iterated = 0;
 
-    let mut root = StateRoot::new();
+    // let mut root: Option<Arc<InMemoryTrieNodeLite>> = None;
+    let mut root = StateRoot::default();
     let set = SyncInMemoryTrieNodeSet::default();
 
     for item in iter_flat_state_entries(shard_uid, store, None, None) {
@@ -434,6 +436,7 @@ pub fn load_trie_in_memory_new(
         let mut memory = NodesStorage::new();
         let mut root_node = trie.move_node_to_mutable(&mut memory, &root)?;
         let key = NibbleSlice::new(&key);
+        // let value_ref = value.to_value_ref();
         let value = match value {
             FlatStateValue::Ref(value_ref) => store
                 .get(
@@ -448,6 +451,7 @@ pub fn load_trie_in_memory_new(
                 .to_vec(),
             FlatStateValue::Inlined(value) => value,
         };
+        // root_node = Trie::insert_lite(&set, root, key, value_ref);
         root_node = trie.insert(&mut memory, root_node, key, value).unwrap();
         let TrieChangesLite { new_root, .. } =
             trie.flatten_nodes_lite(&root, memory, root_node).unwrap();

@@ -1,6 +1,6 @@
 use crate::trie::config::TrieConfig;
 use crate::trie::prefetching_trie_storage::PrefetcherResult;
-use crate::trie::POISONED_LOCK_ERR;
+use crate::trie::{POISONED_LOCK_ERR, TRIE_COSTS};
 use crate::{metrics, DBCol, PrefetchApi, StorageError, Store};
 use lru::LruCache;
 use near_o11y::log_assert;
@@ -282,6 +282,7 @@ impl TrieCache {
 pub struct InMemoryTrieNodeLite {
     pub hash: CryptoHash,
     pub size: u64,
+    pub rc: u32, // 105M nodes -> 420M overhead. needed for correctness
     pub kind: InMemoryTrieNodeKindLite,
 }
 
@@ -291,6 +292,41 @@ pub enum InMemoryTrieNodeKindLite {
     Extension { extension: Box<[u8]>, child: Arc<InMemoryTrieNodeLite> },
     Branch([Option<Arc<InMemoryTrieNodeLite>>; 16]),
     BranchWithLeaf { children: [Option<Arc<InMemoryTrieNodeLite>>; 16], value: ValueRef },
+}
+
+impl InMemoryTrieNodeKindLite {
+    pub fn memory_usage_for_value_length(value_length: u64) -> u64 {
+        value_length * TRIE_COSTS.byte_of_value + TRIE_COSTS.node_cost
+    }
+
+    pub fn memory_usage_value(value: &ValueRef) -> u64 {
+        Self::memory_usage_for_value_length(value.length as u64)
+    }
+
+    pub fn memory_usage_direct_no_memory(&self) -> u64 {
+        self.memory_usage_direct_internal()
+    }
+
+    pub fn memory_usage_direct(&self) -> u64 {
+        self.memory_usage_direct_internal()
+    }
+
+    pub fn memory_usage_direct_internal(&self) -> u64 {
+        match self {
+            Self::Leaf { extension, value } => {
+                TRIE_COSTS.node_cost
+                    + (extension.len() as u64) * TRIE_COSTS.byte_of_key
+                    + Self::memory_usage_value(value)
+            }
+            Self::Extension { extension, .. } => {
+                TRIE_COSTS.node_cost + (extension.len() as u64) * TRIE_COSTS.byte_of_key
+            }
+            Self::Branch(_) => TRIE_COSTS.node_cost,
+            Self::BranchWithLeaf { value, .. } => {
+                TRIE_COSTS.node_cost + Self::memory_usage_value(value)
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -333,12 +369,18 @@ impl InMemoryTrieNodeSet {
         &mut self,
         node: Arc<InMemoryTrieNodeLite>,
     ) -> Arc<InMemoryTrieNodeLite> {
-        if let Some(existing) = self.nodes.get(&node.hash) {
-            existing.clone().0
-        } else {
-            self.nodes.insert(InMemoryTrieNodeRef(node.clone()));
-            node
-        }
+        // self.nodes.take()
+        // let x = InMemoryTrieNodeRef(node);
+        let new_node = match self.nodes.take(&node.hash) {
+            Some(existing) => {
+                let mut new_node = existing;
+                new_node.0.rc += 1;
+                new_node
+            }
+            None => InMemoryTrieNodeRef(node),
+        };
+        self.nodes.insert(new_node.clone());
+        new_node.0
     }
 
     pub fn insert_if_not_exists(&mut self, node: Arc<InMemoryTrieNodeLite>) -> bool {
@@ -347,6 +389,15 @@ impl InMemoryTrieNodeSet {
 
     pub fn get(&self, hash: &CryptoHash) -> Arc<InMemoryTrieNodeLite> {
         self.nodes.get(hash).unwrap().0.clone()
+    }
+
+    pub fn take(&mut self, hash: &CryptoHash) -> Arc<InMemoryTrieNodeLite> {
+        let mut node = self.nodes.take(hash).unwrap();
+        node.0.rc -= 1;
+        if node.0.rc > 0 {
+            self.nodes.insert(node.clone());
+        }
+        node.0
     }
 
     pub fn len(&self) -> usize {

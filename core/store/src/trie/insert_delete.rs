@@ -7,6 +7,7 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::state::ValueRef;
 
 use crate::trie::nibble_slice::NibbleSlice;
+use crate::trie::trie_storage::SyncInMemoryTrieNodeSet;
 use crate::trie::{
     Children, NodeHandle, RawTrieNode, RawTrieNodeWithSize, StorageHandle, StorageValueHandle,
     TrieChangesLite, TrieNode, TrieNodeWithSize, ValueHandle,
@@ -287,6 +288,237 @@ impl Trie {
         }
         Ok(root_handle)
     }
+
+    // pub fn insert_lite(
+    //     set: &SyncInMemoryTrieNodeSet,
+    //     // memory: &mut NodesStorage,
+    //     // node: StorageHandle,
+    //     root_node: Option<Arc<InMemoryTrieNodeLite>>,
+    //     partial: NibbleSlice<'_>,
+    //     value_ref: ValueRef,
+    // ) -> Result<StorageHandle, StorageError> {
+    //     // let in_memory_set = self.storage.as_in_memory_set().unwrap();
+    //     let mut lock = set.0.lock().unwrap();
+    //     // if hash == &Self::EMPTY_ROOT return Ok(memory.store(TrieNodeWithSize::empty()));
+    //
+    //     let mut node = root_node;
+    //     // let mut value = Some(value);
+    //     let mut partial = partial;
+    //     let mut path = Vec::new();
+    //     loop {
+    //         let lite_node = match &node {
+    //             None => {
+    //                 // TrieNode::Empty
+    //                 let key_part: Vec<u8> = partial.encoded(true).into_vec();
+    //                 let new_node_kind = InMemoryTrieNodeKindLite::Leaf {
+    //                     extension: key_part.into_boxed_slice(),
+    //                     value: value_ref.clone(),
+    //                 };
+    //                 let new_node = Arc::new(InMemoryTrieNodeLite {
+    //                     hash: Default::default(), // to flatten
+    //                     size: new_node_kind.memory_usage_direct(),
+    //                     rc: 1, // first node so it's ok
+    //                     kind: new_node_kind,
+    //                 });
+    //                 path.push(new_node);
+    //                 break;
+    //             }
+    //             Some(node) => node.clone(),
+    //         };
+    //         let lite_node = lock.take(&lite_node.hash);
+    //         path.push(lite_node.clone());
+    //         let memory_usage = lite_node.size;
+    //         let children_memory_usage = memory_usage - lite_node.kind.memory_usage_direct();
+    //
+    //         match &lite_node.kind {
+    //             InMemoryTrieNodeKindLite::BranchWithLeaf { mut children, value } => {
+    //                 if partial.is_empty() {
+    //                     panic!("unexpected value");
+    //                 } else {
+    //                     let child = &mut children[partial.at(0) as usize];
+    //                     let new_node_kind = match child {
+    //                         Some(child) => {
+    //
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //             TrieNode::Branch(mut children, existing_value) => {
+    //                 // If the key ends here, store the value in branch's value.
+    //                 if partial.is_empty() {
+    //                     if let Some(value) = &existing_value {
+    //                         self.delete_value(memory, value)?;
+    //                     }
+    //                     let value_handle = memory.store_value(value.take().unwrap());
+    //                     let new_node =
+    //                         TrieNode::Branch(children, Some(ValueHandle::InMemory(value_handle)));
+    //                     let new_memory_usage =
+    //                         children_memory_usage + new_node.memory_usage_direct(memory);
+    //                     memory.store_at(handle, TrieNodeWithSize::new(new_node, new_memory_usage));
+    //                     break;
+    //                 } else {
+    //                     let child = &mut children[partial.at(0)];
+    //                     let new_handle = match child.take() {
+    //                         Some(NodeHandle::Hash(hash)) => {
+    //                             self.move_node_to_mutable(memory, &hash)?
+    //                         }
+    //                         Some(NodeHandle::InMemory(handle)) => handle,
+    //                         None => memory.store(TrieNodeWithSize::empty()),
+    //                     };
+    //                     *child = Some(NodeHandle::InMemory(new_handle));
+    //                     Trie::calc_memory_usage_and_store(
+    //                         memory,
+    //                         handle,
+    //                         children_memory_usage,
+    //                         TrieNode::Branch(children, existing_value),
+    //                         Some(new_handle),
+    //                     );
+    //                     handle = new_handle;
+    //                     partial = partial.mid(1);
+    //                     continue;
+    //                 }
+    //             }
+    //             TrieNode::Leaf(key, existing_value) => {
+    //                 let existing_key = NibbleSlice::from_encoded(&key).0;
+    //                 let common_prefix = partial.common_prefix(&existing_key);
+    //                 if common_prefix == existing_key.len() && common_prefix == partial.len() {
+    //                     // Equivalent leaf.
+    //                     self.delete_value(memory, &existing_value)?;
+    //                     let value_handle = memory.store_value(value.take().unwrap());
+    //                     let node = TrieNode::Leaf(key, ValueHandle::InMemory(value_handle));
+    //                     let memory_usage = node.memory_usage_direct(memory);
+    //                     memory.store_at(handle, TrieNodeWithSize { node, memory_usage });
+    //                     break;
+    //                 } else if common_prefix == 0 {
+    //                     let mut children = Default::default();
+    //                     let children_memory_usage;
+    //                     let branch_node = if existing_key.is_empty() {
+    //                         children_memory_usage = 0;
+    //                         TrieNode::Branch(children, Some(existing_value))
+    //                     } else {
+    //                         let idx = existing_key.at(0);
+    //                         let new_leaf = TrieNode::Leaf(
+    //                             existing_key.mid(1).encoded(true).into_vec(),
+    //                             existing_value,
+    //                         );
+    //                         let memory_usage = new_leaf.memory_usage_direct(memory);
+    //                         children_memory_usage = memory_usage;
+    //                         let handle =
+    //                             memory.store(TrieNodeWithSize { node: new_leaf, memory_usage });
+    //                         children[idx] = Some(NodeHandle::InMemory(handle));
+    //                         TrieNode::Branch(children, None)
+    //                     };
+    //                     let memory_usage =
+    //                         branch_node.memory_usage_direct(memory) + children_memory_usage;
+    //                     memory
+    //                         .store_at(handle, TrieNodeWithSize { node: branch_node, memory_usage });
+    //                     path.pop();
+    //                     continue;
+    //                 } else if common_prefix == existing_key.len() {
+    //                     let branch_node =
+    //                         TrieNode::Branch(Default::default(), Some(existing_value));
+    //                     let memory_usage = branch_node.memory_usage_direct(memory);
+    //                     let child =
+    //                         memory.store(TrieNodeWithSize { node: branch_node, memory_usage });
+    //                     let new_node = TrieNode::Extension(
+    //                         existing_key.encoded(false).into_vec(),
+    //                         NodeHandle::InMemory(child),
+    //                     );
+    //                     let memory_usage = new_node.memory_usage_direct(memory);
+    //                     memory.store_at(handle, TrieNodeWithSize { node: new_node, memory_usage });
+    //                     handle = child;
+    //                     partial = partial.mid(common_prefix);
+    //                     continue;
+    //                 } else {
+    //                     // Partially shared prefix: convert to leaf and call recursively to add a branch.
+    //                     let leaf_node = TrieNode::Leaf(
+    //                         existing_key.mid(common_prefix).encoded(true).into_vec(),
+    //                         existing_value,
+    //                     );
+    //                     let leaf_memory_usage = leaf_node.memory_usage_direct(memory);
+    //                     let child =
+    //                         memory.store(TrieNodeWithSize::new(leaf_node, leaf_memory_usage));
+    //                     let node = TrieNode::Extension(
+    //                         partial.encoded_leftmost(common_prefix, false).into_vec(),
+    //                         NodeHandle::InMemory(child),
+    //                     );
+    //                     let mem = node.memory_usage_direct(memory);
+    //                     memory.store_at(handle, TrieNodeWithSize::new(node, mem));
+    //                     handle = child;
+    //                     partial = partial.mid(common_prefix);
+    //                     continue;
+    //                 }
+    //             }
+    //             TrieNode::Extension(key, child) => {
+    //                 let existing_key = NibbleSlice::from_encoded(&key).0;
+    //                 let common_prefix = partial.common_prefix(&existing_key);
+    //                 if common_prefix == 0 {
+    //                     let idx = existing_key.at(0);
+    //                     let child_memory_usage;
+    //                     let child = if existing_key.len() == 1 {
+    //                         child_memory_usage = children_memory_usage;
+    //                         child
+    //                     } else {
+    //                         let child = TrieNode::Extension(
+    //                             existing_key.mid(1).encoded(false).into_vec(),
+    //                             child,
+    //                         );
+    //                         child_memory_usage =
+    //                             children_memory_usage + child.memory_usage_direct(memory);
+    //                         NodeHandle::InMemory(
+    //                             memory.store(TrieNodeWithSize::new(child, child_memory_usage)),
+    //                         )
+    //                     };
+    //                     let mut children = Box::<Children<_>>::default();
+    //                     children[idx] = Some(child);
+    //                     let branch_node = TrieNode::Branch(children, None);
+    //                     let memory_usage =
+    //                         branch_node.memory_usage_direct(memory) + child_memory_usage;
+    //                     memory.store_at(handle, TrieNodeWithSize::new(branch_node, memory_usage));
+    //                     path.pop();
+    //                     continue;
+    //                 } else if common_prefix == existing_key.len() {
+    //                     let child = match child {
+    //                         NodeHandle::Hash(hash) => self.move_node_to_mutable(memory, &hash)?,
+    //                         NodeHandle::InMemory(handle) => handle,
+    //                     };
+    //                     let node = TrieNode::Extension(key, NodeHandle::InMemory(child));
+    //                     let memory_usage = node.memory_usage_direct(memory);
+    //                     memory.store_at(handle, TrieNodeWithSize::new(node, memory_usage));
+    //                     handle = child;
+    //                     partial = partial.mid(common_prefix);
+    //                     continue;
+    //                 } else {
+    //                     // Partially shared prefix: covert to shorter extension and recursively add a branch.
+    //                     let child_node = TrieNode::Extension(
+    //                         existing_key.mid(common_prefix).encoded(false).into_vec(),
+    //                         child,
+    //                     );
+    //                     let child_memory_usage =
+    //                         children_memory_usage + child_node.memory_usage_direct(memory);
+    //                     let child =
+    //                         memory.store(TrieNodeWithSize::new(child_node, child_memory_usage));
+    //                     let node = TrieNode::Extension(
+    //                         existing_key.encoded_leftmost(common_prefix, false).into_vec(),
+    //                         NodeHandle::InMemory(child),
+    //                     );
+    //                     let memory_usage = node.memory_usage_direct(memory);
+    //                     memory.store_at(handle, TrieNodeWithSize::new(node, memory_usage));
+    //                     handle = child;
+    //                     partial = partial.mid(common_prefix);
+    //                     continue;
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     for i in (0..path.len() - 1).rev() {
+    //         let node = path.get(i).unwrap();
+    //         let child = path.get(i + 1).unwrap();
+    //         let child_memory_usage = memory.node_ref(*child).memory_usage;
+    //         memory.node_mut(*node).memory_usage += child_memory_usage;
+    //     }
+    //     Ok(root_handle)
+    // }
 
     /// On insert/delete, we want to recompute subtree sizes without touching nodes that aren't on
     /// the path of the key inserted/deleted. This is relevant because reducing storage reads
@@ -716,6 +948,7 @@ impl Trie {
                 let lite_node = Arc::new(InMemoryTrieNodeLite {
                     hash: key,
                     size: raw_node_with_size.memory_usage,
+                    rc: 1,
                     kind: lite_node_kind,
                 });
                 set.insert_with_dedup(lite_node);
