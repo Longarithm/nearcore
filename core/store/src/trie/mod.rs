@@ -399,6 +399,7 @@ pub struct TrieRefcountChange {
     rc: std::num::NonZeroU32,
 }
 
+#[allow(unused)]
 pub struct TrieRefcountChangeLite {
     /// DB value. Can be either serialized RawTrieNodeWithSize or value corresponding to
     /// some TrieKey.
