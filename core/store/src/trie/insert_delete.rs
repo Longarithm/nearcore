@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use borsh::BorshSerialize;
@@ -284,8 +284,6 @@ impl Trie {
             let child = path.get(i + 1).unwrap();
             let child_memory_usage = memory.node_ref(*child).memory_usage;
             memory.node_mut(*node).memory_usage += child_memory_usage;
-            let raw_node = memory.node_ref(*node);
-            raw_node
         }
         Ok(root_handle)
     }

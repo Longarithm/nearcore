@@ -842,7 +842,8 @@ impl Trie {
             if hash == &Self::EMPTY_ROOT {
                 return Ok(memory.store(TrieNodeWithSize::empty()));
             }
-            let node = in_memory_set.get(hash);
+            let lock = in_memory_set.0.lock().unwrap();
+            let node = lock.get(hash);
             let result = memory.store(TrieNodeWithSize::from_lite(node));
             // ignore refcount changes for now...
             return Ok(result);

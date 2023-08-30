@@ -15,8 +15,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
-use std::ops::DerefMut;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 pub(crate) struct BoundedQueue<T> {
     queue: VecDeque<T>,
