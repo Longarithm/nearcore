@@ -458,8 +458,8 @@ pub fn load_trie_in_memory_new(
 
         if last_print.elapsed() > Duration::from_secs(10) {
             println!(
-                "Loaded {} nodes ({} after dedup), current key: {:?}",
-                nodes_iterated, nodes_len, key,
+                "Loaded {} nodes ({} after dedup), root: {}, key: {:?}",
+                nodes_iterated, nodes_len, root, key,
             );
             last_print = Instant::now();
         }

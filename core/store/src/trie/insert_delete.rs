@@ -702,6 +702,7 @@ impl Trie {
         if let Some(in_memory_set) = self.storage.as_in_memory_set() {
             let mut set = in_memory_set.0.lock().unwrap();
             for (node_hash, raw_node) in lite_node_stack.into_iter().rev() {
+                println!("{} {:?}", node_hash, raw_node);
                 let lite_node_kind = match raw_node.node {
                     RawTrieNode::Leaf(key, value_ref) => InMemoryTrieNodeKindLite::Leaf {
                         extension: key.into_boxed_slice(),
