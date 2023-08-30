@@ -422,7 +422,7 @@ pub fn load_trie_in_memory_new(
 ) -> anyhow::Result<SyncInMemoryTrieNodeSet> {
     // let mut node_stack = BuilderStack::new();
     let mut last_print = Instant::now();
-    let mut nodes_iterated = 0;
+    let mut keys_iterated = 0;
 
     let mut root = StateRoot::new();
     let set = SyncInMemoryTrieNodeSet::default();
@@ -453,19 +453,19 @@ pub fn load_trie_in_memory_new(
             trie.flatten_nodes_lite(&root, memory, root_node).unwrap();
         root = new_root;
 
-        nodes_iterated += 1;
+        keys_iterated += 1;
         let nodes_len = set.0.lock().unwrap().len();
 
-        if last_print.elapsed() > Duration::from_secs(0) {
+        if last_print.elapsed() > Duration::from_secs(10) {
             println!(
-                "Loaded {} nodes ({} after dedup), root: {}, key: {:?}",
-                nodes_iterated, nodes_len, root, key,
+                "Loaded {} keys ({} nodes after dedup), root: {}, key: {:?}",
+                keys_iterated, nodes_len, root, key,
             );
             last_print = Instant::now();
         }
     }
     let nodes_len = set.0.lock().unwrap().len();
-    println!("Loaded {} nodes ({} after dedup)", nodes_iterated, nodes_len);
+    println!("Loaded {} keys ({} after dedup)", keys_iterated, nodes_len);
     assert_eq!(root, state_root);
     Ok(set)
 }

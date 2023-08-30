@@ -627,7 +627,6 @@ impl Trie {
         let mut last_hash = CryptoHash::default();
         let mut buffer: Vec<u8> = Vec::new();
         let mut memory = memory;
-        let mut lite_node_stack = vec![];
 
         'outer: while let Some((node, position)) = stack.pop() {
             let node_with_size = memory.node_ref(node);
@@ -690,20 +689,10 @@ impl Trie {
             let raw_node_with_size = RawTrieNodeWithSize { node: raw_node, memory_usage };
             raw_node_with_size.serialize(&mut buffer).unwrap();
             let key = hash(&buffer);
-            lite_node_stack.push((key, raw_node_with_size));
-
-            let (_value, rc) =
-                memory.refcount_changes.entry(key).or_insert_with(|| (buffer.clone(), 0));
-            *rc += 1;
-            buffer.clear();
-            last_hash = key;
-        }
-
-        if let Some(in_memory_set) = self.storage.as_in_memory_set() {
-            let mut set = in_memory_set.0.lock().unwrap();
-            for (node_hash, raw_node) in lite_node_stack.into_iter() {
-                println!("{} {:?}", node_hash, raw_node);
-                let lite_node_kind = match raw_node.node {
+            // lite_node_stack.push((key, raw_node_with_size));
+            if let Some(in_memory_set) = self.storage.as_in_memory_set() {
+                let mut set = in_memory_set.0.lock().unwrap();
+                let lite_node_kind = match raw_node_with_size.node {
                     RawTrieNode::Leaf(key, value_ref) => InMemoryTrieNodeKindLite::Leaf {
                         extension: key.into_boxed_slice(),
                         value: value_ref,
@@ -725,12 +714,18 @@ impl Trie {
                     }
                 };
                 let lite_node = Arc::new(InMemoryTrieNodeLite {
-                    hash: node_hash,
-                    size: raw_node.memory_usage,
+                    hash: key,
+                    size: raw_node_with_size.memory_usage,
                     kind: lite_node_kind,
                 });
                 set.insert_with_dedup(lite_node);
             }
+
+            let (_value, rc) =
+                memory.refcount_changes.entry(key).or_insert_with(|| (buffer.clone(), 0));
+            *rc += 1;
+            buffer.clear();
+            last_hash = key;
         }
 
         // let (insertions, deletions) =
