@@ -452,13 +452,13 @@ pub fn load_trie_in_memory_new(
         keys_iterated += 1;
         let lock = set.0.lock().unwrap();
         let nodes_len = lock.len();
-        let rm = lock.removals();
-        let uid = lock.uid();
+        // let rm = lock.removals();
+        // let uid = lock.uid();
 
         if last_print.elapsed() > Duration::from_secs(10) {
             println!(
-                "Loaded {} keys ({} nodes after dedup), root: {}, key: {:?}, rm: {}, uid: {}, last depth: {}",
-                keys_iterated, nodes_len, root, key, rm, uid, depth,
+                "Loaded {} keys ({} nodes after dedup), root: {}, key: {:?}, last depth: {}, last size: {}",
+                keys_iterated, nodes_len, root, key, depth, root_lite.size
             );
             last_print = Instant::now();
         }
