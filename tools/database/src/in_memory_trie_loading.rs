@@ -581,7 +581,7 @@ pub fn load_trie_in_memory_new(
     }
 
     {
-        let mut lock = set.0.lock().unwrap();
+        let lock = set.0.lock().unwrap();
         let nodes_len = lock.len();
         // lock.clear_rc();
         println!(
