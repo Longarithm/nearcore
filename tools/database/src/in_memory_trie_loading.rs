@@ -102,12 +102,12 @@ impl InMemoryTrieNodeBuilder {
         }
     }
 
-    pub fn build(mut self) -> Arc<InMemoryTrieNodeLite> {
+    pub fn build(mut self) -> InMemoryTrieNodeLite {
         assert!(self.placeholder_length.is_none());
-        Arc::new(InMemoryTrieNodeLite {
+        InMemoryTrieNodeLite {
             hash: self.hash_and_size.unwrap().0,
+            uid: 0,
             size: self.hash_and_size.unwrap().1,
-            rc: 0,
             kind: match (self.leaf, self.extension) {
                 (Some(value), Some(extension)) => {
                     InMemoryTrieNodeKindLite::Leaf { extension, value }
@@ -146,7 +146,7 @@ impl InMemoryTrieNodeBuilder {
                     InMemoryTrieNodeKindLite::BranchWithLeaf { children: self.children, value }
                 }
             },
-        })
+        }
     }
 
     pub fn add_child(&mut self, child: Arc<InMemoryTrieNodeLite>) {

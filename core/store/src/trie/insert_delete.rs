@@ -944,12 +944,12 @@ impl Trie {
                         }
                     }
                 };
-                let lite_node = Arc::new(InMemoryTrieNodeLite {
+                let lite_node = InMemoryTrieNodeLite {
                     hash: key,
                     uid: 0, // placeholder
                     size: raw_node_with_size.memory_usage,
                     kind: lite_node_kind,
-                });
+                };
                 set.insert_with_dedup(lite_node);
             }
 

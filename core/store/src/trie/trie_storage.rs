@@ -15,7 +15,6 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
-use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 pub(crate) struct BoundedQueue<T> {
@@ -372,7 +371,7 @@ impl InMemoryTrieNodeSet {
 
     pub fn insert_with_dedup(
         &mut self,
-        mut node: Arc<InMemoryTrieNodeLite>,
+        mut node: InMemoryTrieNodeLite,
     ) -> Arc<InMemoryTrieNodeLite> {
         if let Some(existing) = self.nodes.get(&node.hash) {
             *self.rc.entry(existing.0.uid).or_insert(0) += 1;
@@ -380,8 +379,9 @@ impl InMemoryTrieNodeSet {
         } else {
             node.uid = self.uid;
             self.uid += 1;
-            self.nodes.insert(InMemoryTrieNodeRef(node.clone()));
-            node
+            let arc = Arc::new(node);
+            self.nodes.insert(InMemoryTrieNodeRef(arc.clone()));
+            arc
         }
     }
 
@@ -394,7 +394,7 @@ impl InMemoryTrieNodeSet {
     }
 
     pub fn remove(&mut self, hash: &CryptoHash) -> Arc<InMemoryTrieNodeLite> {
-        let mut node = self.nodes.take(hash).unwrap().0;
+        let node = self.nodes.take(hash).unwrap().0;
         let mut rc = *self.rc.entry(node.uid).or_insert(0);
         rc -= 1;
         if rc == 0 {
