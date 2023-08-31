@@ -12,7 +12,7 @@ use crate::trie::{
     Children, NodeHandle, RawTrieNode, RawTrieNodeWithSize, StorageHandle, StorageValueHandle,
     TrieChangesLite, TrieNode, TrieNodeWithSize, ValueHandle,
 };
-use crate::{InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, StorageError, Trie, TrieChanges};
+use crate::{StorageError, Trie, TrieChanges};
 
 pub struct NodesStorage {
     nodes: Vec<Option<TrieNodeWithSize>>,

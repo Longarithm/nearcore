@@ -1,6 +1,6 @@
 use crate::trie::config::TrieConfig;
 use crate::trie::prefetching_trie_storage::PrefetcherResult;
-use crate::trie::{POISONED_LOCK_ERR, TRIE_COSTS};
+use crate::trie::POISONED_LOCK_ERR;
 use crate::{metrics, DBCol, PrefetchApi, StorageError, Store};
 use lru::LruCache;
 use near_o11y::log_assert;

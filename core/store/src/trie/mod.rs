@@ -52,8 +52,7 @@ use self::accounting_cache::TrieAccountingCache;
 use self::trie_recording::TrieRecorder;
 use self::trie_storage::TrieMemoryPartialStorage;
 use crate::trie::trie_storage::{
-    InMemoryTrieNodeKindSimple, InMemoryTrieNodeRef, InMemoryTrieNodeSimple,
-    InMemoryTrieNodeSimpleRef,
+    InMemoryTrieNodeKindSimple, InMemoryTrieNodeSimple, InMemoryTrieNodeSimpleRef,
 };
 pub use from_flat::construct_trie_from_flat;
 pub use trie_storage::{InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet};
