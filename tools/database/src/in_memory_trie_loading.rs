@@ -516,12 +516,16 @@ impl InMemoryTrieCmd {
         let state_root = flat_head_state_root(&store, &shard_uid);
 
         if self.flat_nodes {
-            let _ = load_trie_in_memory(&store, shard_uid, state_root)?;
+            let _trie = load_trie_in_memory(&store, shard_uid, state_root)?;
+            for _ in 0..1000000 {
+                std::thread::sleep(Duration::from_secs(100));
+            }
         } else {
-            let _ = load_trie_in_memory_new(&store, shard_uid, state_root)?;
-        }
-        for _ in 0..1000000 {
-            std::thread::sleep(Duration::from_secs(100));
+            let trie = load_trie_in_memory_new(&store, shard_uid, state_root)?;
+            for _ in 0..1000000 {
+                std::thread::sleep(Duration::from_secs(100));
+            }
+            println!("{}", trie.0.lock().unwrap().len()); // to avoid dropping
         }
         Ok(())
     }
