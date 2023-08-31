@@ -857,16 +857,17 @@ impl Trie {
         memory: &mut NodesStorage,
         hash: &CryptoHash,
     ) -> Result<StorageHandle, StorageError> {
-        if let Some(in_memory_set) = self.storage.as_in_memory_set() {
+        if let Some(_in_memory_set) = self.storage.as_in_memory_set() {
             if hash == &Self::EMPTY_ROOT {
                 return Ok(memory.store(TrieNodeWithSize::empty()));
             }
-            let mut lock = in_memory_set.0.lock().unwrap();
-            // decrement refcount!
-            let node = lock.remove(hash);
-            let result = memory.store(TrieNodeWithSize::from_lite(node));
-
-            return Ok(result);
+            unreachable!();
+            // let mut lock = in_memory_set.0.lock().unwrap();
+            // // decrement refcount!
+            // let node = lock.remove(hash);
+            // let result = memory.store(TrieNodeWithSize::from_lite(node));
+            //
+            // return Ok(result);
         }
 
         match self.retrieve_raw_node(hash, true)? {

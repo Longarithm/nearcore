@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use borsh::BorshSerialize;
 
@@ -6,6 +7,7 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::state::ValueRef;
 
 use crate::trie::nibble_slice::NibbleSlice;
+use crate::trie::trie_storage::InMemoryTrieNodeRef;
 use crate::trie::{
     Children, NodeHandle, RawTrieNode, RawTrieNodeWithSize, StorageHandle, StorageValueHandle,
     TrieChangesLite, TrieNode, TrieNodeWithSize, ValueHandle,
@@ -79,6 +81,7 @@ impl NodesStorage {
 enum FlattenNodesCrumb {
     Entering,
     AtChild(Box<Children>, u8),
+    AtChildLite([Option<Arc<InMemoryTrieNodeLite>>; 16], usize),
     Exiting,
 }
 
@@ -823,7 +826,9 @@ impl Trie {
                             value.clone().map(|value| Trie::flatten_value(&mut memory, value));
                         RawTrieNode::branch(*new_children, new_value)
                     }
-                    FlattenNodesCrumb::Exiting => unreachable!(),
+                    FlattenNodesCrumb::Exiting | FlattenNodesCrumb::AtChildLite(..) => {
+                        unreachable!()
+                    }
                 },
                 TrieNode::Extension(key, child) => match position {
                     FlattenNodesCrumb::Entering => match child {
@@ -877,41 +882,52 @@ impl Trie {
             depth += 1;
             let node_with_size = memory.node_ref(node);
             let memory_usage = node_with_size.memory_usage;
-            let raw_node = match &node_with_size.node {
+            // let raw_node = match &node_with_size.node {
+            let raw_node_lite = match &node_with_size.node {
                 TrieNode::Empty => {
                     last_hash = Trie::EMPTY_ROOT;
                     continue;
                 }
                 TrieNode::Branch(children, value) => match position {
                     FlattenNodesCrumb::Entering => {
-                        stack.push((node, FlattenNodesCrumb::AtChild(Default::default(), 0)));
+                        stack.push((node, FlattenNodesCrumb::AtChildLite(Default::default(), 0)));
                         continue;
                     }
-                    FlattenNodesCrumb::AtChild(mut new_children, mut i) => {
-                        if i > 0 && children[i - 1].is_some() {
+                    FlattenNodesCrumb::AtChildLite(mut new_children, mut i) => {
+                        if i > 0 && children[(i - 1) as u8].is_some() {
                             new_children[i - 1] = Some(last_hash);
                         }
                         while i < 16 {
-                            match children[i].clone() {
+                            match children[i as u8].clone() {
                                 Some(NodeHandle::InMemory(handle)) => {
                                     stack.push((
                                         node,
-                                        FlattenNodesCrumb::AtChild(new_children, i + 1),
+                                        FlattenNodesCrumb::AtChildLite(new_children, i + 1),
                                     ));
                                     stack.push((handle, FlattenNodesCrumb::Entering));
                                     continue 'outer;
                                 }
-                                Some(NodeHandle::Hash(hash)) => new_children[i] = Some(hash),
-                                Some(NodeHandle::Arc(_)) => unreachable!(),
+                                Some(NodeHandle::Hash(_hash)) => unreachable!(), // new_children[i] = Some(hash),
+                                Some(NodeHandle::Arc(node)) => new_children[i] = Some(node.0),
                                 None => {}
                             }
                             i += 1;
                         }
-                        let new_value =
-                            value.clone().map(|value| Trie::flatten_value(&mut memory, value));
-                        RawTrieNode::branch(*new_children, new_value)
+                        match value {
+                            Some(value) => InMemoryTrieNodeKindLite::BranchWithLeaf {
+                                children: new_children,
+                                value: Trie::flatten_value(&mut memory, value.clone()),
+                            },
+                            None => InMemoryTrieNodeKindLite::Branch(new_children),
+                        }
+                        // let new_value =
+                        //     value.clone().map(|value| Trie::flatten_value(&mut memory, value));
+                        //
+                        // RawTrieNode::branch(*new_children, new_value)
                     }
-                    FlattenNodesCrumb::Exiting => unreachable!(),
+                    FlattenNodesCrumb::Exiting | FlattenNodesCrumb::AtChild(..) => {
+                        unreachable!()
+                    }
                 },
                 TrieNode::Extension(key, child) => match position {
                     FlattenNodesCrumb::Entering => match child {
@@ -920,59 +936,70 @@ impl Trie {
                             stack.push((*child, FlattenNodesCrumb::Entering));
                             continue;
                         }
-                        NodeHandle::Hash(hash) => RawTrieNode::Extension(key.clone(), *hash),
-                        NodeHandle::Arc(_) => unreachable!(),
+                        NodeHandle::Hash(_hash) => unreachable!(), // RawTrieNode::Extension(key.clone(), *hash),
+                        NodeHandle::Arc(node) => InMemoryTrieNodeKindLite::Extension {
+                            extension: key.into_boxed_slice(),
+                            child: node.0.clone(),
+                        },
                     },
-                    FlattenNodesCrumb::Exiting => RawTrieNode::Extension(key.clone(), last_hash),
+                    FlattenNodesCrumb::Exiting => InMemoryTrieNodeKindLite::Extension {
+                        extension: key.into_boxed_slice(),
+                        child: last_hash,
+                    },
+
+                    // RawTrieNode::Extension(key.clone(), last_hash),
                     _ => unreachable!(),
                 },
                 TrieNode::Leaf(key, value) => {
                     let key = key.clone();
                     let value = value.clone();
                     let value = Trie::flatten_value(&mut memory, value);
-                    RawTrieNode::Leaf(key, value)
+                    InMemoryTrieNodeKindLite::Leaf { extension: key.into_boxed_slice(), value }
+                    // RawTrieNode::Leaf(key, value)
                 }
             };
 
-            let raw_node_with_size = RawTrieNodeWithSize { node: raw_node, memory_usage };
-            raw_node_with_size.serialize(&mut buffer).unwrap();
-            let key = hash(&buffer);
+            // let raw_node_with_size = RawTrieNodeWithSize { node: raw_node, memory_usage };
+            // raw_node_with_size.serialize(&mut buffer).unwrap();
+            // let key = hash(&buffer);
+            let key = Default::default();
             // lite_node_stack.push((key, raw_node_with_size));
-            if let Some(in_memory_set) = self.storage.as_in_memory_set() {
-                let mut set = in_memory_set.0.lock().unwrap();
-                let lite_node_kind = match raw_node_with_size.node {
-                    RawTrieNode::Leaf(key, value_ref) => InMemoryTrieNodeKindLite::Leaf {
-                        extension: key.into_boxed_slice(),
-                        value: value_ref,
-                    },
-                    RawTrieNode::BranchNoValue(children) => {
-                        let raw_children = children.0.map(|opt_h| opt_h.map(|h| set.get(&h)));
-                        InMemoryTrieNodeKindLite::Branch(raw_children)
-                    }
-                    RawTrieNode::BranchWithValue(value, children) => {
-                        let raw_children = children.0.map(|opt_h| opt_h.map(|h| set.get(&h)));
-                        InMemoryTrieNodeKindLite::BranchWithLeaf { children: raw_children, value }
-                    }
-                    RawTrieNode::Extension(key, hash) => {
-                        let child = set.get(&hash);
-                        InMemoryTrieNodeKindLite::Extension {
-                            extension: key.into_boxed_slice(),
-                            child,
-                        }
-                    }
-                };
-                let lite_node = InMemoryTrieNodeLite {
-                    hash: key,
-                    uid: 0, // placeholder
-                    size: raw_node_with_size.memory_usage,
-                    kind: lite_node_kind,
-                };
-                set.insert_with_dedup(lite_node);
-            }
+            let mut _in_memory_set = self.storage.as_in_memory_set().unwrap();
 
-            let (_value, rc) =
-                memory.refcount_changes.entry(key).or_insert_with(|| (buffer.clone(), 0));
-            *rc += 1;
+            // if let Some(in_memory_set) = self.storage.as_in_memory_set() {
+            // let mut set = in_memory_set.0.lock().unwrap();
+            // let lite_node_kind = match raw_node_with_size.node {
+            //     RawTrieNode::Leaf(key, value_ref) => InMemoryTrieNodeKindLite::Leaf {
+            //         extension: key.into_boxed_slice(),
+            //         value: value_ref,
+            //     },
+            //     RawTrieNode::BranchNoValue(children) => {
+            //         let raw_children = children.0.map(|opt_h| opt_h.map(|h| set.get(&h)));
+            //         InMemoryTrieNodeKindLite::Branch(raw_children)
+            //     }
+            //     RawTrieNode::BranchWithValue(value, children) => {
+            //         let raw_children = children.0.map(|opt_h| opt_h.map(|h| set.get(&h)));
+            //         InMemoryTrieNodeKindLite::BranchWithLeaf { children: raw_children, value }
+            //     }
+            //     RawTrieNode::Extension(key, hash) => {
+            //         let child = set.get(&hash);
+            //         InMemoryTrieNodeKindLite::Extension {
+            //             extension: key.into_boxed_slice(),
+            //             child,
+            //         }
+            //     }
+            // };
+            let _lite_node = InMemoryTrieNodeLite {
+                hash: key,
+                uid: 0, // placeholder
+                size: memory_usage,
+                kind: raw_node_lite,
+            };
+            // set.insert_with_dedup(lite_node);
+
+            // let (_value, rc) =
+            //     memory.refcount_changes.entry(key).or_insert_with(|| (buffer.clone(), 0));
+            // *rc += 1;
             buffer.clear();
             last_hash = key;
         }
