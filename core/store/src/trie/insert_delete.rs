@@ -915,10 +915,13 @@ impl Trie {
                             i += 1;
                         }
                         match value {
-                            Some(value) => InMemoryTrieNodeKindLite::BranchWithLeaf {
-                                children: new_children,
-                                value: Trie::flatten_value(&mut memory, value.clone()),
-                            },
+                            Some(ValueHandle::HashAndSize(value_ref)) => {
+                                InMemoryTrieNodeKindLite::BranchWithLeaf {
+                                    children: new_children,
+                                    value: value_ref.clone(),
+                                }
+                            }
+                            Some(_) => unreachable!(),
                             None => InMemoryTrieNodeKindLite::Branch(new_children),
                         }
                         // let new_value =
@@ -939,12 +942,12 @@ impl Trie {
                         }
                         NodeHandle::Hash(_hash) => unreachable!(), // RawTrieNode::Extension(key.clone(), *hash),
                         NodeHandle::Arc(node) => InMemoryTrieNodeKindLite::Extension {
-                            extension: key.into_boxed_slice(),
+                            extension: key.clone().into_boxed_slice(),
                             child: node.0.clone(),
                         },
                     },
                     FlattenNodesCrumb::Exiting => InMemoryTrieNodeKindLite::Extension {
-                        extension: key.into_boxed_slice(),
+                        extension: key.clone().into_boxed_slice(),
                         // child: last_hash,
                         child: last_node.clone(),
                     },
