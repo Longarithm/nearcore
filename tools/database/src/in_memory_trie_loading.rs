@@ -593,6 +593,7 @@ pub fn load_trie_in_memory_new(
     }
 
     let root = build_hash(root_lite, set.clone());
+    println!("All done in {}m", start.elapsed().as_secs_f32() / 60.0);
     assert_eq!(root, state_root);
     println!("SUCCESS!");
 
