@@ -358,6 +358,7 @@ impl Eq for InMemoryTrieNodeRef {}
 pub struct InMemoryTrieNodeSet {
     nodes: HashSet<InMemoryTrieNodeRef>,
     rc: HashMap<u32, u32>,
+    removals: u32,
     uid: u32,
 }
 
@@ -366,7 +367,7 @@ pub struct SyncInMemoryTrieNodeSet(pub Arc<Mutex<InMemoryTrieNodeSet>>);
 
 impl InMemoryTrieNodeSet {
     pub fn new() -> Self {
-        Self { nodes: HashSet::new(), rc: HashMap::default(), uid: 0 }
+        Self { nodes: HashSet::new(), rc: HashMap::default(), removals: 0, uid: 0 }
     }
 
     pub fn insert_with_dedup(
@@ -399,6 +400,7 @@ impl InMemoryTrieNodeSet {
         rc -= 1;
         if rc == 0 {
             self.rc.remove(&node.uid);
+            self.removals += 1;
         } else {
             self.nodes.insert(InMemoryTrieNodeRef(node.clone()));
         }
@@ -407,6 +409,14 @@ impl InMemoryTrieNodeSet {
 
     pub fn len(&self) -> usize {
         self.nodes.len()
+    }
+
+    pub fn removals(&self) -> u32 {
+        self.removals
+    }
+
+    pub fn uid(&self) -> u32 {
+        self.uid
     }
 }
 

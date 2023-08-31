@@ -88,11 +88,10 @@ impl Trie {
         memory: &mut NodesStorage,
         node: StorageHandle,
         partial: NibbleSlice<'_>,
-        value: Vec<u8>,
+        value: ValueRef,
     ) -> Result<StorageHandle, StorageError> {
         let root_handle = node;
         let mut handle = node;
-        let mut value = Some(value);
         let mut partial = partial;
         let mut path = Vec::new();
         loop {
@@ -101,10 +100,10 @@ impl Trie {
             let children_memory_usage = memory_usage - node.memory_usage_direct(memory);
             match node {
                 TrieNode::Empty => {
-                    let value_handle = memory.store_value(value.take().unwrap());
+                    // let value_handle = memory.store_value(value.take().unwrap());
                     let leaf_node = TrieNode::Leaf(
                         partial.encoded(true).into_vec(),
-                        ValueHandle::InMemory(value_handle),
+                        ValueHandle::HashAndSize(value),
                     );
                     let memory_usage = leaf_node.memory_usage_direct(memory);
                     memory.store_at(handle, TrieNodeWithSize { node: leaf_node, memory_usage });
@@ -116,9 +115,8 @@ impl Trie {
                         if let Some(value) = &existing_value {
                             self.delete_value(memory, value)?;
                         }
-                        let value_handle = memory.store_value(value.take().unwrap());
                         let new_node =
-                            TrieNode::Branch(children, Some(ValueHandle::InMemory(value_handle)));
+                            TrieNode::Branch(children, Some(ValueHandle::HashAndSize(value)));
                         let new_memory_usage =
                             children_memory_usage + new_node.memory_usage_direct(memory);
                         memory.store_at(handle, TrieNodeWithSize::new(new_node, new_memory_usage));
@@ -151,8 +149,7 @@ impl Trie {
                     if common_prefix == existing_key.len() && common_prefix == partial.len() {
                         // Equivalent leaf.
                         self.delete_value(memory, &existing_value)?;
-                        let value_handle = memory.store_value(value.take().unwrap());
-                        let node = TrieNode::Leaf(key, ValueHandle::InMemory(value_handle));
+                        let node = TrieNode::Leaf(key, ValueHandle::HashAndSize(value));
                         let memory_usage = node.memory_usage_direct(memory);
                         memory.store_at(handle, TrieNodeWithSize { node, memory_usage });
                         break;
@@ -857,8 +854,10 @@ impl Trie {
         let mut last_hash = CryptoHash::default();
         let mut buffer: Vec<u8> = Vec::new();
         let mut memory = memory;
+        let mut depth = 0;
 
         'outer: while let Some((node, position)) = stack.pop() {
+            depth += 1;
             let node_with_size = memory.node_ref(node);
             let memory_usage = node_with_size.memory_usage;
             let raw_node = match &node_with_size.node {
@@ -961,12 +960,7 @@ impl Trie {
 
         // let (insertions, deletions) =
         //     Trie::convert_to_insertions_and_deletions(memory.refcount_changes);
-        Ok(TrieChangesLite {
-            old_root: *old_root,
-            new_root: last_hash,
-            insertions: vec![],
-            deletions: vec![],
-        })
+        Ok(TrieChangesLite { old_root: *old_root, new_root: last_hash, depth })
     }
 
     fn flatten_value(memory: &mut NodesStorage, value: ValueHandle) -> ValueRef {

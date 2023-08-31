@@ -436,34 +436,37 @@ pub fn load_trie_in_memory_new(
         let mut memory = NodesStorage::new();
         let mut root_node = trie.move_node_to_mutable(&mut memory, &root)?;
         let key = NibbleSlice::new(&key);
-        // let value_ref = value.to_value_ref();
-        let value = match value {
-            FlatStateValue::Ref(value_ref) => store
-                .get(
-                    DBCol::State,
-                    &TrieCachingStorage::get_key_from_shard_uid_and_hash(
-                        shard_uid,
-                        &value_ref.hash,
-                    ),
-                )
-                .unwrap()
-                .unwrap()
-                .to_vec(),
-            FlatStateValue::Inlined(value) => value,
-        };
+        let value_ref = value.to_value_ref();
+        // let value = match value {
+        //     FlatStateValue::Ref(value_ref) => store
+        //         .get(
+        //             DBCol::State,
+        //             &TrieCachingStorage::get_key_from_shard_uid_and_hash(
+        //                 shard_uid,
+        //                 &value_ref.hash,
+        //             ),
+        //         )
+        //         .unwrap()
+        //         .unwrap()
+        //         .to_vec(),
+        //     FlatStateValue::Inlined(value) => value,
+        // };
         // root_node = Trie::insert_lite(&set, root, key, value_ref);
-        root_node = trie.insert(&mut memory, root_node, key, value).unwrap();
-        let TrieChangesLite { new_root, .. } =
+        root_node = trie.insert(&mut memory, root_node, key, value_ref).unwrap();
+        let TrieChangesLite { new_root, depth, .. } =
             trie.flatten_nodes_lite(&root, memory, root_node).unwrap();
         root = new_root;
 
         keys_iterated += 1;
-        let nodes_len = set.0.lock().unwrap().len();
+        let lock = set.0.lock().unwrap();
+        let nodes_len = lock.len();
+        let rm = lock.removals();
+        let uid = lock.uid();
 
         if last_print.elapsed() > Duration::from_secs(10) {
             println!(
-                "Loaded {} keys ({} nodes after dedup), root: {}, key: {:?}",
-                keys_iterated, nodes_len, root, key,
+                "Loaded {} keys ({} nodes after dedup), root: {}, key: {:?}, rm: {}, uid: {}, last depth: {}",
+                keys_iterated, nodes_len, root, key, rm, uid, depth,
             );
             last_print = Instant::now();
         }

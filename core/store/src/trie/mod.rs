@@ -459,8 +459,7 @@ pub struct TrieChanges {
 pub struct TrieChangesLite {
     pub old_root: StateRoot,
     pub new_root: StateRoot,
-    pub insertions: Vec<TrieRefcountChangeLite>,
-    pub deletions: Vec<TrieRefcountChangeLite>,
+    pub depth: u32,
 }
 
 impl TrieChanges {
@@ -1097,7 +1096,7 @@ impl Trie {
         for (key, value) in changes {
             let key = NibbleSlice::new(&key);
             root_node = match value {
-                Some(arr) => self.insert(&mut memory, root_node, key, arr),
+                Some(arr) => self.insert(&mut memory, root_node, key, ValueRef::new(&arr)),
                 None => self.delete(&mut memory, root_node, key),
             }?;
         }
