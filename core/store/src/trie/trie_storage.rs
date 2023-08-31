@@ -287,6 +287,12 @@ pub struct InMemoryTrieNodeLite {
     pub kind: InMemoryTrieNodeKindLite,
 }
 
+pub enum IteratedNodeKind {
+    Leaf { extension: Box<[u8]>, value: ValueRef },
+    Extension { extension: Box<[u8]>, child: Arc<InMemoryTrieNodeLite> },
+    Branch([Option<Arc<InMemoryTrieNodeLite>>; 16]),
+}
+
 #[allow(unused)]
 #[derive(Clone)]
 pub enum InMemoryTrieNodeKindLite {
@@ -303,6 +309,17 @@ impl Default for InMemoryTrieNodeKindLite {
 }
 
 impl InMemoryTrieNodeKindLite {
+    pub fn into_iterated(self) -> IteratedNodeKind {
+        match self {
+            Self::Leaf { extension, value } => IteratedNodeKind::Leaf { extension, value },
+            Self::Extension { extension, child } => {
+                IteratedNodeKind::Extension { extension, child }
+            }
+            Self::Branch(child) => IteratedNodeKind::Branch(child),
+            Self::BranchWithLeaf { children, .. } => IteratedNodeKind::Branch(children),
+        }
+    }
+
     pub fn memory_usage_for_value_length(value_length: u64) -> u64 {
         value_length * TRIE_COSTS.byte_of_value + TRIE_COSTS.node_cost
     }
@@ -425,10 +442,10 @@ impl InMemoryTrieNodeSet {
         self.uid
     }
 
-    pub fn clear_rc(&mut self) {
-        println!("rc len = {}", self.rc.len());
-        self.rc.clear();
-    }
+    // pub fn clear_rc(&mut self) {
+    //     println!("rc len = {}", self.rc.len());
+    //     self.rc.clear();
+    // }
 }
 
 pub trait TrieStorage {

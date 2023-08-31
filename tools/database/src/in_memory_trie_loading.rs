@@ -11,8 +11,8 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::state::ValueRef;
 use near_primitives::types::{ShardId, StateRoot};
 use near_store::flat::store_helper::iter_flat_state_entries;
-use near_store::trie::trie_storage::SyncInMemoryTrieNodeSet;
-use near_store::trie::{TrieChangesLite, TrieNodeWithSize};
+use near_store::trie::trie_storage::{IteratedNodeKind, SyncInMemoryTrieNodeSet};
+use near_store::trie::{Children, TrieChangesLite, TrieNodeWithSize};
 use near_store::{
     DBCol, InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet, NibbleSlice,
     NodesStorage, RawTrieNode, RawTrieNodeWithSize, ShardUId, Store, Trie,
@@ -416,6 +416,122 @@ pub fn load_trie_in_memory(
     Ok(trie)
 }
 
+enum FlattenNodesCrumb {
+    Entering,
+    AtChild(Box<Children>, u8),
+    Exiting,
+}
+
+pub fn build_hash(
+    root_node: Arc<InMemoryTrieNodeLite>,
+    set: SyncInMemoryTrieNodeSet,
+) -> CryptoHash {
+    let start = Instant::now();
+    let mut last_print = Instant::now();
+
+    let mut stack: Vec<(Arc<InMemoryTrieNodeLite>, FlattenNodesCrumb)> = Vec::new();
+    stack.push((root_node, FlattenNodesCrumb::Entering));
+    let mut set = set.0.lock().unwrap();
+    let mut last_hash = CryptoHash::default();
+    let mut buffer: Vec<u8> = Vec::new();
+    let mut iter: u64 = 0;
+
+    'outer: while let Some((node, position)) = stack.pop() {
+        iter += 1;
+        // raw trie node
+        let raw_node = match node.kind.clone().into_iterated() {
+            IteratedNodeKind::Branch(children) => match position {
+                FlattenNodesCrumb::Entering => {
+                    stack.push((node, FlattenNodesCrumb::AtChild(Default::default(), 0)));
+                    continue;
+                }
+                FlattenNodesCrumb::AtChild(mut new_children, mut i) => {
+                    if i > 0 && children[(i - 1) as usize].is_some() {
+                        new_children[i - 1] = Some(last_hash);
+                    }
+                    while i < 16 {
+                        match children[i as usize].clone() {
+                            Some(child) => {
+                                stack.push((node, FlattenNodesCrumb::AtChild(new_children, i + 1)));
+                                stack.push((child.clone(), FlattenNodesCrumb::Entering));
+                                continue 'outer;
+                            }
+                            None => {}
+                        }
+                        i += 1;
+                    }
+                    match &node.kind {
+                        InMemoryTrieNodeKindLite::BranchWithLeaf { value, .. } => {
+                            RawTrieNode::BranchWithValue(value.clone(), *new_children)
+                        }
+                        _ => RawTrieNode::BranchNoValue(*new_children),
+                    }
+                }
+                FlattenNodesCrumb::Exiting => {
+                    unreachable!()
+                }
+            },
+            IteratedNodeKind::Extension { extension, child } => match position {
+                FlattenNodesCrumb::Entering => {
+                    stack.push((node, FlattenNodesCrumb::Exiting));
+                    stack.push((child.clone(), FlattenNodesCrumb::Entering));
+                    continue;
+                }
+                FlattenNodesCrumb::Exiting => RawTrieNode::Extension(extension.to_vec(), last_hash),
+                _ => unreachable!(),
+            },
+            IteratedNodeKind::Leaf { extension, value } => {
+                RawTrieNode::Leaf(extension.to_vec(), value.clone())
+            }
+        };
+        let raw_node_with_size = RawTrieNodeWithSize { node: raw_node, memory_usage: node.size };
+        raw_node_with_size.serialize(&mut buffer).unwrap();
+        last_hash = hash(&buffer);
+        buffer.clear();
+
+        let lite_node_kind = match raw_node_with_size.node {
+            RawTrieNode::Leaf(key, value_ref) => InMemoryTrieNodeKindLite::Leaf {
+                extension: key.into_boxed_slice(),
+                value: value_ref,
+            },
+            RawTrieNode::BranchNoValue(children) => {
+                let raw_children = children.0.map(|opt_h| opt_h.map(|h| set.get(&h)));
+                InMemoryTrieNodeKindLite::Branch(raw_children)
+            }
+            RawTrieNode::BranchWithValue(value, children) => {
+                let raw_children = children.0.map(|opt_h| opt_h.map(|h| set.get(&h)));
+                InMemoryTrieNodeKindLite::BranchWithLeaf { children: raw_children, value }
+            }
+            RawTrieNode::Extension(key, hash) => {
+                let child = set.get(&hash);
+                InMemoryTrieNodeKindLite::Extension { extension: key.into_boxed_slice(), child }
+            }
+        };
+        set.insert_with_dedup(InMemoryTrieNodeLite {
+            hash: last_hash,
+            uid: 0, // placeholder
+            size: node.size,
+            kind: lite_node_kind,
+        });
+
+        if last_print.elapsed() > Duration::from_secs(10) {
+            println!(
+                "iter: {}, last hash: {}, last size: {}, len: {}, uid: {}",
+                iter,
+                last_hash,
+                node.size,
+                set.len(),
+                set.uid()
+            );
+            last_print = Instant::now();
+        }
+    }
+
+    println!("Computed in {}", start.elapsed().as_secs_f32() / 60.0);
+
+    last_hash
+}
+
 pub fn load_trie_in_memory_new(
     store: &Store,
     shard_uid: ShardUId,
@@ -467,15 +583,16 @@ pub fn load_trie_in_memory_new(
     {
         let mut lock = set.0.lock().unwrap();
         let nodes_len = lock.len();
-        lock.clear_rc();
+        // lock.clear_rc();
         println!(
-            "Loaded {} keys ({} after dedup) in {:?}m",
+            "Loaded {} keys ({} after dedup) in {:?}m. Will start hash computation",
             keys_iterated,
             nodes_len,
-            start.elapsed().as_secs() / 60
+            start.elapsed().as_secs_f32() / 60.0
         );
     }
 
+    let root = build_hash(root_lite, set.clone());
     assert_eq!(root, state_root);
     println!("SUCCESS!");
 
