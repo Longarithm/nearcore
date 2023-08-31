@@ -51,7 +51,10 @@ pub mod update;
 use self::accounting_cache::TrieAccountingCache;
 use self::trie_recording::TrieRecorder;
 use self::trie_storage::TrieMemoryPartialStorage;
-use crate::trie::trie_storage::InMemoryTrieNodeRef;
+use crate::trie::trie_storage::{
+    InMemoryTrieNodeKindSimple, InMemoryTrieNodeRef, InMemoryTrieNodeSimple,
+    InMemoryTrieNodeSimpleRef,
+};
 pub use from_flat::construct_trie_from_flat;
 pub use trie_storage::{InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet};
 
@@ -87,7 +90,7 @@ pub const TRIE_COSTS: TrieCosts = TrieCosts { byte_of_key: 2, byte_of_value: 1, 
 pub enum NodeHandle {
     InMemory(StorageHandle),
     Hash(CryptoHash),
-    Arc(InMemoryTrieNodeRef),
+    Arc(InMemoryTrieNodeSimpleRef),
 }
 
 impl NodeHandle {
@@ -145,12 +148,12 @@ pub struct TrieNodeWithSize {
 
 impl TrieNodeWithSize {
     fn trie_node_branch(
-        children: &[Option<Arc<InMemoryTrieNodeLite>>; 16],
+        children: &[Option<Arc<InMemoryTrieNodeSimple>>; 16],
         value: Option<ValueRef>,
     ) -> TrieNode {
         // can we avoid clone?
         let children =
-            children.clone().map(|el| el.map(|el| NodeHandle::Arc(InMemoryTrieNodeRef(el))));
+            children.clone().map(|el| el.map(|el| NodeHandle::Arc(InMemoryTrieNodeSimpleRef(el))));
         let children = Box::new(Children(children));
         let value = value.map(ValueHandle::HashAndSize);
         TrieNode::Branch(children, value)
@@ -160,17 +163,17 @@ impl TrieNodeWithSize {
         TrieNodeWithSize::new(TrieNode::new(rc_node.node), rc_node.memory_usage)
     }
 
-    pub fn from_lite(node: Arc<InMemoryTrieNodeLite>) -> TrieNodeWithSize {
+    pub fn from_lite(node: Arc<InMemoryTrieNodeSimple>) -> TrieNodeWithSize {
         let trie_node = match &node.kind {
-            InMemoryTrieNodeKindLite::Branch(children) => Self::trie_node_branch(children, None),
-            InMemoryTrieNodeKindLite::Leaf { extension, value } => {
+            InMemoryTrieNodeKindSimple::Branch(children) => Self::trie_node_branch(children, None),
+            InMemoryTrieNodeKindSimple::Leaf { extension, value } => {
                 TrieNode::Leaf(extension.to_vec(), ValueHandle::HashAndSize(value.clone()))
             }
-            InMemoryTrieNodeKindLite::Extension { extension, child } => TrieNode::Extension(
+            InMemoryTrieNodeKindSimple::Extension { extension, child } => TrieNode::Extension(
                 extension.to_vec(),
-                NodeHandle::Arc(InMemoryTrieNodeRef(child.clone())),
+                NodeHandle::Arc(InMemoryTrieNodeSimpleRef(child.clone())),
             ),
-            InMemoryTrieNodeKindLite::BranchWithLeaf { children, value } => {
+            InMemoryTrieNodeKindSimple::BranchWithLeaf { children, value } => {
                 Self::trie_node_branch(children, Some(value.clone()))
             }
         };
@@ -475,7 +478,7 @@ pub struct TrieChanges {
 
 pub struct TrieChangesLite {
     pub old_root: StateRoot,
-    pub new_root_lite: Arc<InMemoryTrieNodeLite>,
+    pub new_root_lite: Arc<InMemoryTrieNodeSimple>,
     pub depth: u32,
 }
 

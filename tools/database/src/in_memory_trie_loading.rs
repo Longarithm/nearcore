@@ -11,7 +11,9 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::state::ValueRef;
 use near_primitives::types::{ShardId, StateRoot};
 use near_store::flat::store_helper::iter_flat_state_entries;
-use near_store::trie::trie_storage::{IteratedNodeKind, SyncInMemoryTrieNodeSet};
+use near_store::trie::trie_storage::{
+    InMemoryTrieNodeKindSimple, InMemoryTrieNodeSimple, IteratedNodeKind, SyncInMemoryTrieNodeSet,
+};
 use near_store::trie::{Children, TrieChangesLite, TrieNodeWithSize};
 use near_store::{
     DBCol, InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet, NibbleSlice,
@@ -423,13 +425,13 @@ enum FlattenNodesCrumb {
 }
 
 pub fn build_hash(
-    root_node: Arc<InMemoryTrieNodeLite>,
+    root_node: Arc<InMemoryTrieNodeSimple>,
     set: SyncInMemoryTrieNodeSet,
 ) -> CryptoHash {
     let start = Instant::now();
     let mut last_print = Instant::now();
 
-    let mut stack: Vec<(Arc<InMemoryTrieNodeLite>, FlattenNodesCrumb)> = Vec::new();
+    let mut stack: Vec<(Arc<InMemoryTrieNodeSimple>, FlattenNodesCrumb)> = Vec::new();
     stack.push((root_node, FlattenNodesCrumb::Entering));
     let mut set = set.0.lock().unwrap();
     let mut last_hash = CryptoHash::default();
@@ -461,7 +463,7 @@ pub fn build_hash(
                         i += 1;
                     }
                     match &node.kind {
-                        InMemoryTrieNodeKindLite::BranchWithLeaf { value, .. } => {
+                        InMemoryTrieNodeKindSimple::BranchWithLeaf { value, .. } => {
                             RawTrieNode::BranchWithValue(value.clone(), *new_children)
                         }
                         _ => RawTrieNode::BranchNoValue(*new_children),
@@ -527,7 +529,7 @@ pub fn build_hash(
         }
     }
 
-    println!("Computed in {}", start.elapsed().as_secs_f32() / 60.0);
+    println!("Computed in {}m", start.elapsed().as_secs_f32() / 60.0);
 
     last_hash
 }
@@ -544,7 +546,7 @@ pub fn load_trie_in_memory_new(
 
     // let mut root: Option<Arc<InMemoryTrieNodeLite>> = None;
     let root = StateRoot::default();
-    let mut root_lite = Arc::new(InMemoryTrieNodeLite::default());
+    let mut root_lite = Arc::new(InMemoryTrieNodeSimple::default());
     let set = SyncInMemoryTrieNodeSet::default();
 
     for item in iter_flat_state_entries(shard_uid, store, None, None) {

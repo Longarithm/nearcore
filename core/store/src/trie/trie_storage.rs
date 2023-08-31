@@ -289,8 +289,8 @@ pub struct InMemoryTrieNodeLite {
 
 pub enum IteratedNodeKind {
     Leaf { extension: Box<[u8]>, value: ValueRef },
-    Extension { extension: Box<[u8]>, child: Arc<InMemoryTrieNodeLite> },
-    Branch([Option<Arc<InMemoryTrieNodeLite>>; 16]),
+    Extension { extension: Box<[u8]>, child: Arc<InMemoryTrieNodeSimple> },
+    Branch([Option<Arc<InMemoryTrieNodeSimple>>; 16]),
 }
 
 #[allow(unused)]
@@ -302,13 +302,34 @@ pub enum InMemoryTrieNodeKindLite {
     BranchWithLeaf { children: [Option<Arc<InMemoryTrieNodeLite>>; 16], value: ValueRef },
 }
 
+#[derive(Clone, Default)]
+pub struct InMemoryTrieNodeSimple {
+    pub size: u64,
+    pub kind: InMemoryTrieNodeKindSimple,
+}
+
+#[allow(unused)]
+#[derive(Clone)]
+pub enum InMemoryTrieNodeKindSimple {
+    Leaf { extension: Box<[u8]>, value: ValueRef },
+    Extension { extension: Box<[u8]>, child: Arc<InMemoryTrieNodeSimple> },
+    Branch([Option<Arc<InMemoryTrieNodeSimple>>; 16]),
+    BranchWithLeaf { children: [Option<Arc<InMemoryTrieNodeSimple>>; 16], value: ValueRef },
+}
+
 impl Default for InMemoryTrieNodeKindLite {
     fn default() -> Self {
         Self::Leaf { extension: Box::new([]), value: ValueRef::new(&[]) }
     }
 }
 
-impl InMemoryTrieNodeKindLite {
+impl Default for InMemoryTrieNodeKindSimple {
+    fn default() -> Self {
+        Self::Leaf { extension: Box::new([]), value: ValueRef::new(&[]) }
+    }
+}
+
+impl InMemoryTrieNodeKindSimple {
     pub fn into_iterated(self) -> IteratedNodeKind {
         match self {
             Self::Leaf { extension, value } => IteratedNodeKind::Leaf { extension, value },
@@ -319,39 +340,6 @@ impl InMemoryTrieNodeKindLite {
             Self::BranchWithLeaf { children, .. } => IteratedNodeKind::Branch(children),
         }
     }
-
-    pub fn memory_usage_for_value_length(value_length: u64) -> u64 {
-        value_length * TRIE_COSTS.byte_of_value + TRIE_COSTS.node_cost
-    }
-
-    pub fn memory_usage_value(value: &ValueRef) -> u64 {
-        Self::memory_usage_for_value_length(value.length as u64)
-    }
-
-    pub fn memory_usage_direct_no_memory(&self) -> u64 {
-        self.memory_usage_direct_internal()
-    }
-
-    pub fn memory_usage_direct(&self) -> u64 {
-        self.memory_usage_direct_internal()
-    }
-
-    pub fn memory_usage_direct_internal(&self) -> u64 {
-        match self {
-            Self::Leaf { extension, value } => {
-                TRIE_COSTS.node_cost
-                    + (extension.len() as u64) * TRIE_COSTS.byte_of_key
-                    + Self::memory_usage_value(value)
-            }
-            Self::Extension { extension, .. } => {
-                TRIE_COSTS.node_cost + (extension.len() as u64) * TRIE_COSTS.byte_of_key
-            }
-            Self::Branch(_) => TRIE_COSTS.node_cost,
-            Self::BranchWithLeaf { value, .. } => {
-                TRIE_COSTS.node_cost + Self::memory_usage_value(value)
-            }
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -360,6 +348,15 @@ pub struct InMemoryTrieNodeRef(pub Arc<InMemoryTrieNodeLite>);
 impl Hash for InMemoryTrieNodeRef {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash.hash(state);
+    }
+}
+
+#[derive(Clone)]
+pub struct InMemoryTrieNodeSimpleRef(pub Arc<InMemoryTrieNodeSimple>);
+
+impl Hash for InMemoryTrieNodeSimpleRef {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.size.hash(state);
     }
 }
 
