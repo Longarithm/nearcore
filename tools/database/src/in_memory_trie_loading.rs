@@ -8,14 +8,14 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use near_epoch_manager::EpochManager;
 use near_primitives::block_header::BlockHeader;
 use near_primitives::hash::{hash, CryptoHash};
-use near_primitives::state::{FlatStateValue, ValueRef};
+use near_primitives::state::ValueRef;
 use near_primitives::types::{ShardId, StateRoot};
 use near_store::flat::store_helper::iter_flat_state_entries;
 use near_store::trie::trie_storage::SyncInMemoryTrieNodeSet;
 use near_store::trie::TrieChangesLite;
 use near_store::{
     DBCol, InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet, NibbleSlice,
-    NodesStorage, RawTrieNode, RawTrieNodeWithSize, ShardUId, Store, Trie, TrieCachingStorage,
+    NodesStorage, RawTrieNode, RawTrieNodeWithSize, ShardUId, Store, Trie,
 };
 use nearcore::NearConfig;
 
