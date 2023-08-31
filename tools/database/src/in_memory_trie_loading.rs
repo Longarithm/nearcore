@@ -422,7 +422,7 @@ pub fn load_trie_in_memory_new(
     state_root: CryptoHash,
 ) -> anyhow::Result<SyncInMemoryTrieNodeSet> {
     // let mut node_stack = BuilderStack::new();
-    let mut start = Instant::now();
+    let start = Instant::now();
     let mut last_print = Instant::now();
     let mut keys_iterated = 0;
 
