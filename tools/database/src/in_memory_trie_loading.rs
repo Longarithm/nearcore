@@ -12,7 +12,7 @@ use near_primitives::state::ValueRef;
 use near_primitives::types::{ShardId, StateRoot};
 use near_store::flat::store_helper::iter_flat_state_entries;
 use near_store::trie::trie_storage::SyncInMemoryTrieNodeSet;
-use near_store::trie::TrieChangesLite;
+use near_store::trie::{TrieChangesLite, TrieNodeWithSize};
 use near_store::{
     DBCol, InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet, NibbleSlice,
     NodesStorage, RawTrieNode, RawTrieNodeWithSize, ShardUId, Store, Trie,
@@ -427,7 +427,8 @@ pub fn load_trie_in_memory_new(
     let mut keys_iterated = 0;
 
     // let mut root: Option<Arc<InMemoryTrieNodeLite>> = None;
-    let mut root = StateRoot::default();
+    let root = StateRoot::default();
+    let mut root_lite = Arc::new(InMemoryTrieNodeLite::default());
     let set = SyncInMemoryTrieNodeSet::default();
 
     for item in iter_flat_state_entries(shard_uid, store, None, None) {
@@ -435,13 +436,18 @@ pub fn load_trie_in_memory_new(
 
         let trie = Trie::new(Rc::new(set.clone()), root, None);
         let mut memory = NodesStorage::new();
-        let mut root_node = trie.move_node_to_mutable(&mut memory, &root)?;
+        // let mut root_node = trie.move_node_to_mutable(&mut memory, &root)?;
+        let mut root_node = if keys_iterated == 0 {
+            memory.store(TrieNodeWithSize::empty())
+        } else {
+            memory.store(TrieNodeWithSize::from_lite(root_lite.clone()))
+        };
         let key = NibbleSlice::new(&key);
         let value_ref = value.to_value_ref();
         root_node = trie.insert(&mut memory, root_node, key, value_ref).unwrap();
-        let TrieChangesLite { new_root, depth, .. } =
+        let TrieChangesLite { new_root_lite, depth, .. } =
             trie.flatten_nodes_lite(&root, memory, root_node).unwrap();
-        root = new_root;
+        root_lite = new_root_lite;
 
         keys_iterated += 1;
         let lock = set.0.lock().unwrap();

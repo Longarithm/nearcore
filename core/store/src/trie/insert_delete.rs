@@ -52,7 +52,7 @@ impl NodesStorage {
             .expect(INVALID_STORAGE_HANDLE)
     }
 
-    pub(crate) fn store(&mut self, node: TrieNodeWithSize) -> StorageHandle {
+    pub fn store(&mut self, node: TrieNodeWithSize) -> StorageHandle {
         self.nodes.push(Some(node));
         StorageHandle(self.nodes.len() - 1)
     }
@@ -883,7 +883,7 @@ impl Trie {
             let node_with_size = memory.node_ref(node);
             let memory_usage = node_with_size.memory_usage;
             // let raw_node = match &node_with_size.node {
-            let raw_node_lite = match &node_with_size.node {
+            let raw_node_kind_lite = match &node_with_size.node {
                 TrieNode::Empty => {
                     // last_hash = Trie::EMPTY_ROOT;
                     last_node = Arc::new(InMemoryTrieNodeLite::default()); // well, it must not be referenced
@@ -998,7 +998,7 @@ impl Trie {
                 hash: Default::default(), // placeholder
                 uid: 0,                   // placeholder
                 size: memory_usage,
-                kind: raw_node_lite,
+                kind: raw_node_kind_lite,
             });
             // set.insert_with_dedup(lite_node);
 
@@ -1011,7 +1011,7 @@ impl Trie {
 
         // let (insertions, deletions) =
         //     Trie::convert_to_insertions_and_deletions(memory.refcount_changes);
-        Ok(TrieChangesLite { old_root: *old_root, new_root: Default::default(), depth })
+        Ok(TrieChangesLite { old_root: *old_root, new_root_lite: last_node, depth })
     }
 
     fn flatten_value(memory: &mut NodesStorage, value: ValueHandle) -> ValueRef {

@@ -160,7 +160,7 @@ impl TrieNodeWithSize {
         TrieNodeWithSize::new(TrieNode::new(rc_node.node), rc_node.memory_usage)
     }
 
-    fn from_lite(node: Arc<InMemoryTrieNodeLite>) -> TrieNodeWithSize {
+    pub fn from_lite(node: Arc<InMemoryTrieNodeLite>) -> TrieNodeWithSize {
         let trie_node = match &node.kind {
             InMemoryTrieNodeKindLite::Branch(children) => Self::trie_node_branch(children, None),
             InMemoryTrieNodeKindLite::Leaf { extension, value } => {
@@ -185,7 +185,7 @@ impl TrieNodeWithSize {
         self.memory_usage
     }
 
-    fn empty() -> TrieNodeWithSize {
+    pub fn empty() -> TrieNodeWithSize {
         TrieNodeWithSize { node: TrieNode::Empty, memory_usage: 0 }
     }
 }
@@ -475,7 +475,7 @@ pub struct TrieChanges {
 
 pub struct TrieChangesLite {
     pub old_root: StateRoot,
-    pub new_root: StateRoot,
+    pub new_root_lite: Arc<InMemoryTrieNodeLite>,
     pub depth: u32,
 }
 
