@@ -7,7 +7,6 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::state::ValueRef;
 
 use crate::trie::nibble_slice::NibbleSlice;
-use crate::trie::trie_storage::InMemoryTrieNodeRef;
 use crate::trie::{
     Children, NodeHandle, RawTrieNode, RawTrieNodeWithSize, StorageHandle, StorageValueHandle,
     TrieChangesLite, TrieNode, TrieNodeWithSize, ValueHandle,
@@ -873,7 +872,8 @@ impl Trie {
     ) -> Result<TrieChangesLite, StorageError> {
         let mut stack: Vec<(StorageHandle, FlattenNodesCrumb)> = Vec::new();
         stack.push((node, FlattenNodesCrumb::Entering));
-        let mut last_hash = CryptoHash::default();
+        // let mut last_hash = CryptoHash::default();
+        let mut last_node = Arc::new(InMemoryTrieNodeLite::default());
         let mut buffer: Vec<u8> = Vec::new();
         let mut memory = memory;
         let mut depth = 0;
@@ -885,7 +885,8 @@ impl Trie {
             // let raw_node = match &node_with_size.node {
             let raw_node_lite = match &node_with_size.node {
                 TrieNode::Empty => {
-                    last_hash = Trie::EMPTY_ROOT;
+                    // last_hash = Trie::EMPTY_ROOT;
+                    last_node = Arc::new(InMemoryTrieNodeLite::default()); // well, it must not be referenced
                     continue;
                 }
                 TrieNode::Branch(children, value) => match position {
@@ -895,7 +896,7 @@ impl Trie {
                     }
                     FlattenNodesCrumb::AtChildLite(mut new_children, mut i) => {
                         if i > 0 && children[(i - 1) as u8].is_some() {
-                            new_children[i - 1] = Some(last_hash);
+                            new_children[i - 1] = Some(last_node.clone());
                         }
                         while i < 16 {
                             match children[i as u8].clone() {
@@ -944,7 +945,8 @@ impl Trie {
                     },
                     FlattenNodesCrumb::Exiting => InMemoryTrieNodeKindLite::Extension {
                         extension: key.into_boxed_slice(),
-                        child: last_hash,
+                        // child: last_hash,
+                        child: last_node.clone(),
                     },
 
                     // RawTrieNode::Extension(key.clone(), last_hash),
@@ -962,7 +964,7 @@ impl Trie {
             // let raw_node_with_size = RawTrieNodeWithSize { node: raw_node, memory_usage };
             // raw_node_with_size.serialize(&mut buffer).unwrap();
             // let key = hash(&buffer);
-            let key = Default::default();
+            // let key = Default::default();
             // lite_node_stack.push((key, raw_node_with_size));
             let mut _in_memory_set = self.storage.as_in_memory_set().unwrap();
 
@@ -989,19 +991,19 @@ impl Trie {
             //         }
             //     }
             // };
-            let _lite_node = InMemoryTrieNodeLite {
-                hash: key,
-                uid: 0, // placeholder
+            last_node = Arc::new(InMemoryTrieNodeLite {
+                hash: Default::default(), // placeholder
+                uid: 0,                   // placeholder
                 size: memory_usage,
                 kind: raw_node_lite,
-            };
+            });
             // set.insert_with_dedup(lite_node);
 
             // let (_value, rc) =
             //     memory.refcount_changes.entry(key).or_insert_with(|| (buffer.clone(), 0));
             // *rc += 1;
             buffer.clear();
-            last_hash = key;
+            // last_hash = key;
         }
 
         // let (insertions, deletions) =

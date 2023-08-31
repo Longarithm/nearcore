@@ -279,7 +279,7 @@ impl TrieCache {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct InMemoryTrieNodeLite {
     pub hash: CryptoHash,
     pub uid: u32,
@@ -294,6 +294,12 @@ pub enum InMemoryTrieNodeKindLite {
     Extension { extension: Box<[u8]>, child: Arc<InMemoryTrieNodeLite> },
     Branch([Option<Arc<InMemoryTrieNodeLite>>; 16]),
     BranchWithLeaf { children: [Option<Arc<InMemoryTrieNodeLite>>; 16], value: ValueRef },
+}
+
+impl Default for InMemoryTrieNodeKindLite {
+    fn default() -> Self {
+        Self::Leaf { extension: Box::new([]), value: ValueRef::new(&[]) }
+    }
 }
 
 impl InMemoryTrieNodeKindLite {
