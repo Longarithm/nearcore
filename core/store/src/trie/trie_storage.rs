@@ -374,7 +374,7 @@ impl InMemoryTrieNodeSet {
         mut node: InMemoryTrieNodeLite,
     ) -> Arc<InMemoryTrieNodeLite> {
         if let Some(existing) = self.nodes.get(&node.hash) {
-            *self.rc.entry(existing.0.uid).or_insert(0) += 1;
+            *self.rc.entry(existing.0.uid).or_insert(1) += 1;
             existing.clone().0
         } else {
             node.uid = self.uid;
@@ -395,7 +395,7 @@ impl InMemoryTrieNodeSet {
 
     pub fn remove(&mut self, hash: &CryptoHash) -> Arc<InMemoryTrieNodeLite> {
         let node = self.nodes.take(hash).unwrap().0;
-        let mut rc = *self.rc.entry(node.uid).or_insert(0);
+        let mut rc = *self.rc.entry(node.uid).or_insert(1);
         rc -= 1;
         if rc == 0 {
             self.rc.remove(&node.uid);
