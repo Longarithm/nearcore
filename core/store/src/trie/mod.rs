@@ -843,10 +843,11 @@ impl Trie {
             if hash == &Self::EMPTY_ROOT {
                 return Ok(memory.store(TrieNodeWithSize::empty()));
             }
-            let lock = in_memory_set.0.lock().unwrap();
-            let node = lock.get(hash);
+            let mut lock = in_memory_set.0.lock().unwrap();
+            // decrement refcount!
+            let node = lock.remove(hash);
             let result = memory.store(TrieNodeWithSize::from_lite(node));
-            // ignore refcount changes for now...
+
             return Ok(result);
         }
 

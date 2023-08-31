@@ -15,6 +15,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 pub(crate) struct BoundedQueue<T> {
@@ -279,14 +280,16 @@ impl TrieCache {
     }
 }
 
+#[derive(Clone)]
 pub struct InMemoryTrieNodeLite {
     pub hash: CryptoHash,
+    pub uid: u32,
     pub size: u64,
-    pub rc: u32, // 105M nodes -> 420M overhead. needed for correctness
     pub kind: InMemoryTrieNodeKindLite,
 }
 
 #[allow(unused)]
+#[derive(Clone)]
 pub enum InMemoryTrieNodeKindLite {
     Leaf { extension: Box<[u8]>, value: ValueRef },
     Extension { extension: Box<[u8]>, child: Arc<InMemoryTrieNodeLite> },
@@ -355,6 +358,8 @@ impl Eq for InMemoryTrieNodeRef {}
 #[derive(Default)]
 pub struct InMemoryTrieNodeSet {
     nodes: HashSet<InMemoryTrieNodeRef>,
+    rc: HashMap<u32, u32>,
+    uid: u32,
 }
 
 #[derive(Default, Clone)]
@@ -362,25 +367,22 @@ pub struct SyncInMemoryTrieNodeSet(pub Arc<Mutex<InMemoryTrieNodeSet>>);
 
 impl InMemoryTrieNodeSet {
     pub fn new() -> Self {
-        Self { nodes: HashSet::new() }
+        Self { nodes: HashSet::new(), rc: HashMap::default(), uid: 0 }
     }
 
     pub fn insert_with_dedup(
         &mut self,
-        node: Arc<InMemoryTrieNodeLite>,
+        mut node: Arc<InMemoryTrieNodeLite>,
     ) -> Arc<InMemoryTrieNodeLite> {
-        // self.nodes.take()
-        // let x = InMemoryTrieNodeRef(node);
-        let new_node = match self.nodes.take(&node.hash) {
-            Some(existing) => {
-                let mut new_node = existing;
-                new_node.0.rc += 1;
-                new_node
-            }
-            None => InMemoryTrieNodeRef(node),
-        };
-        self.nodes.insert(new_node.clone());
-        new_node.0
+        if let Some(existing) = self.nodes.get(&node.hash) {
+            *self.rc.entry(existing.0.uid).or_insert(0) += 1;
+            existing.clone().0
+        } else {
+            node.uid = self.uid;
+            self.uid += 1;
+            self.nodes.insert(InMemoryTrieNodeRef(node.clone()));
+            node
+        }
     }
 
     pub fn insert_if_not_exists(&mut self, node: Arc<InMemoryTrieNodeLite>) -> bool {
@@ -391,13 +393,16 @@ impl InMemoryTrieNodeSet {
         self.nodes.get(hash).unwrap().0.clone()
     }
 
-    pub fn take(&mut self, hash: &CryptoHash) -> Arc<InMemoryTrieNodeLite> {
-        let mut node = self.nodes.take(hash).unwrap();
-        node.0.rc -= 1;
-        if node.0.rc > 0 {
-            self.nodes.insert(node.clone());
+    pub fn remove(&mut self, hash: &CryptoHash) -> Arc<InMemoryTrieNodeLite> {
+        let mut node = self.nodes.take(hash).unwrap().0;
+        let mut rc = *self.rc.entry(node.uid).or_insert(0);
+        rc -= 1;
+        if rc == 0 {
+            self.rc.remove(&node.uid);
+        } else {
+            self.nodes.insert(InMemoryTrieNodeRef(node.clone()));
         }
-        node.0
+        node
     }
 
     pub fn len(&self) -> usize {

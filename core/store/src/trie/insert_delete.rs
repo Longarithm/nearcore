@@ -7,7 +7,6 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::state::ValueRef;
 
 use crate::trie::nibble_slice::NibbleSlice;
-use crate::trie::trie_storage::SyncInMemoryTrieNodeSet;
 use crate::trie::{
     Children, NodeHandle, RawTrieNode, RawTrieNodeWithSize, StorageHandle, StorageValueHandle,
     TrieChangesLite, TrieNode, TrieNodeWithSize, ValueHandle,
@@ -947,8 +946,8 @@ impl Trie {
                 };
                 let lite_node = Arc::new(InMemoryTrieNodeLite {
                     hash: key,
+                    uid: 0, // placeholder
                     size: raw_node_with_size.memory_usage,
-                    rc: 1,
                     kind: lite_node_kind,
                 });
                 set.insert_with_dedup(lite_node);
