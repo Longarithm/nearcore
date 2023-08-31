@@ -55,6 +55,7 @@ impl NodesStorage {
         StorageHandle(self.nodes.len() - 1)
     }
 
+    #[allow(unused)]
     pub(crate) fn store_value(&mut self, value: Vec<u8>) -> StorageValueHandle {
         self.values.push(Some(value));
         StorageValueHandle(self.values.len() - 1)
