@@ -332,7 +332,7 @@ impl InMemoryTrieNodeKindLite {
 }
 
 #[derive(Clone)]
-struct InMemoryTrieNodeRef(Arc<InMemoryTrieNodeLite>);
+pub struct InMemoryTrieNodeRef(pub Arc<InMemoryTrieNodeLite>);
 
 impl Hash for InMemoryTrieNodeRef {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {

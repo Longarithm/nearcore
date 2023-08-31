@@ -51,6 +51,7 @@ pub mod update;
 use self::accounting_cache::TrieAccountingCache;
 use self::trie_recording::TrieRecorder;
 use self::trie_storage::TrieMemoryPartialStorage;
+use crate::trie::trie_storage::InMemoryTrieNodeRef;
 pub use from_flat::construct_trie_from_flat;
 pub use trie_storage::{InMemoryTrieNodeKindLite, InMemoryTrieNodeLite, InMemoryTrieNodeSet};
 
@@ -86,6 +87,7 @@ pub const TRIE_COSTS: TrieCosts = TrieCosts { byte_of_key: 2, byte_of_value: 1, 
 pub enum NodeHandle {
     InMemory(StorageHandle),
     Hash(CryptoHash),
+    Arc(InMemoryTrieNodeRef),
 }
 
 impl NodeHandle {
@@ -140,28 +142,37 @@ pub struct TrieNodeWithSize {
 }
 
 impl TrieNodeWithSize {
+    fn trie_node_branch(
+        children: &[Option<Arc<InMemoryTrieNodeLite>>; 16],
+        value: Option<ValueRef>,
+    ) -> TrieNode {
+        // can we avoid clone?
+        let children =
+            children.clone().map(|el| el.map(|el| NodeHandle::Arc(InMemoryTrieNodeRef(el))));
+        let children = Box::new(Children(children));
+        let value = value.map(ValueHandle::HashAndSize);
+        TrieNode::Branch(children, value)
+    }
+
     fn from_raw(rc_node: RawTrieNodeWithSize) -> TrieNodeWithSize {
         TrieNodeWithSize::new(TrieNode::new(rc_node.node), rc_node.memory_usage)
     }
 
     fn from_lite(node: Arc<InMemoryTrieNodeLite>) -> TrieNodeWithSize {
-        let raw_trie_node = match &node.kind {
-            InMemoryTrieNodeKindLite::Branch(children) => {
-                let raw_children = children.clone().map(|c| c.map(|node| node.hash));
-                RawTrieNode::branch(Children(raw_children), None)
-            }
+        let trie_node = match &node.kind {
+            InMemoryTrieNodeKindLite::Branch(children) => Self::trie_node_branch(children, None),
             InMemoryTrieNodeKindLite::Leaf { extension, value } => {
-                RawTrieNode::Leaf(extension.to_vec(), value.clone())
+                TrieNode::Leaf(extension.to_vec(), ValueHandle::HashAndSize(value.clone()))
             }
-            InMemoryTrieNodeKindLite::Extension { extension, child } => {
-                RawTrieNode::Extension(extension.to_vec(), child.hash)
-            }
+            InMemoryTrieNodeKindLite::Extension { extension, child } => TrieNode::Extension(
+                extension.to_vec(),
+                NodeHandle::Arc(InMemoryTrieNodeRef(child.clone())),
+            ),
             InMemoryTrieNodeKindLite::BranchWithLeaf { children, value } => {
-                let raw_children = children.clone().map(|c| c.map(|node| node.hash));
-                RawTrieNode::branch(Children(raw_children), Some(value.clone()))
+                Self::trie_node_branch(children, Some(value.clone()))
             }
         };
-        TrieNodeWithSize::new(TrieNode::new(raw_trie_node), node.size)
+        TrieNodeWithSize::new(trie_node, node.size)
     }
 
     fn new(node: TrieNode, memory_usage: u64) -> TrieNodeWithSize {
@@ -178,18 +189,20 @@ impl TrieNodeWithSize {
 }
 
 impl TrieNode {
-    fn new(rc_node: RawTrieNode) -> TrieNode {
-        fn new_branch(children: Children, value: Option<ValueRef>) -> TrieNode {
-            let children = children.0.map(|el| el.map(NodeHandle::Hash));
-            let children = Box::new(Children(children));
-            let value = value.map(ValueHandle::HashAndSize);
-            TrieNode::Branch(children, value)
-        }
+    fn new_branch(children: Children, value: Option<ValueRef>) -> TrieNode {
+        let children = children.0.map(|el| el.map(NodeHandle::Hash));
+        let children = Box::new(Children(children));
+        let value = value.map(ValueHandle::HashAndSize);
+        TrieNode::Branch(children, value)
+    }
 
+    fn new(rc_node: RawTrieNode) -> TrieNode {
         match rc_node {
             RawTrieNode::Leaf(key, value) => TrieNode::Leaf(key, ValueHandle::HashAndSize(value)),
-            RawTrieNode::BranchNoValue(children) => new_branch(children, None),
-            RawTrieNode::BranchWithValue(value, children) => new_branch(children, Some(value)),
+            RawTrieNode::BranchNoValue(children) => Self::new_branch(children, None),
+            RawTrieNode::BranchWithValue(value, children) => {
+                Self::new_branch(children, Some(value))
+            }
             RawTrieNode::Extension(key, child) => TrieNode::Extension(key, NodeHandle::Hash(child)),
         }
     }

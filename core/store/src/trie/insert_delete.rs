@@ -27,6 +27,7 @@ impl NodesStorage {
     }
 
     fn destroy(&mut self, handle: StorageHandle) -> TrieNodeWithSize {
+        // "take" doesn't actually free any memory???
         self.nodes
             .get_mut(handle.0)
             .expect(INVALID_STORAGE_HANDLE)
