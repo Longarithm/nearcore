@@ -95,6 +95,7 @@ impl NodeHandle {
         match self {
             Self::Hash(hash) => hash,
             Self::InMemory(_) => unreachable!(),
+            Self::Arc(_) => unreachable!(),
         }
     }
 }
@@ -104,6 +105,7 @@ impl std::fmt::Debug for NodeHandle {
         match self {
             Self::Hash(hash) => write!(fmtr, "{hash}"),
             Self::InMemory(handle) => write!(fmtr, "@{}", handle.0),
+            Self::Arc(_) => unreachable!(),
         }
     }
 }
@@ -240,6 +242,7 @@ impl TrieNode {
                             let child = &memory.node_ref(*handle).node;
                             child.print(f, memory, spaces)?;
                         }
+                        NodeHandle::Arc(_) => unreachable!(),
                     }
                     writeln!(f)?;
                 }
@@ -258,6 +261,7 @@ impl TrieNode {
                         let child = &memory.node_ref(*handle).node;
                         child.print(f, memory, spaces)?;
                     }
+                    NodeHandle::Arc(_) => unreachable!(),
                 }
                 writeln!(f)?;
                 spaces.remove(spaces.len() - 1);
@@ -607,6 +611,7 @@ impl Trie {
         let TrieNodeWithSize { node, memory_usage } = match handle {
             NodeHandle::InMemory(h) => memory.node_ref(h).clone(),
             NodeHandle::Hash(h) => self.retrieve_node(&h).expect("storage failure").1,
+            NodeHandle::Arc(_) => unreachable!(),
         };
 
         let mut memory_usage_naive = node.memory_usage_direct(memory);
@@ -635,6 +640,7 @@ impl Trie {
                 NodeHandle::Hash(_h) => {
                     eprintln!("Bad node in storage!");
                 }
+                NodeHandle::Arc(_) => unreachable!(),
             };
             assert_eq!(memory_usage_naive, memory_usage);
         }

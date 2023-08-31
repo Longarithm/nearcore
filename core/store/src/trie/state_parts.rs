@@ -382,6 +382,7 @@ impl Trie {
                 let child = match child_handle {
                     NodeHandle::InMemory(_) => unreachable!("only possible while mutating"),
                     NodeHandle::Hash(h) => self.retrieve_node(h)?.1,
+                    NodeHandle::Arc(_) => unreachable!(),
                 };
                 let (slice, _) = NibbleSlice::from_encoded(key);
                 key_nibbles.extend(slice.iter());

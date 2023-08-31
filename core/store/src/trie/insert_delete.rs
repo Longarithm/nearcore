@@ -126,8 +126,12 @@ impl Trie {
                     } else {
                         let child = &mut children[partial.at(0)];
                         let new_handle = match child.take() {
-                            Some(NodeHandle::Hash(hash)) => {
-                                self.move_node_to_mutable(memory, &hash)?
+                            Some(NodeHandle::Hash(_hash)) => {
+                                unreachable!();
+                                // self.move_node_to_mutable(memory, &hash)?
+                            }
+                            Some(NodeHandle::Arc(node)) => {
+                                memory.store(TrieNodeWithSize::from_lite(node.0))
                             }
                             Some(NodeHandle::InMemory(handle)) => handle,
                             None => memory.store(TrieNodeWithSize::empty()),
@@ -245,7 +249,13 @@ impl Trie {
                         continue;
                     } else if common_prefix == existing_key.len() {
                         let child = match child {
-                            NodeHandle::Hash(hash) => self.move_node_to_mutable(memory, &hash)?,
+                            NodeHandle::Hash(_hash) => {
+                                unreachable!();
+                                // self.move_node_to_mutable(memory, &hash)?
+                            }
+                            NodeHandle::Arc(node) => {
+                                memory.store(TrieNodeWithSize::from_lite(node.0))
+                            }
                             NodeHandle::InMemory(handle) => handle,
                         };
                         let node = TrieNode::Extension(key, NodeHandle::InMemory(child));
@@ -595,6 +605,7 @@ impl Trie {
                                     self.move_node_to_mutable(memory, &hash)?
                                 }
                                 NodeHandle::InMemory(handle) => handle,
+                                NodeHandle::Arc(_) => unreachable!(),
                             };
                             *child = Some(NodeHandle::InMemory(new_handle));
                             Trie::calc_memory_usage_and_store(
@@ -628,6 +639,7 @@ impl Trie {
                         let child = match child {
                             NodeHandle::Hash(hash) => self.move_node_to_mutable(memory, &hash)?,
                             NodeHandle::InMemory(node) => node,
+                            NodeHandle::Arc(_) => unreachable!(),
                         };
                         Trie::calc_memory_usage_and_store(
                             memory,
@@ -725,6 +737,7 @@ impl Trie {
         let child = match child {
             NodeHandle::Hash(hash) => self.move_node_to_mutable(memory, &hash)?,
             NodeHandle::InMemory(h) => h,
+            NodeHandle::Arc(_) => unreachable!(),
         };
         let TrieNodeWithSize { node, memory_usage } = memory.destroy(child);
         let child_child_memory_usage = memory_usage - node.memory_usage_direct(memory);
@@ -801,6 +814,7 @@ impl Trie {
                                     continue 'outer;
                                 }
                                 Some(NodeHandle::Hash(hash)) => new_children[i] = Some(hash),
+                                Some(NodeHandle::Arc(_)) => unreachable!(),
                                 None => {}
                             }
                             i += 1;
@@ -819,6 +833,7 @@ impl Trie {
                             continue;
                         }
                         NodeHandle::Hash(hash) => RawTrieNode::Extension(key.clone(), *hash),
+                        NodeHandle::Arc(_) => unreachable!(),
                     },
                     FlattenNodesCrumb::Exiting => RawTrieNode::Extension(key.clone(), last_hash),
                     _ => unreachable!(),
@@ -887,6 +902,7 @@ impl Trie {
                                     continue 'outer;
                                 }
                                 Some(NodeHandle::Hash(hash)) => new_children[i] = Some(hash),
+                                Some(NodeHandle::Arc(_)) => unreachable!(),
                                 None => {}
                             }
                             i += 1;
@@ -905,6 +921,7 @@ impl Trie {
                             continue;
                         }
                         NodeHandle::Hash(hash) => RawTrieNode::Extension(key.clone(), *hash),
+                        NodeHandle::Arc(_) => unreachable!(),
                     },
                     FlattenNodesCrumb::Exiting => RawTrieNode::Extension(key.clone(), last_hash),
                     _ => unreachable!(),
