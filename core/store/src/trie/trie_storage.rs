@@ -418,6 +418,11 @@ impl InMemoryTrieNodeSet {
     pub fn uid(&self) -> u32 {
         self.uid
     }
+
+    pub fn clear_rc(&mut self) {
+        println!("rc len = {}", self.rc.len());
+        self.rc.clear();
+    }
 }
 
 pub trait TrieStorage {

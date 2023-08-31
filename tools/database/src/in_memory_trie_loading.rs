@@ -422,6 +422,7 @@ pub fn load_trie_in_memory_new(
     state_root: CryptoHash,
 ) -> anyhow::Result<SyncInMemoryTrieNodeSet> {
     // let mut node_stack = BuilderStack::new();
+    let mut start = Instant::now();
     let mut last_print = Instant::now();
     let mut keys_iterated = 0;
 
@@ -471,9 +472,22 @@ pub fn load_trie_in_memory_new(
             last_print = Instant::now();
         }
     }
-    let nodes_len = set.0.lock().unwrap().len();
-    println!("Loaded {} keys ({} after dedup)", keys_iterated, nodes_len);
+
+    {
+        let mut lock = set.0.lock().unwrap();
+        let nodes_len = lock.len();
+        lock.clear_rc();
+        println!(
+            "Loaded {} keys ({} after dedup) in {:?}",
+            keys_iterated,
+            nodes_len,
+            start.elapsed()
+        );
+    }
+
     assert_eq!(root, state_root);
+    println!("SUCCESS!");
+
     Ok(set)
 }
 
