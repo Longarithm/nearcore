@@ -263,11 +263,11 @@ pub enum DBCol {
     /// Flat nodes
     /// - *Rows*: `shard_uid` + encoded FlatNodeNibbles (Vec<u8>)
     /// - *Column type*: Serialized RawTrieNodeWithSize
-    FlatNodes,
+    // FlatNodes,
     /// Column that stores the Trie state.
     /// - *Rows*: node hash (CryptoHash)
     /// - *Content type*: Serializd RawTrieNodeWithSize
-    SmallState,
+    // SmallState,
     /// Changes for flat state delta. Stores how flat state should be updated for the given shard and block.
     /// - *Rows*: `KeyForFlatStateDelta { shard_uid, block_hash }`
     /// - *Column type*: `FlatStateChanges`
@@ -476,8 +476,8 @@ impl DBCol {
             // | DBCol::StateChangesForSplitStates
             | DBCol::CachedContractCode
             | DBCol::FlatState
-            | DBCol::FlatNodes
-            | DBCol::SmallState
+            // | DBCol::FlatNodes
+            // | DBCol::SmallState
             | DBCol::FlatStateChanges
             | DBCol::FlatStateDeltaMetadata
             | DBCol::FlatStorageStatus => false,
@@ -546,8 +546,8 @@ impl DBCol {
             DBCol::StateChangesForSplitStates => &[DBKeyType::BlockHash, DBKeyType::ShardId],
             DBCol::TransactionResultForBlock => &[DBKeyType::OutcomeId, DBKeyType::BlockHash],
             DBCol::FlatState => &[DBKeyType::ShardUId, DBKeyType::TrieKey],
-            DBCol::FlatNodes => &[DBKeyType::ShardUId, DBKeyType::TrieKey],
-            DBCol::SmallState => &[DBKeyType::ShardUId, DBKeyType::TrieNodeOrValueHash],
+            // DBCol::FlatNodes => &[DBKeyType::ShardUId, DBKeyType::TrieKey],
+            // DBCol::SmallState => &[DBKeyType::ShardUId, DBKeyType::TrieNodeOrValueHash],
             DBCol::FlatStateChanges => &[DBKeyType::ShardUId, DBKeyType::BlockHash],
             DBCol::FlatStateDeltaMetadata => &[DBKeyType::ShardUId, DBKeyType::BlockHash],
             DBCol::FlatStorageStatus => &[DBKeyType::ShardUId],

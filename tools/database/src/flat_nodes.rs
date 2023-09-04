@@ -510,7 +510,8 @@ impl FlatNodesTrie {
                 LookupMode::SmallState => self
                     .store
                     .get(
-                        near_store::DBCol::SmallState,
+                        near_store::DBCol::FlatState,
+                        // near_store::DBCol::SmallState,
                         &TrieCachingStorage::get_key_from_shard_uid_and_hash(self.shard_uid, &hash),
                     )
                     .unwrap()
