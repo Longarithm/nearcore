@@ -839,6 +839,7 @@ impl Client {
         shard_id: ShardId,
     ) -> Result<(EncodedShardChunk, Vec<MerklePath>, Vec<Receipt>), Error> {
         let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
+        let
         let chunk_extra = self
             .chain
             .get_chunk_extra(&prev_block_hash, &shard_uid)
