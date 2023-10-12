@@ -77,6 +77,9 @@ pub fn process_block_sync(
         chain.postprocess_ready_blocks(me, block_processing_artifacts, Arc::new(|_| {}));
     // This is in test, we should never get errors when postprocessing blocks
     debug_assert!(errors.is_empty());
+
+    let mut blocks = vec![];
+    for (block, res) in accepted_blocks.into_iter() {}
     Ok(accepted_blocks)
 }
 

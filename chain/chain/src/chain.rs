@@ -2386,6 +2386,8 @@ impl Chain {
                 flat_storage_manager.update_flat_storage_for_shard(shard_uid, &block)?;
             }
         }
+
+        Ok(())
     }
 
     /// Run postprocessing on this block, which stores the block on chain.
@@ -2414,7 +2416,7 @@ impl Chain {
         .entered();
 
         let prev_head = self.store.head()?;
-        let is_caught_up = block_preprocess_info.is_caught_up;
+        // let is_caught_up = block_preprocess_info.is_caught_up;
         let provenance = block_preprocess_info.provenance.clone();
         let block_start_processing_time = block_preprocess_info.block_start_processing_time;
         // TODO(#8055): this zip relies on the ordering of the apply_results.
