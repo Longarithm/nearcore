@@ -423,7 +423,7 @@ pub fn check_known(
     check_known_store(chain, block_hash)
 }
 
-type BlockApplyChunksResult = (CryptoHash, Vec<Result<ApplyChunkResult, Error>>);
+pub type BlockApplyChunksResult = (CryptoHash, Vec<ApplyChunkJob>, bool);
 
 /// Facade to the blockchain block processing and storage.
 /// Provides current view on the state according to the chain state.
@@ -1882,14 +1882,14 @@ impl Chain {
         me: &Option<AccountId>,
         block_processing_artifacts: &mut BlockProcessingArtifact,
         apply_chunks_done_callback: DoneApplyChunkCallback,
-    ) -> (Vec<AcceptedBlock>, HashMap<CryptoHash, Error>) {
+    ) -> (Vec<(AcceptedBlock, BlockApplyChunksResult)>, HashMap<CryptoHash, Error>) {
         let mut accepted_blocks = vec![];
         let mut errors = HashMap::new();
-        while let Ok((block_hash, apply_result)) = self.apply_chunks_receiver.try_recv() {
+        while let Ok(block_result) = self.apply_chunks_receiver.try_recv() {
             match self.postprocess_block(
                 me,
                 block_hash,
-                apply_result,
+                vec![],
                 block_processing_artifacts,
                 apply_chunks_done_callback.clone(),
             ) {
@@ -1897,7 +1897,7 @@ impl Chain {
                     errors.insert(block_hash, e);
                 }
                 Ok(accepted_block) => {
-                    accepted_blocks.push(accepted_block);
+                    accepted_blocks.push((accepted_block, block_result));
                 }
             }
         }
@@ -2278,7 +2278,7 @@ impl Chain {
         // );
         // Leave trigger of block POSTprocessing as is to avoid major code changes in prototype.
         let sc = self.apply_chunks_sender.clone();
-        sc.send((block_hash, vec![])).unwrap();
+        sc.send((block_hash, apply_chunk_work, block_preprocess_info.is_caught_up)).unwrap();
         if let Err(_) = apply_chunks_done_marker.set(()) {
             // This should never happen, if it does, it means there is a bug in our code.
             log_assert!(
@@ -2294,34 +2294,35 @@ impl Chain {
     /// Applying chunks async by starting the work at the rayon thread pool
     /// `apply_chunks_done_marker`: a marker that will be set to true once applying chunks is finished
     /// `apply_chunks_done_callback`: a callback that will be called once applying chunks is finished
-    fn schedule_apply_chunks(
+    pub fn schedule_apply_chunks(
         &self,
         block_hash: CryptoHash,
         block_height: BlockHeight,
         work: Vec<Box<dyn FnOnce(&Span) -> Result<ApplyChunkResult, Error> + Send>>,
-        apply_chunks_done_marker: Arc<OnceCell<()>>,
-        apply_chunks_done_callback: DoneApplyChunkCallback,
-    ) {
-        let sc = self.apply_chunks_sender.clone();
-        spawn(move || {
-            // do_apply_chunks runs `work` parallelly, but still waits for all of them to finish
-            let res = do_apply_chunks(block_hash, block_height, work);
-            // If we encounter error here, that means the receiver is deallocated and the client
-            // thread is already shut down. The node is already crashed, so we can unwrap here
-            sc.send((block_hash, res)).unwrap();
-            if let Err(_) = apply_chunks_done_marker.set(()) {
-                // This should never happen, if it does, it means there is a bug in our code.
-                log_assert!(false, "apply chunks are called twice for block {block_hash:?}");
-            }
-            apply_chunks_done_callback(block_hash);
-        });
-
-        /// `rayon::spawn` decorated to propagate `tracing` context across
-        /// threads.
-        fn spawn(f: impl FnOnce() + Send + 'static) {
-            let dispatcher = tracing::dispatcher::get_default(|it| it.clone());
-            rayon::spawn(move || tracing::dispatcher::with_default(&dispatcher, f))
-        }
+        // apply_chunks_done_marker: Arc<OnceCell<()>>,
+        // apply_chunks_done_callback: DoneApplyChunkCallback,
+    ) -> Vec<Result<ApplyChunkResult, Error>> {
+        do_apply_chunks(block_hash, block_height, work)
+        // let sc = self.apply_chunks_sender.clone();
+        // spawn(move || {
+        //     // do_apply_chunks runs `work` parallelly, but still waits for all of them to finish
+        //     let res = do_apply_chunks(block_hash, block_height, work);
+        //     // If we encounter error here, that means the receiver is deallocated and the client
+        //     // thread is already shut down. The node is already crashed, so we can unwrap here
+        //     sc.send((block_hash, res)).unwrap();
+        //     if let Err(_) = apply_chunks_done_marker.set(()) {
+        //         // This should never happen, if it does, it means there is a bug in our code.
+        //         log_assert!(false, "apply chunks are called twice for block {block_hash:?}");
+        //     }
+        //     apply_chunks_done_callback(block_hash);
+        // });
+        //
+        // /// `rayon::spawn` decorated to propagate `tracing` context across
+        // /// threads.
+        // fn spawn(f: impl FnOnce() + Send + 'static) {
+        //     let dispatcher = tracing::dispatcher::get_default(|it| it.clone());
+        //     rayon::spawn(move || tracing::dispatcher::with_default(&dispatcher, f))
+        // }
     }
 
     fn postprocess_block_only(
@@ -2336,6 +2337,54 @@ impl Chain {
             chain_update.postprocess_block(me, &block, block_preprocess_info, apply_results)?;
         chain_update.commit()?;
         Ok(new_head)
+    }
+
+    pub fn update_flat_storage_for_shard(
+        &mut self,
+        me: &Option<AccountId>,
+        block: &Block,
+        is_caught_up: bool,
+    ) {
+        // Update flat storage head to be the last final block. Note that this update happens
+        // in a separate db transaction from the update from block processing. This is intentional
+        // because flat_storage need to be locked during the update of flat head, otherwise
+        // flat_storage is in an inconsistent state that could be accessed by the other
+        // apply chunks processes. This means, the flat head is not always the same as
+        // the last final block on chain, which is OK, because in the flat storage implementation
+        // we don't assume that.
+        let epoch_id = block.header().epoch_id();
+        for shard_id in 0..self.epoch_manager.num_shards(epoch_id)? {
+            let need_flat_storage_update = if is_caught_up {
+                // If we already caught up this epoch, then flat storage exists for both shards which we already track
+                // and shards which will be tracked in next epoch, so we can update them.
+                self.shard_tracker.care_about_shard(
+                    me.as_ref(),
+                    block.header().prev_hash(),
+                    shard_id,
+                    true,
+                ) || self.shard_tracker.will_care_about_shard(
+                    me.as_ref(),
+                    block.header().prev_hash(),
+                    shard_id,
+                    true,
+                )
+            } else {
+                // If we didn't catch up, we can update only shards tracked right now. Remaining shards will be updated
+                // during catchup of this block.
+                self.shard_tracker.care_about_shard(
+                    me.as_ref(),
+                    block.header().prev_hash(),
+                    shard_id,
+                    true,
+                )
+            };
+
+            if need_flat_storage_update {
+                let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
+                let flat_storage_manager = self.runtime_adapter.get_flat_storage_manager();
+                flat_storage_manager.update_flat_storage_for_shard(shard_uid, &block)?;
+            }
+        }
     }
 
     /// Run postprocessing on this block, which stores the block on chain.
@@ -2388,46 +2437,7 @@ impl Chain {
                 Ok(new_head) => new_head,
             };
 
-        // Update flat storage head to be the last final block. Note that this update happens
-        // in a separate db transaction from the update from block processing. This is intentional
-        // because flat_storage need to be locked during the update of flat head, otherwise
-        // flat_storage is in an inconsistent state that could be accessed by the other
-        // apply chunks processes. This means, the flat head is not always the same as
-        // the last final block on chain, which is OK, because in the flat storage implementation
-        // we don't assume that.
-        let epoch_id = block.header().epoch_id();
-        for shard_id in 0..self.epoch_manager.num_shards(epoch_id)? {
-            let need_flat_storage_update = if is_caught_up {
-                // If we already caught up this epoch, then flat storage exists for both shards which we already track
-                // and shards which will be tracked in next epoch, so we can update them.
-                self.shard_tracker.care_about_shard(
-                    me.as_ref(),
-                    block.header().prev_hash(),
-                    shard_id,
-                    true,
-                ) || self.shard_tracker.will_care_about_shard(
-                    me.as_ref(),
-                    block.header().prev_hash(),
-                    shard_id,
-                    true,
-                )
-            } else {
-                // If we didn't catch up, we can update only shards tracked right now. Remaining shards will be updated
-                // during catchup of this block.
-                self.shard_tracker.care_about_shard(
-                    me.as_ref(),
-                    block.header().prev_hash(),
-                    shard_id,
-                    true,
-                )
-            };
-
-            if need_flat_storage_update {
-                let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
-                let flat_storage_manager = self.runtime_adapter.get_flat_storage_manager();
-                flat_storage_manager.update_flat_storage_for_shard(shard_uid, &block)?;
-            }
-        }
+        // self.update_flat_storage_for_shard(me, &block, is_caught_up);
 
         self.pending_state_patch.clear();
 
@@ -4376,7 +4386,7 @@ impl Chain {
         }
     }
 
-    fn chain_update(&mut self) -> ChainUpdate {
+    pub fn chain_update(&mut self) -> ChainUpdate {
         ChainUpdate::new(
             &mut self.store,
             self.epoch_manager.clone(),
@@ -5099,7 +5109,7 @@ impl<'a> ChainUpdate<'a> {
         Ok(outgoing_receipts)
     }
 
-    fn apply_chunk_postprocessing(
+    pub fn apply_chunk_postprocessing(
         &mut self,
         block: &Block,
         apply_results: Vec<ApplyChunkResult>,

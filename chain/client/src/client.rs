@@ -12,7 +12,7 @@ use crate::{metrics, SyncStatus};
 use actix_rt::ArbiterHandle;
 use lru::LruCache;
 use near_async::messaging::{CanSend, Sender};
-use near_chain::chain::VerifyBlockHashAndSignatureResult;
+use near_chain::chain::{ApplyChunkResult, VerifyBlockHashAndSignatureResult};
 use near_chain::chain::{
     ApplyStatePartsRequest, BlockCatchUpRequest, BlockMissingChunks, BlocksCatchUpState,
     OrphanMissingChunks, TX_ROUTING_HEIGHT_HORIZON,
@@ -83,7 +83,7 @@ use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, Span, trace, warn};
 
 const NUM_REBROADCAST_BLOCKS: usize = 30;
 const CHUNK_HEADERS_FOR_INCLUSION_CACHE_SIZE: usize = 2048;
@@ -1406,7 +1406,7 @@ impl Client {
             &mut block_processing_artifacts,
             apply_chunks_done_callback,
         );
-        if accepted_blocks.iter().any(|accepted_block| accepted_block.status.is_new_head()) {
+        if accepted_blocks.iter().any(|(accepted_block, _)| accepted_block.status.is_new_head()) {
             self.shards_manager_adapter.send(ShardsManagerRequestFromClient::UpdateChainHeads {
                 head: self.chain.head().unwrap(),
                 header_head: self.chain.header_head().unwrap(),
@@ -1414,13 +1414,15 @@ impl Client {
         }
         self.process_block_processing_artifact(block_processing_artifacts);
         let accepted_blocks_hashes =
-            accepted_blocks.iter().map(|accepted_block| accepted_block.hash).collect();
-        for accepted_block in accepted_blocks {
+            accepted_blocks.iter().map(|(accepted_block, _)| accepted_block.hash).collect();
+        for (accepted_block, block_result) in accepted_blocks {
             self.on_block_accepted_with_optional_chunk_produce(
+                &me,
                 accepted_block.hash,
                 accepted_block.status,
                 accepted_block.provenance,
                 !should_produce_chunk,
+                block_result,
             );
         }
         self.last_time_head_progress_made =
@@ -1640,11 +1642,14 @@ impl Client {
     /// `skip_produce_chunk` is set to true to simulate when there are missing chunks in a block
     pub fn on_block_accepted_with_optional_chunk_produce(
         &mut self,
+        me: &Option<AccountId>,
         block_hash: CryptoHash,
         status: BlockStatus,
         provenance: Provenance,
         skip_produce_chunk: bool,
+        block_result: (CryptoHash, Vec<Box<dyn FnOnce(&Span) -> Result<ApplyChunkResult, Error> + Send>>, bool),
     ) {
+        let (_, apply_chunk_jobs, is_caught_up) = block_result;
         let block = match self.chain.get_block(&block_hash) {
             Ok(block) => block,
             Err(err) => {
@@ -1722,6 +1727,22 @@ impl Client {
                 }
             }
         }
+
+        // Schedule apply chunks, which will be executed in the rayon thread pool.
+        let apply_chunk_results = self.chain.schedule_apply_chunks(
+            block_hash,
+            block.header().height(),
+            apply_chunk_jobs,
+            // apply_chunks_done_marker,
+            // apply_chunks_done_callback.clone(),
+        );
+        // not sure how to handle errors here, just unwrap for now
+        // and what are consequences? we can't rollback block anymore, right?
+        let apply_chunk_results= apply_chunk_results.into_iter().map(|result| result.unwrap()).collect();
+        let mut chain_update = self.chain.chain_update();
+        chain_update.apply_chunk_postprocessing(&block, apply_chunk_results)?;
+        chain_update.commit()?;
+        self.chain.update_flat_storage_for_shard(me, &block, is_caught_up);
 
         if let Some(validator_signer) = self.validator_signer.clone() {
             let validator_id = validator_signer.validator_id().clone();
