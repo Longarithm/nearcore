@@ -1738,7 +1738,7 @@ impl Client {
         );
         // not sure how to handle errors here, just unwrap for now
         // and what are consequences? we can't rollback block anymore, right?
-        let apply_chunk_results= apply_chunk_results.into_iter().map(|result| result.unwrap()).collect();
+        let apply_chunk_results = apply_chunk_results.into_iter().map(|result| result.unwrap()).collect();
         let mut chain_update = self.chain.chain_update();
         chain_update.apply_chunk_postprocessing(&block, apply_chunk_results)?;
         chain_update.commit()?;
