@@ -2263,18 +2263,30 @@ impl Chain {
 
         let block = block.into_inner();
         let block_hash = *block.hash();
-        let block_height = block.header().height();
+        // let block_height = block.header().height();
         let apply_chunks_done_marker = block_preprocess_info.apply_chunks_done.clone();
         self.blocks_in_processing.add(block, block_preprocess_info)?;
 
+        // FOR NOW, block processing is not blocked on apply chunks.
         // 2) schedule apply chunks, which will be executed in the rayon thread pool.
-        self.schedule_apply_chunks(
-            block_hash,
-            block_height,
-            apply_chunk_work,
-            apply_chunks_done_marker,
-            apply_chunks_done_callback.clone(),
-        );
+        // self.schedule_apply_chunks(
+        //     block_hash,
+        //     block_height,
+        //     apply_chunk_work,
+        //     apply_chunks_done_marker,
+        //     apply_chunks_done_callback.clone(),
+        // );
+        // Leave trigger of block POSTprocessing as is to avoid major code changes in prototype.
+        let sc = self.apply_chunks_sender.clone();
+        sc.send((block_hash, vec![])).unwrap();
+        if let Err(_) = apply_chunks_done_marker.set(()) {
+            // This should never happen, if it does, it means there is a bug in our code.
+            log_assert!(
+                false,
+                "start_process_block_impl are called twice for block {block_hash:?}"
+            );
+        }
+        apply_chunks_done_callback(block_hash);
 
         Ok(())
     }
@@ -2356,6 +2368,8 @@ impl Chain {
         let provenance = block_preprocess_info.provenance.clone();
         let block_start_processing_time = block_preprocess_info.block_start_processing_time;
         // TODO(#8055): this zip relies on the ordering of the apply_results.
+        // apply_results is empty, so we don't care.
+        // or we move this code to other place for integrity
         for (apply_result, chunk) in apply_results.iter().zip(block.chunks().iter()) {
             if let Err(err) = apply_result {
                 if err.is_bad_data() {
@@ -2363,6 +2377,7 @@ impl Chain {
                 }
             }
         }
+
         let new_head =
             match self.postprocess_block_only(me, &block, block_preprocess_info, apply_results) {
                 Err(err) => {
@@ -5384,6 +5399,7 @@ impl<'a> ChainUpdate<'a> {
         apply_chunks_results: Vec<Result<ApplyChunkResult, Error>>,
     ) -> Result<Option<Tip>, Error> {
         let prev_hash = block.header().prev_hash();
+        // apply_results is empty, so we don't care
         let results = apply_chunks_results.into_iter().map(|x| {
             if let Err(err) = &x {
                 warn!(target:"chain", hash = %block.hash(), error = %err, "Error in applying chunks for block");
