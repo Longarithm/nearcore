@@ -1886,6 +1886,7 @@ impl Chain {
         let mut accepted_blocks = vec![];
         let mut errors = HashMap::new();
         while let Ok(block_result) = self.apply_chunks_receiver.try_recv() {
+            let block_hash = block_result.0.clone();
             match self.postprocess_block(
                 me,
                 block_hash,
@@ -2344,7 +2345,7 @@ impl Chain {
         me: &Option<AccountId>,
         block: &Block,
         is_caught_up: bool,
-    ) {
+    ) -> Result<(), Error> {
         // Update flat storage head to be the last final block. Note that this update happens
         // in a separate db transaction from the update from block processing. This is intentional
         // because flat_storage need to be locked during the update of flat head, otherwise

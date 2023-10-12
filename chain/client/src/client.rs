@@ -83,7 +83,7 @@ use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tracing::{debug, error, info, Span, trace, warn};
+use tracing::{debug, error, info, trace, warn, Span};
 
 const NUM_REBROADCAST_BLOCKS: usize = 30;
 const CHUNK_HEADERS_FOR_INCLUSION_CACHE_SIZE: usize = 2048;
@@ -839,7 +839,6 @@ impl Client {
         shard_id: ShardId,
     ) -> Result<(EncodedShardChunk, Vec<MerklePath>, Vec<Receipt>), Error> {
         let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
-        let
         let chunk_extra = self
             .chain
             .get_chunk_extra(&prev_block_hash, &shard_uid)
@@ -1647,7 +1646,11 @@ impl Client {
         status: BlockStatus,
         provenance: Provenance,
         skip_produce_chunk: bool,
-        block_result: (CryptoHash, Vec<Box<dyn FnOnce(&Span) -> Result<ApplyChunkResult, Error> + Send>>, bool),
+        block_result: (
+            CryptoHash,
+            Vec<Box<dyn FnOnce(&Span) -> Result<ApplyChunkResult, Error> + Send>>,
+            bool,
+        ),
     ) {
         let (_, apply_chunk_jobs, is_caught_up) = block_result;
         let block = match self.chain.get_block(&block_hash) {
@@ -1738,11 +1741,12 @@ impl Client {
         );
         // not sure how to handle errors here, just unwrap for now
         // and what are consequences? we can't rollback block anymore, right?
-        let apply_chunk_results = apply_chunk_results.into_iter().map(|result| result.unwrap()).collect();
+        let apply_chunk_results =
+            apply_chunk_results.into_iter().map(|result| result.unwrap()).collect();
         let mut chain_update = self.chain.chain_update();
         chain_update.apply_chunk_postprocessing(&block, apply_chunk_results)?;
         chain_update.commit()?;
-        self.chain.update_flat_storage_for_shard(me, &block, is_caught_up);
+        self.chain.update_flat_storage_for_shard(me, &block, is_caught_up).unwrap();
 
         if let Some(validator_signer) = self.validator_signer.clone() {
             let validator_id = validator_signer.validator_id().clone();
