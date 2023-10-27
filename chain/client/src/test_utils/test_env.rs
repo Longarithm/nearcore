@@ -296,7 +296,7 @@ impl TestEnv {
             self.clients[0].epoch_manager.get_block_producer(&epoch_id, tip.height).unwrap();
 
         let mut block = self.clients[0].produce_block(tip.height + 1).unwrap().unwrap();
-        eprintln!("Producing block with version {protocol_version}");
+        println!("Producing block with version {protocol_version}");
         block.mut_header().set_latest_protocol_version(protocol_version);
         block.mut_header().resign(&create_test_signer(block_producer.as_str()));
 
@@ -305,8 +305,17 @@ impl TestEnv {
             .unwrap();
 
         for i in 0..self.clients[0].chain.epoch_length * 2 {
-            self.produce_block(0, tip.height + i + 2);
+            println!("upgrade_protocol prod");
+            // self.produce_block(0, tip.height + i + 2);
+            let mut block = self.clients[0].produce_block(tip.height + i + 2).unwrap().unwrap();
+            println!("Producing block with version {protocol_version}");
+            block.mut_header().set_latest_protocol_version(protocol_version);
+            block.mut_header().resign(&create_test_signer(block_producer.as_str()));
+            let _ = self.clients[0]
+                .process_block_test_no_produce_chunk(block.into(), Provenance::NONE)
+                .unwrap();
         }
+        println!("upgrade_protocol end");
     }
 
     pub fn query_account(&mut self, account_id: AccountId) -> AccountView {
@@ -477,6 +486,11 @@ impl TestEnv {
         let tip = self.clients[0].chain.head().unwrap();
         for i in 0..max_iters {
             let block = self.clients[0].produce_block(tip.height + i + 1).unwrap().unwrap();
+            println!(
+                "execute_tx {} {}",
+                block.header().height(),
+                block.header().latest_protocol_version()
+            );
             self.process_block(0, block.clone(), Provenance::PRODUCED);
             if let Ok(outcome) = self.clients[0].chain.get_final_transaction_result(&tx_hash) {
                 return Ok(outcome);
