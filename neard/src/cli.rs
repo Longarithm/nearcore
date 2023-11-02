@@ -21,6 +21,7 @@ use near_primitives::hash::CryptoHash;
 use near_primitives::merkle::compute_root_from_path;
 use near_primitives::types::{Gas, NumSeats, NumShards};
 use near_state_parts::cli::StatePartsCommand;
+use near_state_parts_dump_check::cli::StatePartsDumpCheckCommand;
 use near_state_viewer::StateViewerSubCommand;
 use near_store::db::RocksDB;
 use near_store::Mode;
@@ -133,7 +134,15 @@ impl NeardCmd {
                 cmd.run(&home_dir)?;
             }
             NeardSubCommand::ForkNetwork(cmd) => {
-                cmd.run(&home_dir, genesis_validation)?;
+                cmd.run(
+                    &home_dir,
+                    genesis_validation,
+                    neard_cmd.opts.verbose_target(),
+                    &neard_cmd.opts.o11y,
+                )?;
+            }
+            NeardSubCommand::StatePartsDumpCheck(cmd) => {
+                cmd.run()?;
             }
         };
         Ok(())
@@ -260,6 +269,9 @@ pub(super) enum NeardSubCommand {
 
     /// Resets the network into a forked network at the given block height and state.
     ForkNetwork(ForkNetworkCommand),
+
+    /// Check completeness of dumped state parts of an epoch
+    StatePartsDumpCheck(StatePartsDumpCheckCommand),
 }
 
 #[derive(clap::Parser)]
@@ -323,7 +335,9 @@ fn check_release_build(chain: &str) {
     let is_release_build = option_env!("NEAR_RELEASE_BUILD") == Some("release")
         && !cfg!(feature = "nightly")
         && !cfg!(feature = "nightly_protocol");
-    if !is_release_build && ["mainnet", "testnet"].contains(&chain) {
+    if !is_release_build
+        && [near_primitives::chains::MAINNET, near_primitives::chains::TESTNET].contains(&chain)
+    {
         warn!(
             target: "neard",
             "Running a neard executable which wasn’t built with `make release` \
@@ -490,9 +504,9 @@ impl RunCmd {
 
         #[cfg(feature = "sandbox")]
         {
-            if near_config.client_config.chain_id == "mainnet"
-                || near_config.client_config.chain_id == "testnet"
-                || near_config.client_config.chain_id == "betanet"
+            if near_config.client_config.chain_id == near_primitives::chains::MAINNET
+                || near_config.client_config.chain_id == near_primitives::chains::TESTNET
+                || near_config.client_config.chain_id == near_primitives::chains::BETANET
             {
                 eprintln!(
                     "Sandbox node can only run dedicate localnet, cannot connect to a network"

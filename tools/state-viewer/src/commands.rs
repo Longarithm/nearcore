@@ -11,6 +11,7 @@ use near_chain::chain::collect_receipts_from_response;
 use near_chain::migrations::check_if_block_is_first_with_chunk_of_version;
 use near_chain::types::ApplyTransactionResult;
 use near_chain::types::RuntimeAdapter;
+use near_chain::types::RuntimeStorageConfig;
 use near_chain::{ChainStore, ChainStoreAccess, ChainStoreUpdate, Error};
 use near_chain_configs::GenesisChangeConfig;
 use near_epoch_manager::types::BlockHeaderInfo;
@@ -78,7 +79,7 @@ pub(crate) fn apply_block(
         runtime
             .apply_transactions(
                 shard_id,
-                chunk_inner.prev_state_root(),
+                RuntimeStorageConfig::new(*chunk_inner.prev_state_root(), use_flat_storage),
                 height,
                 block.header().raw_timestamp(),
                 block.header().prev_hash(),
@@ -92,8 +93,6 @@ pub(crate) fn apply_block(
                 *block.header().random_value(),
                 true,
                 is_first_block_with_chunk_of_version,
-                Default::default(),
-                use_flat_storage,
             )
             .unwrap()
     } else {
@@ -103,7 +102,7 @@ pub(crate) fn apply_block(
         runtime
             .apply_transactions(
                 shard_id,
-                chunk_extra.state_root(),
+                RuntimeStorageConfig::new(*chunk_extra.state_root(), use_flat_storage),
                 block.header().height(),
                 block.header().raw_timestamp(),
                 block.header().prev_hash(),
@@ -117,8 +116,6 @@ pub(crate) fn apply_block(
                 *block.header().random_value(),
                 false,
                 false,
-                Default::default(),
-                use_flat_storage,
             )
             .unwrap()
     };
@@ -869,9 +866,21 @@ pub(crate) fn view_trie(
     shard_id: u32,
     shard_version: u32,
     max_depth: u32,
+    limit: Option<u32>,
+    record_type: Option<u8>,
+    from: Option<AccountId>,
+    to: Option<AccountId>,
 ) -> anyhow::Result<()> {
     let trie = get_trie(store, hash, shard_id, shard_version);
-    trie.print_recursive(&mut std::io::stdout().lock(), &hash, max_depth);
+    trie.print_recursive(
+        &mut std::io::stdout().lock(),
+        &hash,
+        max_depth,
+        limit,
+        record_type,
+        &from.as_ref(),
+        &to.as_ref(),
+    );
     Ok(())
 }
 
@@ -881,9 +890,20 @@ pub(crate) fn view_trie_leaves(
     shard_id: u32,
     shard_version: u32,
     max_depth: u32,
+    limit: Option<u32>,
+    record_type: Option<u8>,
+    from: Option<AccountId>,
+    to: Option<AccountId>,
 ) -> anyhow::Result<()> {
     let trie = get_trie(store, state_root_hash, shard_id, shard_version);
-    trie.print_recursive_leaves(&mut std::io::stdout().lock(), max_depth);
+    trie.print_recursive_leaves(
+        &mut std::io::stdout().lock(),
+        max_depth,
+        limit,
+        record_type,
+        &from.as_ref(),
+        &to.as_ref(),
+    );
     Ok(())
 }
 

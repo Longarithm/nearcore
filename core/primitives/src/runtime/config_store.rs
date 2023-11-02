@@ -36,15 +36,15 @@ static CONFIG_DIFFS: &[(ProtocolVersion, &str)] = &[
     (61, include_config!("61.yaml")),
     (62, include_config!("62.yaml")),
     (63, include_config!("63.yaml")),
+    (64, include_config!("64.yaml")),
     (129, include_config!("129.yaml")),
-    (139, include_config!("139.yaml")),
 ];
 
 /// Testnet parameters for versions <= 29, which (incorrectly) differed from mainnet parameters
 pub static INITIAL_TESTNET_CONFIG: &str = include_config!("parameters_testnet.yaml");
 
 /// Stores runtime config for each protocol version where it was updated.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RuntimeConfigStore {
     /// Maps protocol version to the config.
     store: BTreeMap<ProtocolVersion, Arc<RuntimeConfig>>,
@@ -113,7 +113,7 @@ impl RuntimeConfigStore {
     /// need to override it specifically to preserve compatibility.
     pub fn for_chain_id(chain_id: &str) -> Self {
         match chain_id {
-            "testnet" => {
+            crate::chains::TESTNET => {
                 let genesis_runtime_config = RuntimeConfig::initial_testnet_config();
                 Self::new(Some(&genesis_runtime_config))
             }
@@ -326,7 +326,7 @@ mod tests {
             let snapshot_name = format!("{version}.json");
             let config_view = RuntimeConfigView::from(store.get_config(*version).as_ref().clone());
             any_failure |= std::panic::catch_unwind(|| {
-                insta::assert_json_snapshot!(snapshot_name, config_view);
+                insta::assert_json_snapshot!(snapshot_name, config_view, { ".wasm_config.vm_kind" => "<REDACTED>"});
             })
             .is_err();
         }
@@ -360,7 +360,7 @@ mod tests {
             let snapshot_name = format!("testnet_{version}.json");
             let config_view = RuntimeConfigView::from(store.get_config(*version).as_ref().clone());
             any_failure |= std::panic::catch_unwind(|| {
-                insta::assert_json_snapshot!(snapshot_name, config_view);
+                insta::assert_json_snapshot!(snapshot_name, config_view, { ".wasm_config.vm_kind" => "<REDACTED>"});
             })
             .is_err();
         }
