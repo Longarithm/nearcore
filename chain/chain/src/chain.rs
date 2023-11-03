@@ -4121,7 +4121,7 @@ impl Chain {
                         challenges_result: prev_block.header().challenges_result().clone(),
                         block_timestamp: prev_block.header().raw_timestamp(),
                         gas_price: prev_prev_block.header().next_gas_price(),
-                        random_seed: prev_block.header().random_value().cloe(),
+                        random_seed: prev_block.header().random_value().clone(),
                         height: prev_chunk_header.height_included(),
                         prev_block_hash: *prev_chunk_header.prev_block_hash(),
                     }
