@@ -524,6 +524,8 @@ impl EpochManagerAdapter for MockEpochManager {
             1,
             1,
             RngSeed::default(),
+            #[cfg(feature = "protocol_feature_chunk_validation")]
+            Default::default(),
         )))
     }
 
@@ -942,6 +944,14 @@ impl EpochManagerAdapter for MockEpochManager {
         let shard_layout = self.get_shard_layout(&epoch_id)?;
         let next_shard_layout = self.get_shard_layout(&next_epoch_id)?;
         Ok(shard_layout != next_shard_layout)
+    }
+
+    #[cfg(feature = "new_epoch_sync")]
+    fn get_all_epoch_hashes(
+        &self,
+        _last_block_info: &BlockInfo,
+    ) -> Result<Vec<CryptoHash>, EpochError> {
+        Ok(vec![])
     }
 }
 
