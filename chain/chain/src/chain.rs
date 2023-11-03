@@ -4087,6 +4087,23 @@ impl Chain {
                         FutureValidationMode::None
                     };
 
+                // make the same as current protocol...
+                let mut prev_hash = *prev_block.hash();
+                loop {
+                    let block = self.get_block(&prev_hash)?;
+                    let chunk_header = &block.chunks()[shard_id];
+                    if chunk_header.height_created() == chunk_header.height_included() {
+                        break;
+                    }
+
+                    prev_hash = *block.header().prev_hash();
+                }
+
+                let prev_block = &self.get_block(&prev_hash)?;
+                let prev_chunk_header = &prev_block.chunks()[shard_id];
+                let prev_prev_block = self.get_block(prev_block.header().prev_hash())?;
+                let prev_prev_chunk_header = &prev_prev_block.chunks()[shard_id];
+
                 let maybe_job = self.get_apply_chunk_job(
                     me,
                     future_validation_mode,
