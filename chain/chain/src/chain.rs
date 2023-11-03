@@ -4099,15 +4099,15 @@ impl Chain {
                     prev_hash = *block.header().prev_hash();
                 }
 
-                let prev_block = &self.get_block(&prev_hash)?;
+                let prev_block = self.get_block(&prev_hash).unwrap();
                 let prev_chunk_header = &prev_block.chunks()[shard_id];
-                let prev_prev_block = self.get_block(prev_block.header().prev_hash())?;
+                let prev_prev_block = self.get_block(prev_block.header().prev_hash()).unwrap();
                 let prev_prev_chunk_header = &prev_prev_block.chunks()[shard_id];
 
                 let maybe_job = self.get_apply_chunk_job(
                     me,
                     future_validation_mode,
-                    prev_block,             // block,
+                    &prev_block,            // block,
                     &prev_prev_block,       // prev_block,
                     prev_chunk_header,      // chunk_header,
                     prev_prev_chunk_header, // prev_chunk_header,
