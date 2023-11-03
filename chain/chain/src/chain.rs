@@ -4185,9 +4185,7 @@ impl Chain {
     // Lol
     // Call if `see_future_chunk` and not production
     fn postvalidate(
-        // &self,
         shard_layout: ShardLayout,
-        // outgoing_receipts: Vec<Receipt>,
         apply_result: &ApplyTransactionResult,
         gas_limit: Gas,
         block: Block,
@@ -4212,7 +4210,6 @@ impl Chain {
         // make chunk extra
         // in true stateless validation, it must happen before applying chunk
         println!("call validate_chunk_with_chunk_extra {prev_hash} -> {block_hash}");
-        let block_header = block.header().clone();
         // block or prev block?
         validate_chunk_with_chunk_extra(
             // It's safe here to use ChainStore instead of ChainStoreUpdate
@@ -4222,7 +4219,6 @@ impl Chain {
             shard_layout,
             // prev_hash,
             apply_result.outgoing_receipts.clone(),
-            block_header.clone(),
             &chunk_extra,
             chunk_header.height_included(),
             &next_chunk_header,
@@ -4365,7 +4361,6 @@ impl Chain {
 
         // Validate that all next chunk information matches previous chunk extra.
         if ProtocolFeature::DelayChunkExecution.protocol_version() != 200 {
-            let prev_header = self.store().get_block_header(prev_hash)?;
             let outgoing_receipts = self.store().get_outgoing_receipts_for_shard(
                 self.epoch_manager.as_ref(),
                 *prev_hash,
@@ -4380,7 +4375,6 @@ impl Chain {
                 shard_layout.clone(),
                 // prev_hash,
                 outgoing_receipts,
-                prev_header,
                 &prev_chunk_extra,
                 prev_chunk_height_included,
                 chunk_header,

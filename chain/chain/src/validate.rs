@@ -113,7 +113,6 @@ pub fn validate_chunk_with_chunk_extra(
     shard_layout: ShardLayout,
     // prev_block_hash: &CryptoHash,
     outgoing_receipts: Vec<Receipt>,
-    prev_header: BlockHeader,
     prev_chunk_extra: &ChunkExtra,
     prev_chunk_height_included: BlockHeight,
     chunk_header: &ShardChunkHeader,

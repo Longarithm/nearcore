@@ -2401,7 +2401,6 @@ fn test_validate_chunk_extra() {
         shard_layout,
         // block1.hash(),
         outgoing_receipts,
-        block1.header().clone(),
         &chunk_extra,
         block1.chunks()[0].height_included(),
         &chunks.get(&0).cloned().unwrap().0,
