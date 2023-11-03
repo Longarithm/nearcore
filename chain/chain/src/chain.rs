@@ -511,6 +511,16 @@ pub enum FutureValidationMode {
     StateWitness(ShardChunkHeader),
 }
 
+pub struct ChainContext {
+    block_hash: CryptoHash,
+    challenges_result: ChallengesResult,
+    block_timestamp: u64,
+    gas_price: Balance,
+    random_seed: CryptoHash,
+    height: BlockHeight,
+    prev_block_hash: CryptoHash,
+}
+
 impl Chain {
     pub fn make_dummy_job(&self, shard_uid: ShardUId) -> ApplyChunkJob {
         let block_hash = self.genesis().hash().clone();
@@ -3941,6 +3951,7 @@ impl Chain {
                 false,                       // will_shard_layout_change, - I don't know
                 &HashMap::from_iter([(shard_id as u64, vec![])]),
                 SandboxStatePatch::default(),
+                None,
             )?;
 
             let job = match maybe_job {
@@ -4099,10 +4110,22 @@ impl Chain {
                     prev_hash = *block.header().prev_hash();
                 }
 
-                let prev_block = self.get_block(&prev_hash).unwrap();
-                let prev_chunk_header = &prev_block.chunks()[shard_id];
-                let prev_prev_block = self.get_block(prev_block.header().prev_hash()).unwrap();
-                let prev_prev_chunk_header = &prev_prev_block.chunks()[shard_id];
+                let chain_context = {
+                    let prev_block = self.get_block(&prev_hash).unwrap();
+                    let prev_chunk_header = &prev_block.chunks()[shard_id];
+                    let prev_prev_block = self.get_block(prev_block.header().prev_hash()).unwrap();
+                    // let prev_prev_chunk_header = &prev_prev_block.chunks()[shard_id];
+
+                    ChainContext {
+                        block_hash: *prev_block.hash(),
+                        challenges_result: prev_block.header().challenges_result().clone(),
+                        block_timestamp: prev_block.header().raw_timestamp(),
+                        gas_price: prev_prev_block.header().next_gas_price(),
+                        random_seed: prev_block.header().random_value().cloe(),
+                        height: prev_chunk_header.height_included(),
+                        prev_block_hash: *prev_chunk_header.prev_block_hash(),
+                    }
+                };
 
                 let maybe_job = self.get_apply_chunk_job(
                     me,
@@ -4116,6 +4139,7 @@ impl Chain {
                     will_shard_layout_change,
                     &HashMap::from_iter([(shard_id as u64, vec![])]),
                     state_patch,
+                    Some(chain_context),
                 );
                 match maybe_job {
                     Ok(Some(processor)) => Some(Ok(processor)),
@@ -4183,6 +4207,7 @@ impl Chain {
                     will_shard_layout_change,
                     incoming_receipts,
                     state_patch,
+                    None,
                 );
 
                 match apply_chunk_job {
@@ -4260,6 +4285,7 @@ impl Chain {
         will_shard_layout_change: bool,
         incoming_receipts: &HashMap<u64, Vec<ReceiptProof>>,
         state_patch: SandboxStatePatch,
+        chain_context: Option<ChainContext>,
     ) -> Result<Option<ApplyChunkJob>, Error> {
         let shard_id = shard_id as ShardId;
         let block_hash = block.hash();
@@ -4322,6 +4348,7 @@ impl Chain {
                     epoch_manager,
                     split_state_roots,
                     future_validation_mode,
+                    chain_context,
                 )
             } else {
                 self.get_apply_chunk_job_old_chunk(
@@ -4333,6 +4360,7 @@ impl Chain {
                     runtime,
                     epoch_manager,
                     split_state_roots,
+                    chain_context,
                 )
             }
         } else if let Some(split_state_roots) = split_state_roots {
@@ -4366,6 +4394,7 @@ impl Chain {
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
         future_validation_mode: FutureValidationMode,
+        chain_context: Option<ChainContext>,
     ) -> Result<Option<ApplyChunkJob>, Error> {
         println!("get_apply_chunk_job_new_chunk {}", block.header().height());
         let prev_hash = block.header().prev_hash();
@@ -4501,13 +4530,13 @@ impl Chain {
             shard_id,
         )?;
 
-        let block_hash = *block.hash();
-        let challenges_result = block.header().challenges_result().clone();
-        let block_timestamp = block.header().raw_timestamp();
-        let next_gas_price = prev_block.header().next_gas_price();
-        let random_seed = *block.header().random_value();
-        let height = chunk_header.height_included();
-        let prev_block_hash = *chunk_header.prev_block_hash();
+        let mut block_hash = *block.hash();
+        let mut challenges_result = block.header().challenges_result().clone();
+        let mut block_timestamp = block.header().raw_timestamp();
+        let mut next_gas_price = prev_block.header().next_gas_price();
+        let mut random_seed = *block.header().random_value();
+        let mut height = chunk_header.height_included();
+        let mut prev_block_hash = *chunk_header.prev_block_hash();
 
         if prev_block_hash == CryptoHash::default() {
             return Ok(Some(self.make_dummy_job(shard_uid)));
@@ -4570,6 +4599,15 @@ impl Chain {
                 state_patch,
                 record_storage: false,
             };
+            if let Some(ctx) = chain_context {
+                height = ctx.height;
+                block_timestamp = ctx.block_timestamp;
+                prev_block_hash = ctx.prev_block_hash;
+                block_hash = ctx.block_hash;
+                next_gas_price = ctx.gas_price;
+                random_seed = ctx.random_seed;
+                challenges_result = ctx.challenges_result;
+            }
             match runtime.apply_transactions(
                 shard_id,
                 storage_config,
@@ -4633,25 +4671,26 @@ impl Chain {
         runtime: Arc<dyn RuntimeAdapter>,
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
+        chain_context: Option<ChainContext>,
     ) -> Result<Option<ApplyChunkJob>, Error> {
         let shard_id = shard_uid.shard_id();
-        let prev_block_hash = *prev_block.hash();
+        let mut prev_block_hash = *prev_block.hash();
         let new_extra = self.get_chunk_extra(&prev_block_hash, &shard_uid)?;
 
-        let block_hash = *block.hash();
-        let challenges_result = block.header().challenges_result().clone();
-        let block_timestamp = block.header().raw_timestamp();
+        let mut block_hash = *block.hash();
+        let mut challenges_result = block.header().challenges_result().clone();
+        let mut block_timestamp = block.header().raw_timestamp();
         let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(&prev_block_hash)?;
         let protocol_version = self.epoch_manager.get_epoch_protocol_version(&epoch_id)?;
 
-        let next_gas_price =
+        let mut next_gas_price =
             if protocol_version >= ProtocolFeature::FixApplyChunks.protocol_version() {
                 prev_block.header().next_gas_price()
             } else {
                 block.header().next_gas_price()
             };
-        let random_seed = *block.header().random_value();
-        let height = block.header().height();
+        let mut random_seed = *block.header().random_value();
+        let mut height = block.header().height();
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
             let _span = tracing::debug_span!(
@@ -4667,6 +4706,15 @@ impl Chain {
                 state_patch,
                 record_storage: false,
             };
+            if let Some(ctx) = chain_context {
+                height = ctx.height;
+                block_timestamp = ctx.block_timestamp;
+                prev_block_hash = ctx.prev_block_hash;
+                block_hash = ctx.block_hash;
+                next_gas_price = ctx.gas_price;
+                random_seed = ctx.random_seed;
+                challenges_result = ctx.challenges_result;
+            }
             match runtime.apply_transactions(
                 shard_id,
                 storage_config,
