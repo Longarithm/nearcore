@@ -303,8 +303,8 @@ impl TestReshardingEnv {
 
         // Make sure that catchup is done before the end of each epoch, but when it is done is
         // by chance. This simulates when catchup takes a long time to be done
-        let should_catchup = enable_catchup
-            && (self.rng.gen_bool(P_CATCHUP) || (next_height + 1) % self.epoch_length == 0);
+        let should_catchup =
+            self.rng.gen_bool(P_CATCHUP) || (next_height + 1) % self.epoch_length == 0;
         // process block, this also triggers chunk producers for the next block to produce chunks
         for j in 0..self.num_clients {
             let client = &mut env.clients[j];
