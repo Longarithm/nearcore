@@ -4090,7 +4090,7 @@ impl Chain {
                 // make the same as current protocol...
                 let mut prev_hash = *prev_block.hash();
                 loop {
-                    let block = self.get_block(&prev_hash)?;
+                    let block = self.get_block(&prev_hash).unwrap();
                     let chunk_header = &block.chunks()[shard_id];
                     if chunk_header.height_created() == chunk_header.height_included() {
                         break;
