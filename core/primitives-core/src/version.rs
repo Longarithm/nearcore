@@ -177,6 +177,7 @@ impl ProtocolFeature {
             ProtocolFeature::PreparationV2 | ProtocolFeature::NearVmRuntime => 62,
             ProtocolFeature::BlockHeaderV4 => 63,
             ProtocolFeature::RestrictTla | ProtocolFeature::TestnetFewerBlockProducers => 64,
+            ProtocolFeature::DelayChunkExecution => 65,
 
             // Nightly features
             #[cfg(feature = "protocol_feature_fix_staking_threshold")]
@@ -190,7 +191,6 @@ impl ProtocolFeature {
             ProtocolFeature::PostStateRoot => 136,
             #[cfg(feature = "protocol_feature_chunk_validation")]
             ProtocolFeature::ChunkValidation => 137,
-            ProtocolFeature::DelayChunkExecution => 200,
         }
     }
 }
@@ -198,7 +198,7 @@ impl ProtocolFeature {
 /// Current protocol version used on the mainnet.
 /// Some features (e. g. FixStorageUsage) require that there is at least one epoch with exactly
 /// the corresponding version
-const STABLE_PROTOCOL_VERSION: ProtocolVersion = 64;
+const STABLE_PROTOCOL_VERSION: ProtocolVersion = 65; //64;
 
 /// Largest protocol version supported by the current binary.
 pub const PROTOCOL_VERSION: ProtocolVersion = if cfg!(feature = "nightly_protocol") {

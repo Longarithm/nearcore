@@ -118,7 +118,7 @@ fn wait_for_flat_storage_creation(
     let deltas_in_metadata =
         store_helper::get_all_deltas_metadata(&store, shard_uid).unwrap().len() as u64;
     let expected_deltas =
-        if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 { 1 } else { 2 };
+        if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 { 1 } else { 2 };
     assert_eq!(deltas_in_metadata, expected_deltas);
 
     next_height
@@ -170,7 +170,7 @@ fn test_flat_storage_creation_sanity() {
         }
         // Deltas for blocks until `START_HEIGHT` should still exist,
         // because they come after flat storage head.
-        let stop_height = if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 {
+        let stop_height = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
             START_HEIGHT - 2
         } else {
             START_HEIGHT - 1

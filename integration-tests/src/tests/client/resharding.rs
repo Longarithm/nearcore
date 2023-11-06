@@ -543,7 +543,7 @@ impl TestReshardingEnv {
             .map(|c| (c.shard_id(), c.height_included() == block.header().height()))
             .collect();
         let new_chunk_map: HashMap<ShardId, bool> = HashMap::from_iter(new_chunk_data.into_iter());
-        let block_hash = if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 {
+        let block_hash = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
             head.prev_block_hash
         } else {
             head.last_block_hash
@@ -755,7 +755,7 @@ fn check_account(env: &TestEnv, account_id: &AccountId, block: &Block) {
         return;
     }
     let prev_block = env.clients[0].chain.get_block(prev_hash).unwrap();
-    let block = if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 {
+    let block = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
         &prev_block
     } else {
         block

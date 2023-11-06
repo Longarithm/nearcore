@@ -2643,7 +2643,7 @@ impl Chain {
         // by this, we mark new pre-state-root changes
         // to replace with protocol feature
         let incoming_receipts = self.collect_incoming_receipts_from_block(me, block)?;
-        let apply_chunk_work = if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 {
+        let apply_chunk_work = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
             self.validate_chunks(
                 me,
                 block,
@@ -4280,7 +4280,7 @@ impl Chain {
         };
 
         let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id())?;
-        let is_new_chunk = if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 {
+        let is_new_chunk = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
             matches!(
                 future_validation_mode,
                 FutureValidationMode::IAmProducer | FutureValidationMode::StateWitness(_)
@@ -4360,7 +4360,7 @@ impl Chain {
         let shard_layout = self.epoch_manager.get_shard_layout_from_prev_block(prev_hash)?;
 
         // Validate that all next chunk information matches previous chunk extra.
-        if ProtocolFeature::DelayChunkExecution.protocol_version() != 200 {
+        if ProtocolFeature::DelayChunkExecution.protocol_version() != 65 {
             let outgoing_receipts = self.store().get_outgoing_receipts_for_shard(
                 self.epoch_manager.as_ref(),
                 *prev_hash,
@@ -4404,7 +4404,7 @@ impl Chain {
         let new_receipts = collect_receipts(incoming_receipts.get(&shard_id).unwrap());
         // because receipts are already in DB
         let (receipts_block_hash, prev_chunk_height_included) =
-            if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 {
+            if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
                 let chunk_prev_hash = chunk_header.prev_block_hash().clone();
                 let mut block_hash = block.hash().clone();
                 loop {
@@ -5556,7 +5556,7 @@ impl<'a> ChainUpdate<'a> {
             if !care_about_shard {
                 continue;
             }
-            let block_hash = if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 {
+            let block_hash = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
                 prev_hash
             } else {
                 hash
@@ -5898,7 +5898,7 @@ impl<'a> ChainUpdate<'a> {
             }
             x
         }).collect::<Result<Vec<_>, Error>>()?;
-        if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 {
+        if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
             let prev_block = self.chain_store_update.get_block(prev_hash)?;
             self.apply_chunk_postprocessing(&prev_block, results)?;
         } else {

@@ -2378,7 +2378,7 @@ fn test_validate_chunk_extra() {
         .get_chunk_headers_ready_for_inclusion(block1.header().epoch_id(), &block1.hash());
     let chunk_extra =
         env.clients[0].chain.get_chunk_extra(block1.hash(), &ShardUId::single_shard()).unwrap();
-    let outgoing_receipts = if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 {
+    let outgoing_receipts = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
         chain_store
             .get_outgoing_receipts(block1.hash(), chunk_header.shard_id())
             .map(|v| v.to_vec())
@@ -3343,7 +3343,7 @@ fn test_congestion_receipt_execution() {
     let (mut env, tx_hashes) = prepare_env_with_congestion(PROTOCOL_VERSION, None, 3);
 
     env.produce_block(0, 3);
-    let height = if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 {
+    let height = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
         env.produce_block(0, 4);
         5
     } else {

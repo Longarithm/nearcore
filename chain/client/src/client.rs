@@ -817,7 +817,7 @@ impl Client {
         let prev_block_hash = *prev_block.hash();
         let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
         let (chunk_extra, outgoing_receipts, outcomes_with_id, trie_changes) =
-            if ProtocolFeature::DelayChunkExecution.protocol_version() == 200 {
+            if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
                 let me = match &self.validator_signer {
                     Some(validator_signer) => Some(validator_signer.validator_id().clone()),
                     None => None,
