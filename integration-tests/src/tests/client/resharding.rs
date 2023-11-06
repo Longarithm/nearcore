@@ -1437,6 +1437,16 @@ fn test_latest_protocol_missing_chunks(p_missing: f64, rng_seed: u64) {
     test_missing_chunks(&mut test_env, p_missing, PROTOCOL_VERSION, epoch_length)
 }
 
+fn test_delay_execution_missing_chunks(p_missing: f64, rng_seed: u64) {
+    init_test_logger();
+    let epoch_length = 10;
+    let genesis_pv = ProtocolFeature::DelayChunkExecution.protocol_version() - 1;
+    let target_pv = ProtocolFeature::DelayChunkExecution.protocol_version();
+    let mut test_env =
+        create_test_env_for_cross_contract_test(genesis_pv, epoch_length, rng_seed, None);
+    test_missing_chunks(&mut test_env, p_missing, target_pv, epoch_length)
+}
+
 #[test]
 fn test_shard_layout_upgrade_missing_chunks_low_missing_prob_v1() {
     test_shard_layout_upgrade_missing_chunks(ReshardingType::V1, 0.1, 42);
@@ -1525,6 +1535,21 @@ fn test_latest_protocol_missing_chunks_mid_missing_prob() {
 #[test]
 fn test_latest_protocol_missing_chunks_high_missing_prob() {
     test_latest_protocol_missing_chunks(0.9, 27);
+}
+
+#[test]
+fn test_delay_execution_missing_chunks_low_missing_prob() {
+    test_delay_execution_missing_chunks(0.1, 25);
+}
+
+#[test]
+fn test_delay_execution_missing_chunks_mid_missing_prob() {
+    test_delay_execution_missing_chunks(0.5, 26);
+}
+
+#[test]
+fn test_delay_execution_missing_chunks_high_missing_prob() {
+    test_delay_execution_missing_chunks(0.9, 27);
 }
 
 // TODO(resharding) add a test with missing blocks
