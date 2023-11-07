@@ -3812,6 +3812,8 @@ impl Chain {
         // block: &Block,
         chunk_header: &ShardChunkHeader,
     ) -> Result<ChunkState, Error> {
+        let chunk = self.get_chunk_clone_from_header(chunk_header).unwrap();
+
         // TODO (#6316): enable storage proof generation
         // let chunk_shard_id = chunk_header.shard_id();
         // let prev_merkle_proofs = Block::compute_chunk_headers_root(prev_block.chunks().iter()).1;
@@ -3869,9 +3871,9 @@ impl Chain {
             prev_block_header: vec![], // borsh::to_vec(&prev_block.header())?,
             block_header: vec![],      // borsh::to_vec(&block.header())?,
             prev_merkle_proof: MerklePath::default(), // prev_merkle_proofs[chunk_shard_id as usize].clone(),
-            prev_chunk: chunk_header.clone(),
+            prev_chunk: chunk,
             merkle_proof: MerklePath::default(), // merkle_proofs[chunk_shard_id as usize].clone(),
-            chunk_header: chunk_header.clone(),
+            chunk_header: *chunk_header,
             partial_state: PartialState::TrieValues(vec![]),
         })
     }
