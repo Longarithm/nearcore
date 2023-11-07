@@ -1481,26 +1481,26 @@ impl Client {
         if accepted_blocks.iter().any(|accepted_block| accepted_block.status.is_new_head()) {
             let head = self.chain.head().unwrap();
             // EXTREME DEBUG
-            println!("CHAIN STRUCTURE:");
-            for height in 0..=head.height {
-                let result_block = self.chain.get_block_by_height(height);
-                if let Ok(block) = result_block {
-                    let block_hash = block.hash();
-                    let prev_hash = block.header().prev_hash();
-                    let block_height = block.header().height();
-                    let epoch_id = block.header().epoch_id();
-                    let pv = self.epoch_manager.get_epoch_protocol_version(epoch_id).unwrap();
-                    let chunks: Vec<_> = block
-                        .chunks()
-                        .iter()
-                        .map(|c| (c.chunk_hash(), c.height_included()))
-                        .collect();
-                    println!(
-                        "{prev_hash} -> {block_hash} | {block_height} | {} {pv} | CHUNKS: {:?}",
-                        epoch_id.0, chunks
-                    );
-                }
-            }
+            // println!("CHAIN STRUCTURE:");
+            // for height in 0..=head.height {
+            //     let result_block = self.chain.get_block_by_height(height);
+            //     if let Ok(block) = result_block {
+            //         let block_hash = block.hash();
+            //         let prev_hash = block.header().prev_hash();
+            //         let block_height = block.header().height();
+            //         let epoch_id = block.header().epoch_id();
+            //         let pv = self.epoch_manager.get_epoch_protocol_version(epoch_id).unwrap();
+            //         let chunks: Vec<_> = block
+            //             .chunks()
+            //             .iter()
+            //             .map(|c| (c.chunk_hash(), c.height_included()))
+            //             .collect();
+            //         println!(
+            //             "{prev_hash} -> {block_hash} | {block_height} | {} {pv} | CHUNKS: {:?}",
+            //             epoch_id.0, chunks
+            //         );
+            //     }
+            // }
             self.shards_manager_adapter.send(ShardsManagerRequestFromClient::UpdateChainHeads {
                 head: self.chain.head().unwrap(),
                 header_head: self.chain.header_head().unwrap(),
