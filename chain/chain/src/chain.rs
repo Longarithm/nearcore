@@ -4680,7 +4680,7 @@ impl Chain {
                             epoch_manager.as_ref(),
                             runtime.as_ref(),
                             &block_hash,
-                            prev_block_hash,
+                            &prev_block_hash,
                             &apply_result,
                             split_state_roots,
                         )?)
