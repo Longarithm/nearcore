@@ -4338,7 +4338,12 @@ impl Chain {
     /// Returns the apply chunk job when applying a new chunk and applying transactions.
     fn get_apply_chunk_job_new_chunk(
         &self,
-        block: &Block,
+        // context block?
+        // later, we'll need to decide if which info we take from here, and which from
+        // future chunk.
+        // same for protocol version.
+        // now, take everything from it.
+        latest_block: &Block,
         // prev_block: &Block,
         chunk_header: &ShardChunkHeader,
         prev_chunk_header: &ShardChunkHeader,
@@ -4351,12 +4356,54 @@ impl Chain {
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
         future_validation_mode: FutureValidationMode,
     ) -> Result<Option<ApplyChunkJob>, Error> {
-        println!("get_apply_chunk_job_new_chunk {}", block.header().height());
+        println!("get_apply_chunk_job_new_chunk {}", latest_block.header().height());
+        let shard_id = shard_uid.shard_id();
+        // we can't use hash from the current block here yet because the incoming receipts
+        // for this block is not stored yet
+        // should be empty for Delayed
+        let new_receipts = collect_receipts(incoming_receipts.get(&shard_id).unwrap());
+        // because receipts are already in DB
+        let prev_chunk_height_included = prev_chunk_header.height_included();
+        let (block_copy, receipts_block_hash, prev_chunk_height_included) =
+            if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
+                let chunk_prev_hash = chunk_header.prev_block_hash().clone();
+                let mut block_hash = latest_block.hash().clone();
+                loop {
+                    let header = self.get_block_header(&block_hash)?;
+                    if header.height() < prev_chunk_height_included {
+                        panic!("...");
+                    }
+                    let prev_hash = header.prev_hash().clone();
+                    if prev_hash == chunk_prev_hash {
+                        break;
+                    }
+                    block_hash = prev_hash;
+                }
+                if chunk_prev_hash == CryptoHash::default() {
+                    (self.get_block(&block_hash)?.clone(), block_hash.clone(), 0)
+                } else {
+                    let block = self.get_block(&chunk_prev_hash)?;
+                    let prev_prev_chunk_height_included =
+                        block.chunks()[shard_id as usize].height_included();
+                    (
+                        self.get_block(&block_hash)?.clone(),
+                        block_hash,
+                        prev_prev_chunk_height_included,
+                    )
+                }
+            } else {
+                (
+                    latest_block.clone(),
+                    *latest_block.header().prev_hash(),
+                    prev_chunk_height_included,
+                )
+            };
+
+        // And now we do crazy reindex...
+        let block = &block_copy;
         let prev_hash = block.header().prev_hash();
         let prev_header = self.get_block_header(prev_hash)?;
-        let shard_id = shard_uid.shard_id();
 
-        let prev_chunk_height_included = prev_chunk_header.height_included();
         // Validate state root.
         let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
         let shard_layout = self.epoch_manager.get_shard_layout_from_prev_block(prev_hash)?;
@@ -4404,37 +4451,6 @@ impl Chain {
             })?;
         }
 
-        // we can't use hash from the current block here yet because the incoming receipts
-        // for this block is not stored yet
-        // should be empty for Delayed
-        let new_receipts = collect_receipts(incoming_receipts.get(&shard_id).unwrap());
-        // because receipts are already in DB
-        let (receipts_block_hash, prev_chunk_height_included) =
-            if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
-                let chunk_prev_hash = chunk_header.prev_block_hash().clone();
-                let mut block_hash = block.hash().clone();
-                loop {
-                    let header = self.get_block_header(&block_hash)?;
-                    if header.height() < prev_chunk_height_included {
-                        panic!("...");
-                    }
-                    let prev_hash = header.prev_hash().clone();
-                    if prev_hash == chunk_prev_hash {
-                        break;
-                    }
-                    block_hash = prev_hash;
-                }
-                if chunk_prev_hash == CryptoHash::default() {
-                    (block_hash, 0)
-                } else {
-                    let block = self.get_block(&chunk_prev_hash)?;
-                    let prev_prev_chunk_height_included =
-                        block.chunks()[shard_id as usize].height_included();
-                    (block_hash, prev_prev_chunk_height_included)
-                }
-            } else {
-                (prev_hash.clone(), prev_chunk_height_included)
-            };
         let old_receipts = &self.store().get_incoming_receipts_for_shard(
             self.epoch_manager.as_ref(),
             shard_id,
@@ -4503,7 +4519,7 @@ impl Chain {
         }
 
         // shard layout - block or prev block??
-        let block_copy = block.clone();
+        // let block_copy = block.clone();
         let next_chunk = match &future_validation_mode {
             FutureValidationMode::StateWitness(next_chunk_header) => {
                 let chunk = self.get_chunk_clone_from_header(next_chunk_header)?;
@@ -4511,23 +4527,26 @@ impl Chain {
                 // some basic checks of future chunk still must happen, I think
                 let transactions = chunk.transactions();
                 if !validate_transactions_order(transactions) {
-                    let merkle_paths = Block::compute_chunk_headers_root(block.chunks().iter()).1;
+                    let merkle_paths =
+                        Block::compute_chunk_headers_root(block_copy.chunks().iter()).1;
                     let chunk_proof = ChunkProofs {
-                        block_header: borsh::to_vec(&block.header()).expect("Failed to serialize"),
+                        block_header: borsh::to_vec(&block_copy.header())
+                            .expect("Failed to serialize"),
                         merkle_proof: merkle_paths[shard_id as usize].clone(),
                         chunk: MaybeEncodedShardChunk::Decoded(chunk),
                     };
                     return Err(Error::InvalidChunkProofs(Box::new(chunk_proof)));
                 }
 
-                let protocol_version =
-                    self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
+                let protocol_version = self
+                    .epoch_manager
+                    .get_epoch_protocol_version(block_copy.header().epoch_id())?;
                 if checked_feature!("stable", AccessKeyNonceRange, protocol_version) {
                     let transaction_validity_period = self.transaction_validity_period;
                     for transaction in transactions {
                         self.store()
                             .check_transaction_validity_period(
-                                block.header(),
+                                block_copy.header(),
                                 &transaction.transaction.block_hash,
                                 transaction_validity_period,
                             )

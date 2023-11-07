@@ -177,7 +177,7 @@ impl ProtocolFeature {
             ProtocolFeature::PreparationV2 | ProtocolFeature::NearVmRuntime => 62,
             ProtocolFeature::BlockHeaderV4 => 63,
             ProtocolFeature::RestrictTla | ProtocolFeature::TestnetFewerBlockProducers => 64,
-            ProtocolFeature::DelayChunkExecution => 765,
+            ProtocolFeature::DelayChunkExecution => 65,
 
             // Nightly features
             #[cfg(feature = "protocol_feature_fix_staking_threshold")]
