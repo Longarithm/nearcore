@@ -3929,7 +3929,7 @@ impl Chain {
                     ChunkExtra::clone(self.get_chunk_extra(block.hash(), &shard_uid)?.as_ref());
                 return Ok((chunk_extra, vec![], vec![], dummy_trie_changes)); // continue;
             }
-            // let prev_block = self.get_block(prev_hash)?;
+            let prev_block = self.get_block(prev_hash)?;
             let maybe_job = self.get_apply_chunk_job(
                 me,
                 // we are producer of next chunk
