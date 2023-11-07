@@ -4399,6 +4399,7 @@ impl Chain {
                 )
             };
 
+        println!("block_copy {}", block_copy.header().height());
         // And now we do crazy reindex...
         let block = &block_copy;
         let prev_hash = block.header().prev_hash();
