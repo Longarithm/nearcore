@@ -3873,7 +3873,7 @@ impl Chain {
             prev_merkle_proof: MerklePath::default(), // prev_merkle_proofs[chunk_shard_id as usize].clone(),
             prev_chunk: chunk,
             merkle_proof: MerklePath::default(), // merkle_proofs[chunk_shard_id as usize].clone(),
-            chunk_header: *chunk_header,
+            chunk_header: chunk_header.clone(),
             partial_state: PartialState::TrieValues(vec![]),
         })
     }
@@ -4624,14 +4624,14 @@ impl Chain {
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
     ) -> Result<Option<ApplyChunkJob>, Error> {
         let shard_id = shard_uid.shard_id();
-        let prev_block_hash = block.header().prev_hash();
-        let prev_header = self.get_block_header(prev_block_hash)?;
-        let new_extra = self.get_chunk_extra(prev_block_hash, &shard_uid)?;
+        let prev_block_hash = *block.header().prev_hash();
+        let prev_header = self.get_block_header(&prev_block_hash)?;
+        let new_extra = self.get_chunk_extra(&prev_block_hash, &shard_uid)?;
 
         let block_hash = *block.hash();
         let challenges_result = block.header().challenges_result().clone();
         let block_timestamp = block.header().raw_timestamp();
-        let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(prev_block_hash)?;
+        let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(&prev_block_hash)?;
         let protocol_version = self.epoch_manager.get_epoch_protocol_version(&epoch_id)?;
 
         let next_gas_price =
@@ -4662,7 +4662,7 @@ impl Chain {
                 storage_config,
                 height,
                 block_timestamp,
-                prev_block_hash,
+                &prev_block_hash,
                 &block_hash,
                 &[],
                 &[],
