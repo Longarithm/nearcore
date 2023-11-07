@@ -4403,7 +4403,11 @@ impl Chain {
         // And now we do crazy reindex...
         let block = &block_copy;
         let prev_hash = block.header().prev_hash();
-        let prev_header = self.get_block_header(prev_hash)?;
+        let prev_header = if prev_hash != &CryptoHash::default() {
+            self.get_block_header(prev_hash)?
+        } else {
+            block.header().clone()
+        };
 
         // Validate state root.
         let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
