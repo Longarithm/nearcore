@@ -4358,6 +4358,8 @@ impl Chain {
         // Validate state root.
         let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
         let shard_layout = self.epoch_manager.get_shard_layout_from_prev_block(prev_hash)?;
+        let protocol_version =
+            self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
 
         // Validate that all next chunk information matches previous chunk extra.
         if ProtocolFeature::DelayChunkExecution.protocol_version() != 65 {
