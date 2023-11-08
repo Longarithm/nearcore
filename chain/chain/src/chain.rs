@@ -3943,7 +3943,7 @@ impl Chain {
                     let prev_hash = candidate_header.prev_hash();
                     let prev_header = self.get_block_header(prev_hash).unwrap();
                     // if we found another epoch, break with prev hash
-                    if prev_header.epoch_id() != epoch_id {
+                    if prev_header.epoch_id() != &epoch_id {
                         break Some(*prev_header.hash());
                     }
                     let has_chunk = prev_header.chunk_mask()[shard_id];
