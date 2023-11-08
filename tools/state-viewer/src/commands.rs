@@ -79,7 +79,7 @@ pub(crate) fn apply_block(
         runtime
             .apply_transactions(
                 shard_id,
-                ExecutionBlockContext { latest_is_first_with_chunk: false },
+                ExecutionBlockContext::default(),
                 RuntimeStorageConfig::new(*chunk_inner.prev_state_root(), use_flat_storage),
                 height,
                 block.header().raw_timestamp(),
@@ -103,7 +103,7 @@ pub(crate) fn apply_block(
         runtime
             .apply_transactions(
                 shard_id,
-                ExecutionBlockContext { latest_is_first_with_chunk: false },
+                ExecutionBlockContext::default(),
                 RuntimeStorageConfig::new(*chunk_extra.state_root(), use_flat_storage),
                 block.header().height(),
                 block.header().raw_timestamp(),

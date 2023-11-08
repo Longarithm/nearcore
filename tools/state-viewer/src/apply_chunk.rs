@@ -130,7 +130,7 @@ pub(crate) fn apply_chunk(
     Ok((
         runtime.apply_transactions(
             shard_id,
-            ExecutionBlockContext { latest_is_first_with_chunk: false },
+            ExecutionBlockContext::default(),
             RuntimeStorageConfig::new(prev_state_root, use_flat_storage),
             target_height,
             prev_timestamp + 1_000_000_000,

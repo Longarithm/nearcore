@@ -289,13 +289,21 @@ impl NightshadeRuntime {
                 })
                 .collect();
 
-            let is_it_reward_time = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65
-            {
-                is_new_chunk && block_context.latest_is_first_with_chunk
+            let rewarding_block = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
+                if is_new_chunk {
+                    block_context.rewarding_block
+                } else {
+                    None
+                }
             } else {
-                epoch_manager.is_next_block_epoch_start(prev_block_hash)?
+                if epoch_manager.is_next_block_epoch_start(prev_block_hash)? {
+                    Some(*prev_block_hash)
+                } else {
+                    None
+                }
             };
-            if is_it_reward_time {
+            if let Some(prev_block_hash) = rewarding_block {
+                println!("reward time {prev_block_hash} | {block_hash} | {block_height}");
                 let (stake_info, validator_reward, double_sign_slashing_info) =
                     epoch_manager.compute_stake_return_info(prev_block_hash)?;
                 let stake_info = stake_info
@@ -1376,7 +1384,7 @@ mod test {
             let mut result = self
                 .apply_transactions(
                     shard_id,
-                    ExecutionBlockContext { latest_is_first_with_chunk: false },
+                    ExecutionBlockContext::default(),
                     RuntimeStorageConfig::new(*state_root, true),
                     height,
                     block_timestamp,
