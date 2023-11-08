@@ -50,6 +50,7 @@ use crate::types::{
 };
 use crate::BlockHeader;
 
+use crate::chain::ExecutionBlockContext;
 use near_primitives::epoch_manager::ShardConfig;
 
 use super::ValidatorSchedule;
@@ -1026,6 +1027,7 @@ impl RuntimeAdapter for KeyValueRuntime {
     fn apply_transactions(
         &self,
         shard_id: ShardId,
+        // _block_context: ExecutionBlockContext,
         storage_config: RuntimeStorageConfig,
         _height: BlockHeight,
         _block_timestamp: u64,

@@ -32,6 +32,7 @@ use near_primitives::version::{
 use near_primitives::views::{QueryRequest, QueryResponse};
 use near_store::{PartialStorage, ShardTries, Store, Trie, WrappedTrieChanges};
 
+use crate::chain::ExecutionBlockContext;
 pub use near_epoch_manager::EpochManagerAdapter;
 pub use near_primitives::block::{Block, BlockHeader, Tip};
 
@@ -345,6 +346,7 @@ pub trait RuntimeAdapter: Send + Sync {
     fn apply_transactions(
         &self,
         shard_id: ShardId,
+        // block_context: ExecutionBlockContext,
         storage: RuntimeStorageConfig,
         height: BlockHeight,
         block_timestamp: u64,

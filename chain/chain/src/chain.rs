@@ -911,6 +911,8 @@ impl Chain {
 
         self.runtime_adapter.apply_transactions(
             shard_id,
+            // tmp
+            // ExecutionBlockContext { latest_block_hash: block_hash.clone() },
             RuntimeStorageConfig::new(prev_state_root, true),
             block_height,
             block_timestamp,
@@ -4584,6 +4586,7 @@ impl Chain {
             };
             match runtime.apply_transactions(
                 shard_id,
+                // ExecutionBlockContext { latest_block_hash: *latest_block.hash() },
                 storage_config,
                 height,
                 block_timestamp,
@@ -4682,6 +4685,8 @@ impl Chain {
             };
             match runtime.apply_transactions(
                 shard_id,
+                // actually latest one, we didn't change anything
+                // ExecutionBlockContext { latest_block_hash: block_hash.clone() },
                 storage_config,
                 height,
                 block_timestamp,
@@ -4873,6 +4878,17 @@ fn get_should_apply_transactions(
             !cares_about_shard_this_epoch && cares_about_shard_next_epoch
         }
     }
+}
+
+pub struct ExecutionBlockContext {
+    // block_hash: CryptoHash,
+    // challenges_result: ChallengesResult,
+    // block_timestamp: u64,
+    // gas_price: Balance,
+    // random_seed: CryptoHash,
+    // height: BlockHeight,
+    // prev_block_hash: CryptoHash,
+    latest_block_hash: CryptoHash,
 }
 
 /// Implement block merkle proof retrieval.
@@ -6237,6 +6253,8 @@ impl<'a> ChainUpdate<'a> {
 
         let apply_result = self.runtime_adapter.apply_transactions(
             shard_id,
+            // tmp
+            // ExecutionBlockContext { latest_block_hash: *block_header.hash() },
             RuntimeStorageConfig::new(chunk_header.prev_state_root(), true),
             chunk_header.height_included(),
             block_header.raw_timestamp(),

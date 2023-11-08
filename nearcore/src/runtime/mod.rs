@@ -4,6 +4,7 @@ use crate::NearConfig;
 
 use borsh::BorshDeserialize;
 use errors::FromStateViewerErrors;
+use near_chain::chain::ExecutionBlockContext;
 use near_chain::types::{
     ApplySplitStateResult, ApplyTransactionResult, RuntimeAdapter, RuntimeStorageConfig,
     StorageDataSource, Tip,
@@ -273,6 +274,7 @@ impl NightshadeRuntime {
                    epoch_manager.is_next_block_epoch_start(prev_block_hash).unwrap()
             );
 
+            // empty
             let mut slashing_info: HashMap<_, _> = challenges_result
                 .iter()
                 .filter_map(|s| {
@@ -797,6 +799,7 @@ impl RuntimeAdapter for NightshadeRuntime {
     fn apply_transactions(
         &self,
         shard_id: ShardId,
+        // block_context: ExecutionBlockContext,
         storage_config: RuntimeStorageConfig,
         height: BlockHeight,
         block_timestamp: u64,
