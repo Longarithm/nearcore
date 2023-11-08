@@ -305,7 +305,7 @@ impl NightshadeRuntime {
             if let Some(prev_block_hash) = rewarding_block {
                 println!("reward time {prev_block_hash} | {block_hash} | {block_height}");
                 let (stake_info, validator_reward, double_sign_slashing_info) =
-                    epoch_manager.compute_stake_return_info(prev_block_hash)?;
+                    epoch_manager.compute_stake_return_info(&prev_block_hash)?;
                 let stake_info = stake_info
                     .into_iter()
                     .filter(|(account_id, _)| {
