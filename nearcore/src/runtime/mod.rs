@@ -289,8 +289,7 @@ impl NightshadeRuntime {
                 })
                 .collect();
 
-            let rewarding_block = if false {
-                // ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
+            let rewarding_block = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65 {
                 if is_new_chunk {
                     block_context.rewarding_block
                 } else {
