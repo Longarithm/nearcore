@@ -118,7 +118,7 @@ impl AdversarialBehaviorTestData {
 
 #[test]
 fn test_non_adversarial_case() {
-    init_test_logger();
+    // init_test_logger();
     let mut test = AdversarialBehaviorTestData::new();
     let epoch_manager = test.env.clients[0].epoch_manager.clone();
     for height in 1..=EPOCH_LENGTH * 4 + 5 {

@@ -815,7 +815,7 @@ impl RuntimeAdapter for NightshadeRuntime {
         is_new_chunk: bool,
         is_first_block_with_chunk_of_version: bool,
     ) -> Result<ApplyTransactionResult, Error> {
-        println!("apply_transactions post state root for {prev_block_hash} = prev state root for {block_hash}");
+        println!("apply_transactions post state root for {prev_block_hash} = prev state root for {block_hash} | {height}");
         let _timer =
             metrics::APPLYING_CHUNKS_TIME.with_label_values(&[&shard_id.to_string()]).start_timer();
 
