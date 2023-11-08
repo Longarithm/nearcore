@@ -4116,7 +4116,7 @@ impl Chain {
                     // is first in epoch?
                     let mut candidate_hash = *prev_hash;
                     loop {
-                        let candidate_block = self.get_block_header(&candidate_hash)?;
+                        let candidate_block = self.get_block_header(&candidate_hash).unwrap();
                         // resharding?
                         let has_chunk = candidate_block.chunk_mask()[shard_id];
                         if has_chunk {
