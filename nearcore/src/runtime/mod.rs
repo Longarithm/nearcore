@@ -37,7 +37,7 @@ use near_primitives::types::{
     AccountId, Balance, BlockHeight, EpochHeight, EpochId, EpochInfoProvider, Gas, MerkleHash,
     ShardId, StateChangeCause, StateChangesForSplitStates, StateRoot, StateRootNode,
 };
-use near_primitives::version::ProtocolVersion;
+use near_primitives::version::{ProtocolFeature, ProtocolVersion};
 use near_primitives::views::{
     AccessKeyInfoView, CallResult, QueryRequest, QueryResponse, QueryResponseKind, ViewApplyState,
     ViewStateResult,
@@ -249,6 +249,7 @@ impl NightshadeRuntime {
         &self,
         trie: Trie,
         shard_id: ShardId,
+        block_context: ExecutionBlockContext,
         block_height: BlockHeight,
         block_hash: &CryptoHash,
         block_timestamp: u64,
@@ -288,7 +289,13 @@ impl NightshadeRuntime {
                 })
                 .collect();
 
-            if epoch_manager.is_next_block_epoch_start(prev_block_hash)? {
+            let is_it_reward_time = if ProtocolFeature::DelayChunkExecution.protocol_version() == 65
+            {
+                is_new_chunk && block_context.latest_is_first_with_chunk
+            } else {
+                epoch_manager.is_next_block_epoch_start(prev_block_hash)?
+            };
+            if is_it_reward_time {
                 let (stake_info, validator_reward, double_sign_slashing_info) =
                     epoch_manager.compute_stake_return_info(prev_block_hash)?;
                 let stake_info = stake_info
@@ -839,6 +846,7 @@ impl RuntimeAdapter for NightshadeRuntime {
         match self.process_state_update(
             trie,
             shard_id,
+            block_context,
             height,
             block_hash,
             block_timestamp,
