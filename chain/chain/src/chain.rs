@@ -3932,6 +3932,25 @@ impl Chain {
                 return Ok((chunk_extra, vec![], vec![], dummy_trie_changes)); // continue;
             }
             let prev_block = self.get_block(prev_hash)?;
+            // yes, current block is prev to the one which will be produced.
+            let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(block.hash())?;
+            let latest_has_chunk = true; // we are producing it :))
+            let latest_is_first_with_chunk = if latest_has_chunk {
+                // is first in epoch?
+                let mut candidate_hash = *prev_hash;
+                loop {
+                    let candidate_block = self.get_block_header(&candidate_hash)?;
+                    // resharding?
+                    let has_chunk = candidate_block.chunk_mask()[shard_id];
+                    if has_chunk {
+                        break candidate_block.epoch_id() != &epoch_id;
+                    }
+                    candidate_hash = *candidate_block.prev_hash();
+                }
+            } else {
+                false
+            };
+
             let maybe_job = self.get_apply_chunk_job(
                 me,
                 // we are producer of next chunk
@@ -3945,6 +3964,7 @@ impl Chain {
                 false,                       // will_shard_layout_change, - I don't know
                 &HashMap::from_iter([(shard_id as u64, vec![])]),
                 SandboxStatePatch::default(),
+                latest_is_first_with_chunk,
             )?;
 
             let job = match maybe_job {
@@ -4084,12 +4104,29 @@ impl Chain {
                 // only for a single shard. This so far has been enough.
                 let state_patch = state_patch.take();
                 let next_chunk_header = &block.chunks()[shard_id as usize];
+                let mut latest_has_chunk = false;
                 let future_validation_mode =
                     if next_chunk_header.height_included() == block.header().height() {
+                        latest_has_chunk = true;
                         FutureValidationMode::StateWitness(next_chunk_header.clone())
                     } else {
                         FutureValidationMode::None
                     };
+                let latest_is_first_with_chunk = if latest_has_chunk {
+                    // is first in epoch?
+                    let mut candidate_hash = *prev_hash;
+                    loop {
+                        let candidate_block = self.get_block_header(&candidate_hash)?;
+                        // resharding?
+                        let has_chunk = candidate_block.chunk_mask()[shard_id];
+                        if has_chunk {
+                            break candidate_block.epoch_id() != epoch_id;
+                        }
+                        candidate_hash = *candidate_block.prev_hash();
+                    }
+                } else {
+                    false
+                };
 
                 let maybe_job = self.get_apply_chunk_job(
                     me,
@@ -4102,6 +4139,7 @@ impl Chain {
                     will_shard_layout_change,
                     &HashMap::from_iter([(shard_id as u64, vec![])]),
                     state_patch,
+                    latest_is_first_with_chunk,
                 );
                 match maybe_job {
                     Ok(Some(processor)) => Some(Ok(processor)),
@@ -4169,6 +4207,7 @@ impl Chain {
                     will_shard_layout_change,
                     incoming_receipts,
                     state_patch,
+                    false, // no one cares.
                 );
 
                 match apply_chunk_job {
@@ -4246,6 +4285,8 @@ impl Chain {
         will_shard_layout_change: bool,
         incoming_receipts: &HashMap<u64, Vec<ReceiptProof>>,
         state_patch: SandboxStatePatch,
+        // uhh...
+        latest_is_first_with_chunk: bool,
     ) -> Result<Option<ApplyChunkJob>, Error> {
         let shard_id = shard_id as ShardId;
         let block_hash = block.hash();
@@ -4308,6 +4349,7 @@ impl Chain {
                     epoch_manager,
                     split_state_roots,
                     future_validation_mode,
+                    latest_is_first_with_chunk,
                 )
             } else {
                 self.get_apply_chunk_job_old_chunk(
@@ -4357,6 +4399,7 @@ impl Chain {
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
         future_validation_mode: FutureValidationMode,
+        latest_is_first_with_chunk: bool,
     ) -> Result<Option<ApplyChunkJob>, Error> {
         println!("get_apply_chunk_job_new_chunk {}", latest_block.header().height());
         let shard_id = shard_uid.shard_id();
@@ -4586,7 +4629,7 @@ impl Chain {
             };
             match runtime.apply_transactions(
                 shard_id,
-                ExecutionBlockContext { latest_is_first_with_chunk: false },
+                ExecutionBlockContext { latest_is_first_with_chunk },
                 storage_config,
                 height,
                 block_timestamp,
