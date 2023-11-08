@@ -346,7 +346,7 @@ pub trait RuntimeAdapter: Send + Sync {
     fn apply_transactions(
         &self,
         shard_id: ShardId,
-        // block_context: ExecutionBlockContext,
+        block_context: ExecutionBlockContext,
         storage: RuntimeStorageConfig,
         height: BlockHeight,
         block_timestamp: u64,

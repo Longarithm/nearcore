@@ -912,7 +912,7 @@ impl Chain {
         self.runtime_adapter.apply_transactions(
             shard_id,
             // tmp
-            // ExecutionBlockContext { latest_block_hash: block_hash.clone() },
+            ExecutionBlockContext { latest_is_first_with_chunk: false },
             RuntimeStorageConfig::new(prev_state_root, true),
             block_height,
             block_timestamp,
@@ -4586,7 +4586,7 @@ impl Chain {
             };
             match runtime.apply_transactions(
                 shard_id,
-                // ExecutionBlockContext { latest_block_hash: *latest_block.hash() },
+                ExecutionBlockContext { latest_is_first_with_chunk: false },
                 storage_config,
                 height,
                 block_timestamp,
@@ -4686,7 +4686,7 @@ impl Chain {
             match runtime.apply_transactions(
                 shard_id,
                 // actually latest one, we didn't change anything
-                // ExecutionBlockContext { latest_block_hash: block_hash.clone() },
+                ExecutionBlockContext { latest_is_first_with_chunk: false },
                 storage_config,
                 height,
                 block_timestamp,
@@ -4888,7 +4888,8 @@ pub struct ExecutionBlockContext {
     // random_seed: CryptoHash,
     // height: BlockHeight,
     // prev_block_hash: CryptoHash,
-    latest_block_hash: CryptoHash,
+    // latest_block_hash: CryptoHash,
+    pub latest_is_first_with_chunk: bool,
 }
 
 /// Implement block merkle proof retrieval.
@@ -6254,7 +6255,7 @@ impl<'a> ChainUpdate<'a> {
         let apply_result = self.runtime_adapter.apply_transactions(
             shard_id,
             // tmp
-            // ExecutionBlockContext { latest_block_hash: *block_header.hash() },
+            ExecutionBlockContext { latest_is_first_with_chunk: false },
             RuntimeStorageConfig::new(chunk_header.prev_state_root(), true),
             chunk_header.height_included(),
             block_header.raw_timestamp(),
@@ -6348,6 +6349,7 @@ impl<'a> ChainUpdate<'a> {
 
         let apply_result = self.runtime_adapter.apply_transactions(
             shard_id,
+            ExecutionBlockContext { latest_is_first_with_chunk: false },
             RuntimeStorageConfig::new(*chunk_extra.state_root(), true),
             block_header.height(),
             block_header.raw_timestamp(),

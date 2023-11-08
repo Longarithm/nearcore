@@ -7,7 +7,7 @@ use crate::state_dump::state_dump_redis;
 use crate::tx_dump::dump_tx_from_block;
 use crate::{apply_chunk, epoch_info};
 use ansi_term::Color::Red;
-use near_chain::chain::collect_receipts_from_response;
+use near_chain::chain::{collect_receipts_from_response, ExecutionBlockContext};
 use near_chain::migrations::check_if_block_is_first_with_chunk_of_version;
 use near_chain::types::ApplyTransactionResult;
 use near_chain::types::RuntimeAdapter;
@@ -79,6 +79,7 @@ pub(crate) fn apply_block(
         runtime
             .apply_transactions(
                 shard_id,
+                ExecutionBlockContext { latest_is_first_with_chunk: false },
                 RuntimeStorageConfig::new(*chunk_inner.prev_state_root(), use_flat_storage),
                 height,
                 block.header().raw_timestamp(),
@@ -102,6 +103,7 @@ pub(crate) fn apply_block(
         runtime
             .apply_transactions(
                 shard_id,
+                ExecutionBlockContext { latest_is_first_with_chunk: false },
                 RuntimeStorageConfig::new(*chunk_extra.state_root(), use_flat_storage),
                 block.header().height(),
                 block.header().raw_timestamp(),

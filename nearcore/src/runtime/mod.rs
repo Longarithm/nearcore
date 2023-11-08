@@ -799,7 +799,7 @@ impl RuntimeAdapter for NightshadeRuntime {
     fn apply_transactions(
         &self,
         shard_id: ShardId,
-        // block_context: ExecutionBlockContext,
+        block_context: ExecutionBlockContext,
         storage_config: RuntimeStorageConfig,
         height: BlockHeight,
         block_timestamp: u64,
@@ -1368,6 +1368,7 @@ mod test {
             let mut result = self
                 .apply_transactions(
                     shard_id,
+                    ExecutionBlockContext { latest_is_first_with_chunk: false },
                     RuntimeStorageConfig::new(*state_root, true),
                     height,
                     block_timestamp,

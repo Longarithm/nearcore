@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context};
 use borsh::BorshDeserialize;
-use near_chain::chain::collect_receipts_from_response;
+use near_chain::chain::{collect_receipts_from_response, ExecutionBlockContext};
 use near_chain::migrations::check_if_block_is_first_with_chunk_of_version;
 use near_chain::types::{ApplyTransactionResult, RuntimeAdapter, RuntimeStorageConfig};
 use near_chain::{ChainStore, ChainStoreAccess};
@@ -130,6 +130,7 @@ pub(crate) fn apply_chunk(
     Ok((
         runtime.apply_transactions(
             shard_id,
+            ExecutionBlockContext { latest_is_first_with_chunk: false },
             RuntimeStorageConfig::new(prev_state_root, use_flat_storage),
             target_height,
             prev_timestamp + 1_000_000_000,

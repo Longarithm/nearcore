@@ -1027,7 +1027,7 @@ impl RuntimeAdapter for KeyValueRuntime {
     fn apply_transactions(
         &self,
         shard_id: ShardId,
-        // _block_context: ExecutionBlockContext,
+        _block_context: ExecutionBlockContext,
         storage_config: RuntimeStorageConfig,
         _height: BlockHeight,
         _block_timestamp: u64,
