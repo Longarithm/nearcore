@@ -3989,7 +3989,8 @@ impl Chain {
                 (self.get_block(&block_hash)?.clone(), block_hash.clone(), 0)
             } else {
                 let block = self.get_block(&chunk_prev_hash)?;
-                let prev_prev_chunk_height_included = block.chunks()[shard_id].height_included();
+                let prev_prev_chunk_height_included =
+                    block.chunks()[shard_id as usize].height_included();
                 (self.get_block(&block_hash)?.clone(), block_hash, prev_prev_chunk_height_included)
             }
         };
