@@ -2470,7 +2470,7 @@ impl Chain {
         challenges: &mut Vec<ChallengeBody>,
         invalid_chunks: &mut Vec<ShardChunkHeader>,
         block_received_time: Instant,
-        state_patch: SandboxStatePatch,
+        mut state_patch: SandboxStatePatch,
     ) -> Result<PreprocessBlockResult, Error> {
         let header = block.header();
 
@@ -2608,7 +2608,8 @@ impl Chain {
         // Check if block can be finalized and drop it otherwise.
         self.check_if_finalizable(header)?;
 
-        let apply_chunk_work = self.apply_chunks_preprocessing(
+        let patch = state_patch.take();
+        let mut apply_chunk_work = self.apply_chunks_preprocessing(
             me,
             block,
             &prev_block,
@@ -2619,6 +2620,14 @@ impl Chain {
             if is_caught_up { ApplyChunksMode::IsCaughtUp } else { ApplyChunksMode::NotCaughtUp },
             state_patch,
             invalid_chunks,
+        )?;
+        let validate_work = self.validate_chunks(
+            me,
+            block,
+            &prev_block,
+            if is_caught_up { ApplyChunksMode::IsCaughtUp } else { ApplyChunksMode::NotCaughtUp },
+            patch,
+            // invalid_chunks,
         )?;
 
         Ok((
@@ -3845,7 +3854,7 @@ impl Chain {
 
     // Validate chunks by applying old chunks!
     fn validate_chunks(
-        &mut self,
+        &self,
         me: &Option<AccountId>,
         block: &Block,
         prev_block: &Block,
