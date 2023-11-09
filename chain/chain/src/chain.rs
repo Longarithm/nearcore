@@ -4130,12 +4130,13 @@ impl Chain {
             .entered();
             let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
             let mut trie_refcount = TrieRefcountDeltaMap::new();
-            let mut state_changes: BTreeMap<TrieKey, RawStateChange> = BTreeMap::default();
+            let mut state_changes: BTreeMap<Vec<u8>, (TrieKey, RawStateChange)> =
+                BTreeMap::default();
             let mut storage_config = RuntimeStorageConfig {
                 state_root: *chunk_inner.prev_state_root(),
                 use_flat_storage: true,
                 source: crate::types::StorageDataSource::Db,
-                state_patch,
+                state_patch: SandboxStatePatch::new(vec![]),
                 record_storage: false,
             };
             let last_block = block_contexts.pop().unwrap();
@@ -4161,13 +4162,14 @@ impl Chain {
 
                 for c in apply_tx_result.trie_changes.state_changes.into_iter() {
                     // todo: aggregation
-                    state_changes.insert(c.trie_key, c.changes.last().unwrap().clone());
+                    let key = c.trie_key.to_vec();
+                    state_changes.insert(key, (c.trie_key, c.changes.last().unwrap().clone()));
                 }
                 for t in apply_tx_result.trie_changes.trie_changes.insertions() {
-                    trie_refcount.add(*t.hash(), t.payload().to_vec(), t.rc);
+                    trie_refcount.add(*t.hash(), t.payload().to_vec(), t.rc as u32);
                 }
                 for t in apply_tx_result.trie_changes.trie_changes.deletions() {
-                    trie_refcount.subtract(t.trie_node_or_value_hash, t.rc);
+                    trie_refcount.subtract(t.trie_node_or_value_hash, t.rc as u32);
                 }
             }
 
@@ -4315,7 +4317,7 @@ impl Chain {
     fn get_block_context(&self, block_hash: &CryptoHash, shard_uid: ShardUId) -> BlockContext {
         let block_header = self.get_block_header(block_hash).unwrap();
         let prev_header = self.get_previous_header(&block_header).unwrap();
-        let new_extra = self.get_chunk_extra(prev_header.hash(), &shard_uid)?;
+        let new_extra = self.get_chunk_extra(prev_header.hash(), &shard_uid).unwrap();
         BlockContext {
             block_hash: *block_hash,
             prev_block_hash: *block_header.prev_hash(),
