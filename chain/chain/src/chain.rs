@@ -4134,12 +4134,13 @@ impl Chain {
         let runtime = self.runtime_adapter.clone();
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-            let _span = tracing::debug_span!(
-                target: "chain",
-                parent: parent_span,
-                "validate_chunk",
-                shard_id)
-            .entered();
+            // spans break tests?
+            // let _span = tracing::debug_span!(
+            //     target: "chain",
+            //     parent: parent_span,
+            //     "validate_chunk",
+            //     shard_id)
+            // .entered();
             let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
             let mut trie_refcount = TrieRefcountDeltaMap::new();
             let mut state_changes: BTreeMap<Vec<u8>, (TrieKey, RawStateChange)> =
