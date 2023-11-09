@@ -4114,11 +4114,12 @@ impl Chain {
             .entered();
             let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
 
+            let mut prev_state_root = block_contexts[0].state_root.clone();
             let last_block = block_contexts.pop().unwrap();
             let first_blocks = block_contexts.into_iter();
             for block_context in first_blocks {
                 let storage_config = RuntimeStorageConfig {
-                    state_root: block_context.state_root,
+                    state_root: prev_state_root,
                     use_flat_storage: true,
                     source: crate::types::StorageDataSource::Db,
                     state_patch: state_patch.take(),
@@ -4144,11 +4145,12 @@ impl Chain {
                     false,
                     block_context.is_first_block_with_chunk_of_version,
                 )?;
+                prev_state_root = apply_tx_result.new_root;
             }
 
             let block_context = last_block;
             let storage_config = RuntimeStorageConfig {
-                state_root: block_context.state_root,
+                state_root: prev_state_root,
                 use_flat_storage: true,
                 source: crate::types::StorageDataSource::Db,
                 state_patch: state_patch.take(),
