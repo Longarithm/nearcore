@@ -4138,7 +4138,7 @@ impl Chain {
             println!("test_validate_chunk {height} started");
             let _span = tracing::debug_span!(
                 target: "chain",
-                parent: parent_span,
+                // parent: parent_span,
                 "test_validate_chunk",
                 shard_id)
             .entered();
