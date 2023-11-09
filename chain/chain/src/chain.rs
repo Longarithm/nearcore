@@ -500,6 +500,19 @@ pub enum VerifyBlockHashAndSignatureResult {
     CannotVerifyBecauseBlockIsOrphan,
 }
 
+struct BlockContext<'a> {
+    block_hash: CryptoHash,
+    prev_block_hash: CryptoHash,
+    challenges_result: ChallengesResult,
+    block_timestamp: u64,
+    gas_price: Balance,
+    height: BlockHeight,
+    random_seed: CryptoHash,
+    state_root: CryptoHash,
+    validator_proposals: ValidatorStakeIter<'a>,
+    gas_limit: Gas,
+}
+
 impl Chain {
     pub fn make_genesis_block(
         epoch_manager: &dyn EpochManagerAdapter,
@@ -4072,13 +4085,33 @@ impl Chain {
             shard_id as ShardId,
         )?;
 
-        let block_hash = *block.hash();
-        let challenges_result = block.header().challenges_result().clone();
-        let block_timestamp = block.header().raw_timestamp();
-        let next_gas_price = prev_header.next_gas_price();
-        let random_seed = *block.header().random_value();
-        let height = chunk_header.height_included();
-        let prev_block_hash = *chunk_header.prev_block_hash();
+
+        // old
+        // I think it is safe to take it based on only old block info.
+        // let block_hash = *block.hash();
+        // let challenges_result = block.header().challenges_result().clone();
+        // let block_timestamp = block.header().raw_timestamp();
+        // let next_gas_price = prev_block.header().next_gas_price();
+        // let random_seed = *block.header().random_value();
+        // let height = block.header().height();
+        // let new_extra = self.get_chunk_extra(&prev_block_hash, &shard_uid)?;
+        // let state_root = *new_extra.state_root();
+        // let validator_proposals = new_extra.validator_proposals();
+        // let gas_limit = new_extra.gas_limit();
+
+        // new
+        // let block_hash = *block.hash();
+        // let challenges_result = block.header().challenges_result().clone();
+        // let block_timestamp = block.header().raw_timestamp();
+        // let next_gas_price = prev_block.header().next_gas_price();
+        // let random_seed = *block.header().random_value();
+        // let height = chunk_header.height_included();
+        // let prev_block_hash = *chunk_header.prev_block_hash();
+        // let chunk_inner = chunk.cloned_header().take_inner();
+        // chunk_inner.prev_validator_proposals()
+        // chunk_inner.prev_state_root()
+        // let gas_limit = chunk_inner.gas_limit();
+
         let epoch_manager = self.epoch_manager.clone();
         let runtime = self.runtime_adapter.clone();
 
@@ -4092,7 +4125,7 @@ impl Chain {
             let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
             let mut trie_refcount = TrieRefcountDeltaMap::new();
             let mut state_changes = RawStateChanges::new();
-            let storage_config = RuntimeStorageConfig {
+            let mut storage_config = RuntimeStorageConfig {
                 state_root: *chunk_inner.prev_state_root(),
                 use_flat_storage: true,
                 source: crate::types::StorageDataSource::Db,
@@ -4241,6 +4274,23 @@ impl Chain {
         }
     }
 
+    fn get_block_context(&self, block_hash: &CryptoHash, shard_uid: ShardUId) -> BlockContext {
+        let block_header = self.get_block_header(block_hash).unwrap();
+        let prev_header = self.get_previous_header(&block_header).unwrap();
+        let new_extra = self.get_chunk_extra(prev_header.hash(), &shard_uid)?;
+        BlockContext {
+            block_hash: *block_hash,
+            prev_block_hash: *block_header.prev_hash(),
+            challenges_result: vec![], // block.header().challenges_result().clone();
+            block_timestamp: block_header.raw_timestamp(),
+            gas_price: prev_header.next_gas_price(),
+            height: block_header.height(),
+            random_seed: *block_header.random_value(),
+            state_root: *new_extra.state_root(),
+            validator_proposals: *new_extra.validator_proposals(),
+            gas_limit: new_extra.gas_limit(),
+        }
+    }
     /// Returns the apply chunk job when applying a new chunk and applying transactions.
     fn get_apply_chunk_job_new_chunk(
         &self,
@@ -4333,7 +4383,6 @@ impl Chain {
         };
 
         let chunk_inner = chunk.cloned_header().take_inner();
-        let gas_limit = chunk_inner.gas_limit();
 
         // This variable is responsible for checking to which block we can apply receipts previously lost in apply_chunks
         // (see https://github.com/near/nearcore/pull/4248/)
@@ -4346,13 +4395,7 @@ impl Chain {
             shard_id,
         )?;
 
-        let block_hash = *block.hash();
-        let challenges_result = block.header().challenges_result().clone();
-        let block_timestamp = block.header().raw_timestamp();
-        let next_gas_price = prev_block.header().next_gas_price();
-        let random_seed = *block.header().random_value();
-        let height = chunk_header.height_included();
-        let prev_block_hash = *chunk_header.prev_block_hash();
+        let gas_limit = chunk_inner.gas_limit();
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
             let _span = tracing::debug_span!(
