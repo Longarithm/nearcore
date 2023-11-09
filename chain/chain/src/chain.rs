@@ -3872,7 +3872,7 @@ impl Chain {
                         prev_block,             // block,
                         prev_chunk_header,      // chunk_header,
                         prev_prev_chunk_header, // prev_chunk_header,
-                        shard_id,
+                        shard_id as ShardId,
                         mode,
                         will_shard_layout_change,
                         state_patch,
@@ -3994,6 +3994,7 @@ impl Chain {
             }
         };
         let block = &block_copy;
+        let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id())?;
         let prev_hash = block.header().prev_hash();
         if prev_hash == &CryptoHash::default() {
             return Ok(None);
