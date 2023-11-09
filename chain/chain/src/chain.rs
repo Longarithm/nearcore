@@ -2629,6 +2629,7 @@ impl Chain {
             patch,
             // invalid_chunks,
         )?;
+        apply_chunk_work.extend(validate_work.into_iter());
 
         Ok((
             apply_chunk_work,
