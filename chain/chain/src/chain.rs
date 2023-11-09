@@ -515,7 +515,7 @@ struct BlockContext {
     height: BlockHeight,
     random_seed: CryptoHash,
     new_extra: Arc<ChunkExtra>,
-    state_root: CryptoHash,
+    // state_root: CryptoHash,
     // validator_proposals: ValidatorStakeIter,
     gas_limit: Gas,
     is_first_block_with_chunk_of_version: bool,
@@ -4114,39 +4114,39 @@ impl Chain {
             .entered();
             let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
 
-            let mut prev_state_root = block_contexts[0].state_root.clone();
+            let mut prev_state_root = chunk_header.prev_state_root();
             let last_block = block_contexts.pop().unwrap();
-            // let first_blocks = block_contexts.into_iter();
-            // for block_context in first_blocks {
-            //     let storage_config = RuntimeStorageConfig {
-            //         state_root: prev_state_root,
-            //         use_flat_storage: true,
-            //         source: crate::types::StorageDataSource::Db,
-            //         state_patch: state_patch.take(),
-            //         record_storage: false,
-            //     };
-            //     let validator_proposals = block_context.new_extra.validator_proposals();
-            //     // maybe we should maintain state root, actually
-            //     // how does flat storage work here?! ultimately it shouldn't, because state witness is storage.
-            //     let apply_tx_result = runtime.apply_transactions(
-            //         shard_id,
-            //         storage_config,
-            //         block_context.height,
-            //         block_context.block_timestamp,
-            //         &block_context.prev_block_hash,
-            //         &block_context.block_hash,
-            //         &[],
-            //         &[],
-            //         validator_proposals,
-            //         block_context.gas_price,
-            //         block_context.gas_limit,
-            //         &block_context.challenges_result,
-            //         block_context.random_seed,
-            //         false,
-            //         block_context.is_first_block_with_chunk_of_version,
-            //     )?;
-            //     prev_state_root = apply_tx_result.new_root;
-            // }
+            let first_blocks = block_contexts.into_iter();
+            for block_context in first_blocks {
+                let storage_config = RuntimeStorageConfig {
+                    state_root: prev_state_root,
+                    use_flat_storage: true,
+                    source: crate::types::StorageDataSource::Db,
+                    state_patch: state_patch.take(),
+                    record_storage: false,
+                };
+                let validator_proposals = block_context.new_extra.validator_proposals();
+                // maybe we should maintain state root, actually
+                // how does flat storage work here?! ultimately it shouldn't, because state witness is storage.
+                let apply_tx_result = runtime.apply_transactions(
+                    shard_id,
+                    storage_config,
+                    block_context.height,
+                    block_context.block_timestamp,
+                    &block_context.prev_block_hash,
+                    &block_context.block_hash,
+                    &[],
+                    &[],
+                    validator_proposals,
+                    block_context.gas_price,
+                    block_context.gas_limit,
+                    &block_context.challenges_result,
+                    block_context.random_seed,
+                    false,
+                    block_context.is_first_block_with_chunk_of_version,
+                )?;
+                prev_state_root = apply_tx_result.new_root;
+            }
 
             let block_context = last_block;
             let storage_config = RuntimeStorageConfig {
@@ -4312,7 +4312,7 @@ impl Chain {
             height: block_header.height(),
             random_seed: *block_header.random_value(),
             new_extra: new_extra.clone(),
-            state_root: *new_extra.state_root(),
+            // state_root: *new_extra.state_root(),
             // validator_proposals: new_extra.validator_proposals(),
             gas_limit: new_extra.gas_limit(),
             is_first_block_with_chunk_of_version,
