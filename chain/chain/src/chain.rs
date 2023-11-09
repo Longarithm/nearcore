@@ -2295,6 +2295,7 @@ impl Chain {
     ) {
         let sc = self.apply_chunks_sender.clone();
         spawn(move || {
+            println!("schedule_apply_chunks START {block_height}");
             // do_apply_chunks runs `work` parallelly, but still waits for all of them to finish
             let res = do_apply_chunks(block_hash, block_height, work);
             // If we encounter error here, that means the receiver is deallocated and the client
@@ -2305,6 +2306,7 @@ impl Chain {
                 log_assert!(false, "apply chunks are called twice for block {block_hash:?}");
             }
             apply_chunks_done_callback(block_hash);
+            println!("schedule_apply_chunks END {block_height}");
         });
 
         /// `rayon::spawn` decorated to propagate `tracing` context across
