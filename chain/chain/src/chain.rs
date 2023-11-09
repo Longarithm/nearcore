@@ -4134,6 +4134,7 @@ impl Chain {
         let runtime = self.runtime_adapter.clone();
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+            println!("test_validate_chunk {} started", block.header().height());
             let _span = tracing::debug_span!(
                 target: "chain",
                 parent: parent_span,
@@ -4480,6 +4481,7 @@ impl Chain {
         let prev_block_hash = *chunk_header.prev_block_hash();
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+            println!("new_chunk {height} started");
             let _span = tracing::debug_span!(
                 target: "chain",
                 parent: parent_span,
