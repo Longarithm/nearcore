@@ -4198,7 +4198,7 @@ impl Chain {
                 block_context.random_seed,
                 true,
                 false, // is_first_block_with_chunk_of_version,
-            )?;
+            );
             // aggregate trie changes later!
 
             match apply_result {
