@@ -515,8 +515,8 @@ pub struct MemTrieChanges {
 pub struct TrieChanges {
     pub old_root: StateRoot,
     pub new_root: StateRoot,
-    insertions: Vec<TrieRefcountAddition>,
-    deletions: Vec<TrieRefcountSubtraction>,
+    pub insertions: Vec<TrieRefcountAddition>,
+    pub deletions: Vec<TrieRefcountSubtraction>,
     // If Some, in-memory changes are applied as well.
     #[borsh(skip)]
     pub mem_trie_changes: Option<MemTrieChanges>,

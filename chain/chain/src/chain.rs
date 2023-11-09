@@ -4155,6 +4155,8 @@ impl Chain {
                     record_storage: false,
                 };
                 let validator_proposals = block_context.new_extra.validator_proposals();
+                // maybe we should maintain state root, actually
+                // how does flat storage work here?! ultimately it shouldn't, because state witness is storage.
                 let apply_tx_result = runtime.apply_transactions(
                     shard_id,
                     storage_config,
@@ -4195,7 +4197,7 @@ impl Chain {
                 record_storage: false,
             };
             let validator_proposals = block_context.new_extra.validator_proposals();
-            let apply_result = runtime.apply_transactions(
+            let mut apply_result = runtime.apply_transactions(
                 shard_id,
                 storage_config,
                 block_context.height,
@@ -4211,32 +4213,43 @@ impl Chain {
                 block_context.random_seed,
                 true,
                 false, // is_first_block_with_chunk_of_version,
-            );
-            // aggregate trie changes later!
-
-            match apply_result {
-                Ok(apply_result) => {
-                    let apply_split_result_or_state_changes = if will_shard_layout_change {
-                        Some(ChainUpdate::apply_split_state_changes(
-                            epoch_manager.as_ref(),
-                            runtime.as_ref(),
-                            &block_context.block_hash,
-                            &block_context.prev_block_hash,
-                            &apply_result,
-                            split_state_roots,
-                        )?)
-                    } else {
-                        None
-                    };
-                    Ok(ApplyChunkResult::ValidatedHeight(SameHeightResult {
-                        gas_limit,
-                        shard_uid,
-                        apply_result,
-                        apply_split_result_or_state_changes,
-                    }))
-                }
-                Err(err) => Err(err),
+            )?;
+            for c in apply_result.trie_changes.state_changes.iter() {
+                // todo: aggregation of all changes?
+                let key = c.trie_key.to_vec();
+                state_changes.insert(key, (c.trie_key.clone(), c.changes.last().unwrap().clone()));
             }
+            for t in apply_result.trie_changes.trie_changes.insertions() {
+                trie_refcount.add(*t.hash(), t.payload().to_vec(), t.rc.into());
+            }
+            for t in apply_result.trie_changes.trie_changes.deletions() {
+                trie_refcount.subtract(t.trie_node_or_value_hash, t.rc.into());
+            }
+            // aggregate changes
+            let (i, d) = trie_refcount.into_changes();
+            apply_result.trie_changes.trie_changes.insertions = i;
+            apply_result.trie_changes.trie_changes.deletions = d;
+            // apply_result.trie_changes.state_changes = // ???
+
+            let apply_split_result_or_state_changes = if will_shard_layout_change {
+                Some(ChainUpdate::apply_split_state_changes(
+                    epoch_manager.as_ref(),
+                    runtime.as_ref(),
+                    &block_context.block_hash,
+                    &block_context.prev_block_hash,
+                    &apply_result,
+                    split_state_roots,
+                )?)
+            } else {
+                None
+            };
+
+            Ok(ApplyChunkResult::ValidatedHeight(SameHeightResult {
+                gas_limit,
+                shard_uid,
+                apply_result,
+                apply_split_result_or_state_changes,
+            }))
         })))
     }
 
