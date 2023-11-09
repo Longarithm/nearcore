@@ -4299,7 +4299,8 @@ impl Chain {
             self.epoch_manager.as_ref(),
             prev_header.hash(),
             shard_uid.shard_id(),
-        )?;
+        )
+        .unwrap();
         BlockContext {
             block_hash: *block_hash,
             prev_block_hash: *block_header.prev_hash(),
