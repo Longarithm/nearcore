@@ -340,7 +340,7 @@ pub struct WrappedTrieChanges {
     shard_uid: ShardUId,
     pub trie_changes: TrieChanges,
     pub state_changes: Vec<RawStateChangesWithTrieKey>,
-    block_hash: CryptoHash,
+    pub block_hash: CryptoHash,
 }
 
 // Partial implementation. Skips `tries` due to its complexity and

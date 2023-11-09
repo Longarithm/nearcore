@@ -5726,6 +5726,21 @@ impl<'a> ChainUpdate<'a> {
                 apply_split_result_or_state_changes,
             }) => {
                 println!("caught {prev_hash} {block_hash} {height}");
+                let (outcome_root, outcome_paths) =
+                    ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
+                // let shard_id = shard_uid.shard_id();
+                let ce = ChunkExtra::new(
+                    &apply_result.new_root,
+                    outcome_root,
+                    apply_result.validator_proposals,
+                    apply_result.total_gas_burnt,
+                    gas_limit,
+                    apply_result.total_balance_burnt,
+                );
+                let correct_ce = self
+                    .chain_store_update
+                    .get_chunk_extra(&apply_result.trie_changes.block_hash, &shard_uid)?;
+                assert_eq!(ce, correct_ce, "unequal chunk extras");
                 return Ok(());
             }
             ApplyChunkResult::SameHeight(SameHeightResult {
