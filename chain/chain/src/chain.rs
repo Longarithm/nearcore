@@ -61,9 +61,14 @@ use near_primitives::state_sync::{
 };
 use near_primitives::static_clock::StaticClock;
 use near_primitives::transaction::{ExecutionOutcomeWithIdAndProof, SignedTransaction};
+use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::validator_stake::ValidatorStakeIter;
-use near_primitives::types::{AccountId, Balance, BlockExtra, BlockHeight, BlockHeightDelta, EpochId, Gas, MerkleHash, NumBlocks, NumShards, RawStateChanges, ShardId, StateChangesForSplitStates, StateRoot};
+use near_primitives::types::{
+    AccountId, Balance, BlockExtra, BlockHeight, BlockHeightDelta, EpochId, Gas, MerkleHash,
+    NumBlocks, NumShards, RawStateChange, RawStateChanges, RawStateChangesWithTrieKey, ShardId,
+    StateChangesForSplitStates, StateRoot,
+};
 use near_primitives::unwrap_or_return;
 use near_primitives::utils::MaybeValidated;
 use near_primitives::version::{ProtocolFeature, PROTOCOL_VERSION};
@@ -75,18 +80,18 @@ use near_primitives::views::{
 use near_store::config::StateSnapshotType;
 use near_store::flat::{store_helper, FlatStorageReadyStatus, FlatStorageStatus};
 use near_store::get_genesis_state_roots;
+use near_store::trie::TrieRefcountDeltaMap;
 use near_store::{DBCol, ShardTries};
 use once_cell::sync::OnceCell;
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::{Duration as TimeDuration, Instant};
 use tracing::{debug, error, info, warn, Span};
-use near_store::trie::TrieRefcountDeltaMap;
 
 /// Maximum number of orphans chain can store.
 pub const MAX_ORPHAN_SIZE: usize = 1024;
@@ -4039,8 +4044,9 @@ impl Chain {
             prev_chunk_height_included,
         )?;
         let block_hashes: Vec<_> = receipts_response.iter().map(|r| r.0.clone()).rev().collect();
-        let block_context: Vec<_> = block_hashes.into_iter().map(|b| self.get_block_context(&b, shard_uid)).collect();
-        assert!(block_context.len() >= 1);
+        let mut block_contexts: Vec<_> =
+            block_hashes.into_iter().map(|b| self.get_block_context(&b, shard_uid)).collect();
+        assert!(block_contexts.len() >= 1);
         let receipts = collect_receipts_from_response(receipts_response);
 
         let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
@@ -4086,7 +4092,6 @@ impl Chain {
             shard_id as ShardId,
         )?;
 
-
         // old
         // I think it is safe to take it based on only old block info.
         // let block_hash = *block.hash();
@@ -4125,7 +4130,7 @@ impl Chain {
             .entered();
             let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
             let mut trie_refcount = TrieRefcountDeltaMap::new();
-            let mut state_changes = RawStateChanges::new();
+            let mut state_changes: BTreeMap<TrieKey, RawStateChange> = BTreeMap::default();
             let mut storage_config = RuntimeStorageConfig {
                 state_root: *chunk_inner.prev_state_root(),
                 use_flat_storage: true,
@@ -4133,43 +4138,75 @@ impl Chain {
                 state_patch,
                 record_storage: false,
             };
-            let Some((last_block, first_blocks)) = block_context.split_last();
-            for block_hash in first_blocks {
+            let last_block = block_contexts.pop().unwrap();
+            let first_blocks = block_contexts.into_iter();
+            for block_context in first_blocks {
                 let apply_tx_result = runtime.apply_transactions(
                     shard_id,
                     storage_config.clone(),
-                    height,
-                    block_timestamp,
-                    &prev_block_hash,
-                    &block_hash,
-                    &receipts,
-                    chunk.transactions(),
-                    chunk_inner.prev_validator_proposals(),
-                    next_gas_price,
-                    gas_limit,
-                    &challenges_result,
-                    random_seed,
-                    true,
-                    is_first_block_with_chunk_of_version,
-                );
+                    block_context.height,
+                    block_context.block_timestamp,
+                    &block_context.prev_block_hash,
+                    &block_context.block_hash,
+                    &[],
+                    &[],
+                    block_context.validator_proposals,
+                    block_context.gas_price,
+                    block_context.gas_limit,
+                    &block_context.challenges_result,
+                    block_context.random_seed,
+                    false,
+                    false, // is_first_block_with_chunk_of_version,
+                )?;
+
+                for c in apply_tx_result.trie_changes.state_changes.into_iter() {
+                    // todo: aggregation
+                    state_changes.insert(c.trie_key, c.changes.last().unwrap().clone());
+                }
+                for t in apply_tx_result.trie_changes.trie_changes.insertions() {
+                    trie_refcount.add(*t.hash(), t.payload().to_vec(), t.rc);
+                }
+                for t in apply_tx_result.trie_changes.trie_changes.deletions() {
+                    trie_refcount.subtract(t.trie_node_or_value_hash, t.rc);
+                }
             }
-            // apply last block
-            let apply_result = ApplyTransactionResult // aggregate
+
+            let block_context = last_block;
+
+            let apply_result = runtime.apply_transactions(
+                shard_id,
+                storage_config.clone(),
+                block_context.height,
+                block_context.block_timestamp,
+                &block_context.prev_block_hash,
+                &block_context.block_hash,
+                &receipts,
+                chunk.transactions(),
+                block_context.validator_proposals,
+                block_context.gas_price,
+                block_context.gas_limit,
+                &block_context.challenges_result,
+                block_context.random_seed,
+                true,
+                false, // is_first_block_with_chunk_of_version,
+            )?;
+            // aggregate trie changes later!
+
             match apply_result {
                 Ok(apply_result) => {
                     let apply_split_result_or_state_changes = if will_shard_layout_change {
                         Some(ChainUpdate::apply_split_state_changes(
                             epoch_manager.as_ref(),
                             runtime.as_ref(),
-                            &block_hash,
-                            &prev_block_hash,
+                            &block_context.block_hash,
+                            &block_context.prev_block_hash,
                             &apply_result,
                             split_state_roots,
                         )?)
                     } else {
                         None
                     };
-                    Ok(ApplyChunkResult::SameHeight(SameHeightResult {
+                    Ok(ApplyChunkResult::ValidatedHeight(SameHeightResult {
                         gas_limit,
                         shard_uid,
                         apply_result,
@@ -4288,7 +4325,7 @@ impl Chain {
             height: block_header.height(),
             random_seed: *block_header.random_value(),
             state_root: *new_extra.state_root(),
-            validator_proposals: *new_extra.validator_proposals(),
+            validator_proposals: new_extra.validator_proposals(),
             gas_limit: new_extra.gas_limit(),
         }
     }
@@ -5647,11 +5684,12 @@ impl<'a> ChainUpdate<'a> {
         let height = block.header().height();
         match result {
             ApplyChunkResult::ValidatedHeight(SameHeightResult {
-                                                  gas_limit,
-                                                  shard_uid,
-                                                  apply_result,
-                                                  apply_split_result_or_state_changes,
+                gas_limit,
+                shard_uid,
+                apply_result,
+                apply_split_result_or_state_changes,
             }) => {
+                println!("caught {prev_hash} {block_hash} {height}");
                 return Ok(());
             }
             ApplyChunkResult::SameHeight(SameHeightResult {

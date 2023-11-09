@@ -240,6 +240,7 @@ impl ChainGenesis {
     }
 }
 
+#[derive(Clone)]
 pub enum StorageDataSource {
     Db,
     Recorded(PartialStorage),

@@ -374,7 +374,7 @@ pub struct TrieRefcountAddition {
     /// some TrieKey.
     trie_node_or_value: Vec<u8>,
     /// Reference count difference which will be added to the total refcount.
-    rc: std::num::NonZeroU32,
+    pub rc: std::num::NonZeroU32,
 }
 
 /// Stores reference count subtraction for some key in DB.
@@ -382,12 +382,12 @@ pub struct TrieRefcountAddition {
 pub struct TrieRefcountSubtraction {
     /// Hash of trie_node_or_value and part of the DB key.
     /// Used for uniting with shard id to get actual DB key.
-    trie_node_or_value_hash: CryptoHash,
+    pub trie_node_or_value_hash: CryptoHash,
     /// Obsolete field but which we cannot remove because this data is persisted
     /// to the database.
     _ignored: IgnoredVecU8,
     /// Reference count difference which will be subtracted to the total refcount.
-    rc: std::num::NonZeroU32,
+    pub rc: std::num::NonZeroU32,
 }
 
 /// Struct that is borsh compatible with Vec<u8> but which is logically the unit type.
