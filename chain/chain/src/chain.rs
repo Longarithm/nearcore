@@ -514,10 +514,6 @@ struct BlockContext {
     gas_price: Balance,
     height: BlockHeight,
     random_seed: CryptoHash,
-    new_extra: Arc<ChunkExtra>,
-    // state_root: CryptoHash,
-    // validator_proposals: ValidatorStakeIter,
-    gas_limit: Gas,
     is_first_block_with_chunk_of_version: bool,
 }
 
@@ -4115,9 +4111,7 @@ impl Chain {
                     state_patch: state_patch.take(),
                     record_storage: false,
                 };
-                // let validator_proposals = block_context.new_extra.validator_proposals();
-                let validator_proposals = chunk_inner.prev_validator_proposals(); // unchanged
-                                                                                  // how does flat storage work here?! ultimately it shouldn't, because state witness is storage.
+                // how does flat storage work here?! ultimately it shouldn't, because state witness is storage.
                 let apply_tx_result = runtime.apply_transactions(
                     shard_id,
                     storage_config,
@@ -4127,9 +4121,9 @@ impl Chain {
                     &block_context.block_hash,
                     &[],
                     &[],
-                    validator_proposals,
+                    chunk_inner.prev_validator_proposals(), // unchanged
                     block_context.gas_price,
-                    block_context.gas_limit,
+                    gas_limit,
                     &block_context.challenges_result,
                     block_context.random_seed,
                     false,
@@ -4146,9 +4140,6 @@ impl Chain {
                 state_patch: state_patch.take(),
                 record_storage: false,
             };
-            // let validator_proposals = block_context.new_extra.validator_proposals();
-            // Unchanged. They are known already when prev chunk was processed
-            let validator_proposals = chunk_inner.prev_validator_proposals();
             let mut apply_result = runtime.apply_transactions(
                 shard_id,
                 storage_config,
@@ -4158,9 +4149,10 @@ impl Chain {
                 &block_context.block_hash,
                 &receipts,
                 chunk.transactions(),
-                validator_proposals,
+                // Unchanged. They are known already when prev chunk was processed
+                chunk_inner.prev_validator_proposals(),
                 block_context.gas_price,
-                block_context.gas_limit,
+                gas_limit,
                 &block_context.challenges_result,
                 block_context.random_seed,
                 true,
@@ -4287,7 +4279,6 @@ impl Chain {
     fn get_block_context(&self, block_hash: &CryptoHash, shard_uid: ShardUId) -> BlockContext {
         let block_header = self.get_block_header(block_hash).unwrap();
         let prev_header = self.get_previous_header(&block_header).unwrap();
-        let new_extra = self.get_chunk_extra(prev_header.hash(), &shard_uid).unwrap();
         let is_first_block_with_chunk_of_version = check_if_block_is_first_with_chunk_of_version(
             self.store(),
             self.epoch_manager.as_ref(),
@@ -4303,10 +4294,6 @@ impl Chain {
             gas_price: prev_header.next_gas_price(),
             height: block_header.height(),
             random_seed: *block_header.random_value(),
-            new_extra: new_extra.clone(),
-            // state_root: *new_extra.state_root(),
-            // validator_proposals: new_extra.validator_proposals(),
-            gas_limit: new_extra.gas_limit(),
             is_first_block_with_chunk_of_version,
         }
     }
