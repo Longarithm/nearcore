@@ -3969,7 +3969,6 @@ impl Chain {
         will_shard_layout_change: bool,
         state_patch: SandboxStatePatch,
     ) -> Result<Option<ApplyChunkJob>, Error> {
-        let prev_hash = block.header().prev_hash();
         let prev_chunk_height_included = prev_chunk_header.height_included();
         let (block_copy, receipts_block_hash, prev_chunk_height_included) = {
             let chunk_prev_hash = chunk_header.prev_block_hash().clone();
@@ -4000,12 +3999,15 @@ impl Chain {
         }
         let prev_header = self.get_block_header(prev_hash)?;
 
+        // reverse order
         let receipts_response = &self.store().get_incoming_receipts_for_shard(
             self.epoch_manager.as_ref(),
             shard_id as ShardId,
             receipts_block_hash,
             prev_chunk_height_included,
         )?;
+        let block_hashes: Vec<_> = receipts_response.iter().map(|r| r.0.clone()).rev().collect();
+        assert!(block_hashes.len() >= 1);
         let receipts = collect_receipts_from_response(receipts_response);
 
         let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
@@ -4058,6 +4060,9 @@ impl Chain {
         let random_seed = *block.header().random_value();
         let height = chunk_header.height_included();
         let prev_block_hash = *chunk_header.prev_block_hash();
+        let epoch_manager = self.epoch_manager.clone();
+        let runtime = self.runtime_adapter.clone();
+        let split_state_roots = None;
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
             let _span = tracing::debug_span!(
@@ -4075,7 +4080,7 @@ impl Chain {
                 record_storage: false,
             };
             match runtime.apply_transactions(
-                shard_id,
+                shard_id as ShardId,
                 storage_config,
                 height,
                 block_timestamp,
