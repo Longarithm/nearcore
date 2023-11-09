@@ -145,6 +145,7 @@ impl BlocksInProcessing {
         &self,
         block_hash: &CryptoHash,
     ) -> Result<(), BlockNotInPoolError> {
+        println!("wait {block_hash}");
         let _ = self
             .preprocessed_blocks
             .get(block_hash)
@@ -152,6 +153,7 @@ impl BlocksInProcessing {
             .1
             .apply_chunks_done
             .wait();
+        println!("waited {block_hash}");
         Ok(())
     }
 }
