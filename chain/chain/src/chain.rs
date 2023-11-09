@@ -4321,7 +4321,11 @@ impl Chain {
         }
     }
 
-    fn get_block_context(&self, block_hash: &CryptoHash, shard_uid: ShardUId) -> BlockContext {
+    fn get_block_context<'a>(
+        &'a self,
+        block_hash: &CryptoHash,
+        shard_uid: ShardUId,
+    ) -> BlockContext<'a> {
         let block_header = self.get_block_header(block_hash).unwrap();
         let prev_header = self.get_previous_header(&block_header).unwrap();
         let new_extra = self.get_chunk_extra(prev_header.hash(), &shard_uid).unwrap();
