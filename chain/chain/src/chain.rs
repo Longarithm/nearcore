@@ -505,7 +505,7 @@ pub enum VerifyBlockHashAndSignatureResult {
     CannotVerifyBecauseBlockIsOrphan,
 }
 
-struct BlockContext<'a> {
+struct BlockContext {
     block_hash: CryptoHash,
     prev_block_hash: CryptoHash,
     challenges_result: ChallengesResult,
@@ -513,8 +513,9 @@ struct BlockContext<'a> {
     gas_price: Balance,
     height: BlockHeight,
     random_seed: CryptoHash,
+    new_extra: Arc<ChunkExtra>,
     state_root: CryptoHash,
-    validator_proposals: ValidatorStakeIter<'a>,
+    // validator_proposals: ValidatorStakeIter,
     gas_limit: Gas,
 }
 
@@ -4143,6 +4144,7 @@ impl Chain {
                     state_patch: state_patch.take(),
                     record_storage: false,
                 };
+                let validator_proposals = block_context.new_extra.validator_proposals();
                 let apply_tx_result = runtime.apply_transactions(
                     shard_id,
                     storage_config,
@@ -4152,7 +4154,7 @@ impl Chain {
                     &block_context.block_hash,
                     &[],
                     &[],
-                    block_context.validator_proposals,
+                    validator_proposals,
                     block_context.gas_price,
                     block_context.gas_limit,
                     &block_context.challenges_result,
@@ -4182,6 +4184,7 @@ impl Chain {
                 state_patch: state_patch.take(),
                 record_storage: false,
             };
+            let validator_proposals = block_context.new_extra.validator_proposals();
             let apply_result = runtime.apply_transactions(
                 shard_id,
                 storage_config,
@@ -4191,7 +4194,7 @@ impl Chain {
                 &block_context.block_hash,
                 &receipts,
                 chunk.transactions(),
-                block_context.validator_proposals,
+                validator_proposals,
                 block_context.gas_price,
                 block_context.gas_limit,
                 &block_context.challenges_result,
@@ -4321,11 +4324,7 @@ impl Chain {
         }
     }
 
-    fn get_block_context<'a>(
-        &'a self,
-        block_hash: &CryptoHash,
-        shard_uid: ShardUId,
-    ) -> BlockContext<'a> {
+    fn get_block_context(&self, block_hash: &CryptoHash, shard_uid: ShardUId) -> BlockContext {
         let block_header = self.get_block_header(block_hash).unwrap();
         let prev_header = self.get_previous_header(&block_header).unwrap();
         let new_extra = self.get_chunk_extra(prev_header.hash(), &shard_uid).unwrap();
@@ -4337,8 +4336,9 @@ impl Chain {
             gas_price: prev_header.next_gas_price(),
             height: block_header.height(),
             random_seed: *block_header.random_value(),
+            new_extra,
             state_root: *new_extra.state_root(),
-            validator_proposals: new_extra.validator_proposals(),
+            // validator_proposals: new_extra.validator_proposals(),
             gas_limit: new_extra.gas_limit(),
         }
     }
