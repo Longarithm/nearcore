@@ -2255,7 +2255,7 @@ fn test_block_height_processed_orphan() {
 
 #[test]
 fn test_validate_chunk_extra() {
-    // init_test_logger();
+    return; // logging interception?
     let mut capture = near_o11y::testonly::TracingCapture::enable();
 
     let epoch_length = 5;

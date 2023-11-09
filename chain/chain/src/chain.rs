@@ -518,6 +518,7 @@ struct BlockContext {
     state_root: CryptoHash,
     // validator_proposals: ValidatorStakeIter,
     gas_limit: Gas,
+    is_first_block_with_chunk_of_version: bool,
 }
 
 impl Chain {
@@ -4099,39 +4100,6 @@ impl Chain {
         // (see https://github.com/near/nearcore/pull/4248/)
         // We take the first block with existing chunk in the first epoch in which protocol feature
         // RestoreReceiptsAfterFixApplyChunks was enabled, and put the restored receipts there.
-        let is_first_block_with_chunk_of_version = check_if_block_is_first_with_chunk_of_version(
-            self.store(),
-            self.epoch_manager.as_ref(),
-            prev_hash,
-            shard_id as ShardId,
-        )?;
-
-        // old
-        // I think it is safe to take it based on only old block info.
-        // let block_hash = *block.hash();
-        // let challenges_result = block.header().challenges_result().clone();
-        // let block_timestamp = block.header().raw_timestamp();
-        // let next_gas_price = prev_block.header().next_gas_price();
-        // let random_seed = *block.header().random_value();
-        // let height = block.header().height();
-        // let new_extra = self.get_chunk_extra(&prev_block_hash, &shard_uid)?;
-        // let state_root = *new_extra.state_root();
-        // let validator_proposals = new_extra.validator_proposals();
-        // let gas_limit = new_extra.gas_limit();
-
-        // new
-        // let block_hash = *block.hash();
-        // let challenges_result = block.header().challenges_result().clone();
-        // let block_timestamp = block.header().raw_timestamp();
-        // let next_gas_price = prev_block.header().next_gas_price();
-        // let random_seed = *block.header().random_value();
-        // let height = chunk_header.height_included();
-        // let prev_block_hash = *chunk_header.prev_block_hash();
-        // let chunk_inner = chunk.cloned_header().take_inner();
-        // chunk_inner.prev_validator_proposals()
-        // chunk_inner.prev_state_root()
-        // let gas_limit = chunk_inner.gas_limit();
-
         let epoch_manager = self.epoch_manager.clone();
         let runtime = self.runtime_adapter.clone();
         let height = block.header().height();
@@ -4145,9 +4113,6 @@ impl Chain {
                 shard_id)
             .entered();
             let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
-            let mut trie_refcount = TrieRefcountDeltaMap::new();
-            let mut state_changes: BTreeMap<Vec<u8>, (TrieKey, RawStateChange)> =
-                BTreeMap::default();
 
             let last_block = block_contexts.pop().unwrap();
             let first_blocks = block_contexts.into_iter();
@@ -4177,20 +4142,8 @@ impl Chain {
                     &block_context.challenges_result,
                     block_context.random_seed,
                     false,
-                    false, // is_first_block_with_chunk_of_version,
+                    block_context.is_first_block_with_chunk_of_version,
                 )?;
-
-                for c in apply_tx_result.trie_changes.state_changes.into_iter() {
-                    // todo: aggregation
-                    let key = c.trie_key.to_vec();
-                    state_changes.insert(key, (c.trie_key, c.changes.last().unwrap().clone()));
-                }
-                for t in apply_tx_result.trie_changes.trie_changes.insertions() {
-                    trie_refcount.add(*t.hash(), t.payload().to_vec(), t.rc.into());
-                }
-                for t in apply_tx_result.trie_changes.trie_changes.deletions() {
-                    trie_refcount.subtract(t.trie_node_or_value_hash, t.rc.into());
-                }
             }
 
             let block_context = last_block;
@@ -4217,24 +4170,8 @@ impl Chain {
                 &block_context.challenges_result,
                 block_context.random_seed,
                 true,
-                false, // is_first_block_with_chunk_of_version,
+                block_context.is_first_block_with_chunk_of_version,
             )?;
-            for c in apply_result.trie_changes.state_changes.iter() {
-                // todo: aggregation of all changes?
-                let key = c.trie_key.to_vec();
-                state_changes.insert(key, (c.trie_key.clone(), c.changes.last().unwrap().clone()));
-            }
-            for t in apply_result.trie_changes.trie_changes.insertions() {
-                trie_refcount.add(*t.hash(), t.payload().to_vec(), t.rc.into());
-            }
-            for t in apply_result.trie_changes.trie_changes.deletions() {
-                trie_refcount.subtract(t.trie_node_or_value_hash, t.rc.into());
-            }
-            // aggregate changes
-            let (i, d) = trie_refcount.into_changes();
-            apply_result.trie_changes.trie_changes.insertions = i;
-            apply_result.trie_changes.trie_changes.deletions = d;
-            // apply_result.trie_changes.state_changes = // ???
 
             let apply_split_result_or_state_changes = if will_shard_layout_change {
                 Some(ChainUpdate::apply_split_state_changes(
@@ -4357,6 +4294,12 @@ impl Chain {
         let block_header = self.get_block_header(block_hash).unwrap();
         let prev_header = self.get_previous_header(&block_header).unwrap();
         let new_extra = self.get_chunk_extra(prev_header.hash(), &shard_uid).unwrap();
+        let is_first_block_with_chunk_of_version = check_if_block_is_first_with_chunk_of_version(
+            self.store(),
+            self.epoch_manager.as_ref(),
+            prev_header.hash(),
+            shard_uid.shard_id(),
+        )?;
         BlockContext {
             block_hash: *block_hash,
             prev_block_hash: *block_header.prev_hash(),
@@ -4369,6 +4312,7 @@ impl Chain {
             state_root: *new_extra.state_root(),
             // validator_proposals: new_extra.validator_proposals(),
             gas_limit: new_extra.gas_limit(),
+            is_first_block_with_chunk_of_version,
         }
     }
     /// Returns the apply chunk job when applying a new chunk and applying transactions.
