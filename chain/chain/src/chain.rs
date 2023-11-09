@@ -3984,7 +3984,7 @@ impl Chain {
         shard_id: ShardId,
         mode: ApplyChunksMode,
         will_shard_layout_change: bool,
-        state_patch: SandboxStatePatch,
+        mut state_patch: SandboxStatePatch,
     ) -> Result<Option<ApplyChunkJob>, Error> {
         let prev_chunk_height_included = prev_chunk_header.height_included();
         let (block_copy, receipts_block_hash, prev_chunk_height_included) = {
@@ -4136,7 +4136,7 @@ impl Chain {
                 state_root: *chunk_inner.prev_state_root(),
                 use_flat_storage: true,
                 source: crate::types::StorageDataSource::Db,
-                state_patch: SandboxStatePatch::new(vec![]),
+                state_patch: state_patch.take(),
                 record_storage: false,
             };
             let last_block = block_contexts.pop().unwrap();
@@ -4166,10 +4166,10 @@ impl Chain {
                     state_changes.insert(key, (c.trie_key, c.changes.last().unwrap().clone()));
                 }
                 for t in apply_tx_result.trie_changes.trie_changes.insertions() {
-                    trie_refcount.add(*t.hash(), t.payload().to_vec(), t.rc as u32);
+                    trie_refcount.add(*t.hash(), t.payload().to_vec(), t.rc.into());
                 }
                 for t in apply_tx_result.trie_changes.trie_changes.deletions() {
-                    trie_refcount.subtract(t.trie_node_or_value_hash, t.rc as u32);
+                    trie_refcount.subtract(t.trie_node_or_value_hash, t.rc.into());
                 }
             }
 
