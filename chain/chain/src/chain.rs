@@ -4247,6 +4247,7 @@ impl Chain {
                 None
             };
 
+            println!("test_validate_chunk {height} finished");
             Ok(ApplyChunkResult::ValidatedHeight(SameHeightResult {
                 gas_limit,
                 shard_uid,
