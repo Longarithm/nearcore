@@ -4103,6 +4103,7 @@ impl Chain {
         let epoch_manager = self.epoch_manager.clone();
         let runtime = self.runtime_adapter.clone();
         let height = block.header().height();
+        let mut prev_state_root = chunk_header.prev_state_root();
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
             println!("test_validate_chunk {height} started");
@@ -4114,7 +4115,6 @@ impl Chain {
             .entered();
             let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
 
-            let mut prev_state_root = chunk_header.prev_state_root();
             let last_block = block_contexts.pop().unwrap();
             let first_blocks = block_contexts.into_iter();
             for block_context in first_blocks {
