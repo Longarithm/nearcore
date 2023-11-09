@@ -246,7 +246,6 @@ pub enum StorageDataSource {
     Recorded(PartialStorage),
 }
 
-#[derive(Clone)]
 pub struct RuntimeStorageConfig {
     pub state_root: StateRoot,
     pub use_flat_storage: bool,

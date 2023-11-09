@@ -4132,19 +4132,20 @@ impl Chain {
             let mut trie_refcount = TrieRefcountDeltaMap::new();
             let mut state_changes: BTreeMap<Vec<u8>, (TrieKey, RawStateChange)> =
                 BTreeMap::default();
-            let mut storage_config = RuntimeStorageConfig {
-                state_root: *chunk_inner.prev_state_root(),
-                use_flat_storage: true,
-                source: crate::types::StorageDataSource::Db,
-                state_patch: state_patch.take(),
-                record_storage: false,
-            };
+
             let last_block = block_contexts.pop().unwrap();
             let first_blocks = block_contexts.into_iter();
             for block_context in first_blocks {
+                let storage_config = RuntimeStorageConfig {
+                    state_root: block_context.state_root,
+                    use_flat_storage: true,
+                    source: crate::types::StorageDataSource::Db,
+                    state_patch: state_patch.take(),
+                    record_storage: false,
+                };
                 let apply_tx_result = runtime.apply_transactions(
                     shard_id,
-                    storage_config.clone(),
+                    storage_config,
                     block_context.height,
                     block_context.block_timestamp,
                     &block_context.prev_block_hash,
@@ -4174,10 +4175,16 @@ impl Chain {
             }
 
             let block_context = last_block;
-
+            let storage_config = RuntimeStorageConfig {
+                state_root: block_context.state_root,
+                use_flat_storage: true,
+                source: crate::types::StorageDataSource::Db,
+                state_patch: state_patch.take(),
+                record_storage: false,
+            };
             let apply_result = runtime.apply_transactions(
                 shard_id,
-                storage_config.clone(),
+                storage_config,
                 block_context.height,
                 block_context.block_timestamp,
                 &block_context.prev_block_hash,
