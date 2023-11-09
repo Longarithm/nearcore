@@ -84,6 +84,7 @@ impl TestEnv {
     /// infrastructure. Hopefully this is good enough, but, if it isn't, we can
     /// add something more robust.
     pub fn pause_block_processing(&mut self, capture: &mut TracingCapture, block: &CryptoHash) {
+        println!("pausing");
         let paused_blocks = Arc::clone(&self.paused_blocks);
         paused_blocks.lock().unwrap().insert(*block, Arc::new(OnceCell::new()));
         capture.set_callback(move |msg| {
@@ -104,6 +105,7 @@ impl TestEnv {
 
     /// See `pause_block_processing`.
     pub fn resume_block_processing(&mut self, block: &CryptoHash) {
+        println!("resuming");
         let mut paused_blocks = self.paused_blocks.lock().unwrap();
         let cell = paused_blocks.remove(block).unwrap();
         let _ = cell.set(());
