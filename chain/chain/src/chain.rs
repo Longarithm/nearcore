@@ -4132,9 +4132,10 @@ impl Chain {
 
         let epoch_manager = self.epoch_manager.clone();
         let runtime = self.runtime_adapter.clone();
+        let height = block.header().height();
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-            println!("test_validate_chunk {} started", block.header().height());
+            println!("test_validate_chunk {height} started");
             let _span = tracing::debug_span!(
                 target: "chain",
                 parent: parent_span,
