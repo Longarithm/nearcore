@@ -4383,6 +4383,7 @@ impl Chain {
         };
 
         let chunk_inner = chunk.cloned_header().take_inner();
+        let gas_limit = chunk_inner.gas_limit();
 
         // This variable is responsible for checking to which block we can apply receipts previously lost in apply_chunks
         // (see https://github.com/near/nearcore/pull/4248/)
@@ -4395,7 +4396,13 @@ impl Chain {
             shard_id,
         )?;
 
-        let gas_limit = chunk_inner.gas_limit();
+        let block_hash = *block.hash();
+        let challenges_result = block.header().challenges_result().clone();
+        let block_timestamp = block.header().raw_timestamp();
+        let next_gas_price = prev_block.header().next_gas_price();
+        let random_seed = *block.header().random_value();
+        let height = chunk_header.height_included();
+        let prev_block_hash = *chunk_header.prev_block_hash();
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
             let _span = tracing::debug_span!(
