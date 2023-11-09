@@ -3951,6 +3951,7 @@ impl Chain {
     /// Returns the apply chunk job when applying a new chunk and applying transactions.
     fn get_apply_chunk_to_validate_job(
         &self,
+        me: &Option<AccountId>,
         block: &Block,
         // prev_block: &Block,
         // chunk_header: &ShardChunkHeader,
@@ -3964,7 +3965,7 @@ impl Chain {
         // split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
         chunk_header: &ShardChunkHeader,
         prev_chunk_header: &ShardChunkHeader,
-        shard_id: usize,
+        shard_id: ShardId,
         mode: ApplyChunksMode,
         will_shard_layout_change: bool,
         state_patch: SandboxStatePatch,
@@ -3998,6 +3999,24 @@ impl Chain {
             return Ok(None);
         }
         let prev_header = self.get_block_header(prev_hash)?;
+        let cares_about_shard_this_epoch =
+            self.shard_tracker.care_about_shard(me.as_ref(), prev_hash, shard_id, true);
+        let cares_about_shard_next_epoch =
+            self.shard_tracker.will_care_about_shard(me.as_ref(), prev_hash, shard_id, true);
+        let should_apply_transactions = get_should_apply_transactions(
+            mode,
+            cares_about_shard_this_epoch,
+            cares_about_shard_next_epoch,
+        );
+        let need_to_split_states = will_shard_layout_change && cares_about_shard_next_epoch;
+        let split_state_roots = if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp {
+            Some(self.get_split_state_roots(block, shard_id)?)
+        } else {
+            None
+        };
+        if !should_apply_transactions {
+            return Ok(None);
+        }
 
         // reverse order
         let receipts_response = &self.store().get_incoming_receipts_for_shard(
@@ -4062,7 +4081,6 @@ impl Chain {
         let prev_block_hash = *chunk_header.prev_block_hash();
         let epoch_manager = self.epoch_manager.clone();
         let runtime = self.runtime_adapter.clone();
-        let split_state_roots = None;
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
             let _span = tracing::debug_span!(
@@ -4080,7 +4098,7 @@ impl Chain {
                 record_storage: false,
             };
             match runtime.apply_transactions(
-                shard_id as ShardId,
+                shard_id,
                 storage_config,
                 height,
                 block_timestamp,
