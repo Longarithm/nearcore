@@ -4084,7 +4084,6 @@ impl Chain {
         };
 
         let chunk_inner = chunk.cloned_header().take_inner();
-        let gas_limit = chunk_inner.gas_limit();
 
         // This variable is responsible for checking to which block we can apply receipts previously lost in apply_chunks
         // (see https://github.com/near/nearcore/pull/4248/)
@@ -4105,6 +4104,7 @@ impl Chain {
             .entered();
             let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
 
+            let gas_limit = chunk_inner.gas_limit(); // should stay unchanged
             let last_block = block_contexts.pop().unwrap();
             let first_blocks = block_contexts.into_iter();
             for block_context in first_blocks {
@@ -4115,9 +4115,9 @@ impl Chain {
                     state_patch: state_patch.take(),
                     record_storage: false,
                 };
-                let validator_proposals = block_context.new_extra.validator_proposals();
-                // maybe we should maintain state root, actually
-                // how does flat storage work here?! ultimately it shouldn't, because state witness is storage.
+                // let validator_proposals = block_context.new_extra.validator_proposals();
+                let validator_proposals = chunk_inner.prev_validator_proposals(); // unchanged
+                                                                                  // how does flat storage work here?! ultimately it shouldn't, because state witness is storage.
                 let apply_tx_result = runtime.apply_transactions(
                     shard_id,
                     storage_config,
@@ -4146,7 +4146,9 @@ impl Chain {
                 state_patch: state_patch.take(),
                 record_storage: false,
             };
-            let validator_proposals = block_context.new_extra.validator_proposals();
+            // let validator_proposals = block_context.new_extra.validator_proposals();
+            // Unchanged. They are known already when prev chunk was processed
+            let validator_proposals = chunk_inner.prev_validator_proposals();
             let mut apply_result = runtime.apply_transactions(
                 shard_id,
                 storage_config,
