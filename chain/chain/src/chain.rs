@@ -4039,7 +4039,8 @@ impl Chain {
             prev_chunk_height_included,
         )?;
         let block_hashes: Vec<_> = receipts_response.iter().map(|r| r.0.clone()).rev().collect();
-        assert!(block_hashes.len() >= 1);
+        let block_context: Vec<_> = block_hashes.into_iter().map(|b| self.get_block_context(&b, shard_uid)).collect();
+        assert!(block_context.len() >= 1);
         let receipts = collect_receipts_from_response(receipts_response);
 
         let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
@@ -4132,11 +4133,11 @@ impl Chain {
                 state_patch,
                 record_storage: false,
             };
-            let Some((last_block, first_blocks)) = block_hashes.split_last();
+            let Some((last_block, first_blocks)) = block_context.split_last();
             for block_hash in first_blocks {
                 let apply_tx_result = runtime.apply_transactions(
                     shard_id,
-                    storage_config,
+                    storage_config.clone(),
                     height,
                     block_timestamp,
                     &prev_block_hash,
