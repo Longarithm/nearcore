@@ -4485,7 +4485,7 @@ impl Chain {
         let prev_block_hash = *chunk_header.prev_block_hash();
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-            println!("new_chunk {height} started");
+            println!("new_chunk START {height}");
             let _span = tracing::debug_span!(
                 target: "chain",
                 parent: parent_span,
@@ -4500,7 +4500,7 @@ impl Chain {
                 state_patch,
                 record_storage: false,
             };
-            match runtime.apply_transactions(
+            let res = match runtime.apply_transactions(
                 shard_id,
                 storage_config,
                 height,
@@ -4538,7 +4538,9 @@ impl Chain {
                     }))
                 }
                 Err(err) => Err(err),
-            }
+            };
+            println!("new_chunk END {height}");
+            res
         })))
     }
 
