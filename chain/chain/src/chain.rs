@@ -2625,15 +2625,15 @@ impl Chain {
             state_patch,
             invalid_chunks,
         )?;
-        // let validate_work = self.validate_chunks(
-        //     me,
-        //     block,
-        //     &prev_block,
-        //     if is_caught_up { ApplyChunksMode::IsCaughtUp } else { ApplyChunksMode::NotCaughtUp },
-        //     patch,
-        //     // invalid_chunks,
-        // )?;
-        // apply_chunk_work.extend(validate_work.into_iter());
+        let validate_work = self.validate_chunks(
+            me,
+            block,
+            &prev_block,
+            if is_caught_up { ApplyChunksMode::IsCaughtUp } else { ApplyChunksMode::NotCaughtUp },
+            patch,
+            // invalid_chunks,
+        )?;
+        apply_chunk_work.extend(validate_work.into_iter());
 
         Ok((
             apply_chunk_work,
