@@ -63,10 +63,7 @@ use near_primitives::static_clock::StaticClock;
 use near_primitives::transaction::{ExecutionOutcomeWithIdAndProof, SignedTransaction};
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::validator_stake::ValidatorStakeIter;
-use near_primitives::types::{
-    AccountId, Balance, BlockExtra, BlockHeight, BlockHeightDelta, EpochId, Gas, MerkleHash,
-    NumBlocks, NumShards, ShardId, StateChangesForSplitStates, StateRoot,
-};
+use near_primitives::types::{AccountId, Balance, BlockExtra, BlockHeight, BlockHeightDelta, EpochId, Gas, MerkleHash, NumBlocks, NumShards, RawStateChanges, ShardId, StateChangesForSplitStates, StateRoot};
 use near_primitives::unwrap_or_return;
 use near_primitives::utils::MaybeValidated;
 use near_primitives::version::{ProtocolFeature, PROTOCOL_VERSION};
@@ -89,6 +86,7 @@ use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::time::{Duration as TimeDuration, Instant};
 use tracing::{debug, error, info, warn, Span};
+use near_store::trie::TrieRefcountDeltaMap;
 
 /// Maximum number of orphans chain can store.
 pub const MAX_ORPHAN_SIZE: usize = 1024;
@@ -4088,10 +4086,12 @@ impl Chain {
             let _span = tracing::debug_span!(
                 target: "chain",
                 parent: parent_span,
-                "new_chunk",
+                "validate_chunk",
                 shard_id)
             .entered();
             let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
+            let mut trie_refcount = TrieRefcountDeltaMap::new();
+            let mut state_changes = RawStateChanges::new();
             let storage_config = RuntimeStorageConfig {
                 state_root: *chunk_inner.prev_state_root(),
                 use_flat_storage: true,
@@ -4099,23 +4099,29 @@ impl Chain {
                 state_patch,
                 record_storage: false,
             };
-            match runtime.apply_transactions(
-                shard_id,
-                storage_config,
-                height,
-                block_timestamp,
-                &prev_block_hash,
-                &block_hash,
-                &receipts,
-                chunk.transactions(),
-                chunk_inner.prev_validator_proposals(),
-                next_gas_price,
-                gas_limit,
-                &challenges_result,
-                random_seed,
-                true,
-                is_first_block_with_chunk_of_version,
-            ) {
+            let Some((last_block, first_blocks)) = block_hashes.split_last();
+            for block_hash in first_blocks {
+                let apply_tx_result = runtime.apply_transactions(
+                    shard_id,
+                    storage_config,
+                    height,
+                    block_timestamp,
+                    &prev_block_hash,
+                    &block_hash,
+                    &receipts,
+                    chunk.transactions(),
+                    chunk_inner.prev_validator_proposals(),
+                    next_gas_price,
+                    gas_limit,
+                    &challenges_result,
+                    random_seed,
+                    true,
+                    is_first_block_with_chunk_of_version,
+                );
+            }
+            // apply last block
+            let apply_result = ApplyTransactionResult // aggregate
+            match apply_result {
                 Ok(apply_result) => {
                     let apply_split_result_or_state_changes = if will_shard_layout_change {
                         Some(ChainUpdate::apply_split_state_changes(
@@ -5288,6 +5294,7 @@ pub enum ApplyChunkResult {
     SameHeight(SameHeightResult),
     DifferentHeight(DifferentHeightResult),
     SplitState(SplitStateResult),
+    ValidatedHeight(SameHeightResult),
 }
 
 impl<'a> ChainUpdate<'a> {
@@ -5588,6 +5595,14 @@ impl<'a> ChainUpdate<'a> {
         let prev_hash = block.header().prev_hash();
         let height = block.header().height();
         match result {
+            ApplyChunkResult::ValidatedHeight(SameHeightResult {
+                                                  gas_limit,
+                                                  shard_uid,
+                                                  apply_result,
+                                                  apply_split_result_or_state_changes,
+            }) => {
+                return Ok(());
+            }
             ApplyChunkResult::SameHeight(SameHeightResult {
                 gas_limit,
                 shard_uid,
