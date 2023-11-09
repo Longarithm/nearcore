@@ -89,6 +89,7 @@ use rand_chacha::ChaCha20Rng;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Debug, Formatter};
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::{Duration as TimeDuration, Instant};
 use tracing::{debug, error, info, warn, Span};
@@ -5740,7 +5741,7 @@ impl<'a> ChainUpdate<'a> {
                 let correct_ce = self
                     .chain_store_update
                     .get_chunk_extra(&apply_result.trie_changes.block_hash, &shard_uid)?;
-                assert_eq!(ce, correct_ce, "unequal chunk extras");
+                assert_eq!(Arc::new(ce), correct_ce, "unequal chunk extras");
                 return Ok(());
             }
             ApplyChunkResult::SameHeight(SameHeightResult {
