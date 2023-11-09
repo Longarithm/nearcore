@@ -4336,7 +4336,7 @@ impl Chain {
             gas_price: prev_header.next_gas_price(),
             height: block_header.height(),
             random_seed: *block_header.random_value(),
-            new_extra,
+            new_extra: new_extra.clone(),
             state_root: *new_extra.state_root(),
             // validator_proposals: new_extra.validator_proposals(),
             gas_limit: new_extra.gas_limit(),
