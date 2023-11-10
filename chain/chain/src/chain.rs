@@ -4067,7 +4067,7 @@ impl Chain {
         let mut prev_state_root = chunk_header.prev_state_root();
 
         let mut jobs: Vec<ApplyChunkJob> = vec![];
-        let gas_limit = chunk_inner.gas_limit(); // should stay unchanged
+        let gas_limit = chunk_header.gas_limit(); // should stay unchanged
         let last_block = block_contexts.pop().unwrap();
         let first_blocks = block_contexts.into_iter();
         for block_context in first_blocks {
