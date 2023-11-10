@@ -3879,6 +3879,76 @@ impl Chain {
             .collect()
     }
 
+    // Validate chunks by applying old chunks!
+    fn validate_chunks(
+        &mut self,
+        me: &Option<AccountId>,
+        block: &Block,
+        prev_block: &Block,
+        mode: ApplyChunksMode,
+        mut state_patch: SandboxStatePatch,
+        // invalid_chunks: &mut Vec<ShardChunkHeader>,
+    ) -> Result<Vec<ApplyChunkJob>, Error> {
+        let _span = tracing::debug_span!(target: "chain", "validate_chunks").entered();
+        let prev_hash = block.header().prev_hash();
+        // this shouldn't be even triggered as genesis chunks are never processed.
+        // just in case
+        if prev_hash == &CryptoHash::default() {
+            return Ok(vec![]);
+        }
+
+        let prev_prev_hash = prev_block.header().prev_hash();
+        // chunk to apply is genesis chunk. its execution result will be trivial.
+        if prev_prev_hash == &CryptoHash::default() {
+            return Ok(vec![]);
+        }
+        let prev_prev_block = self.get_block(prev_block.header().prev_hash())?;
+
+        let will_shard_layout_change = self.epoch_manager.will_shard_layout_change(prev_hash)?;
+        let prev_prev_chunk_headers =
+            Chain::get_prev_chunk_headers(self.epoch_manager.as_ref(), &prev_prev_block)?;
+
+        prev_block
+            .chunks()
+            .iter()
+            .zip(prev_prev_chunk_headers.iter())
+            .enumerate()
+            .filter_map(|(shard_id, (prev_chunk_header, prev_prev_chunk_header))| {
+                // XXX: This is a bit questionable -- sandbox state patching works
+                // only for a single shard. This so far has been enough.
+                let state_patch = state_patch.take();
+                let next_chunk_header = &block.chunks()[shard_id as usize];
+
+                if next_chunk_header.height_included() == block.header().height() {
+                    let block_hash = *block.hash();
+                    let maybe_job = self.get_apply_chunk_validating_job(
+                        me,
+                        prev_block,             // block,
+                        prev_chunk_header,      // chunk_header,
+                        prev_prev_chunk_header, // prev_chunk_header,
+                        shard_id, // ?
+                        mode, // ?
+                        will_shard_layout_change, // ?
+                        state_patch,
+                    );
+                    match maybe_job {
+                        Ok(Some(processor)) => Some(Ok(processor)),
+                        Ok(None) => None,
+                        Err(err) => {
+                            assert!(false, "Error on get_apply_chunk_validating_job for block {block_hash} shard {shard_id}: {err}");
+                            // if err.is_bad_data() {
+                            //     invalid_chunks.push(next_chunk_header.clone());
+                            // }
+                            Some(Err(err))
+                        }
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     /// This method returns the closure that is responsible for applying of a single chunk.
     fn get_apply_chunk_job(
         &self,
@@ -3971,6 +4041,182 @@ impl Chain {
         } else {
             Ok(None)
         }
+    }
+
+    /// Returns the apply chunk job when applying a new chunk and applying transactions.
+    fn get_apply_chunk_validating_job(
+        &self,
+        me: &Option<AccountId>,
+        block: &Block,
+        // prev_block: &Block,
+        chunk_header: &ShardChunkHeader,
+        prev_chunk_header: &ShardChunkHeader,
+        shard_id: usize,
+        mode: ApplyChunksMode,
+        will_shard_layout_change: bool,
+        // incoming_receipts: &HashMap<u64, Vec<ReceiptProof>>,
+        state_patch: SandboxStatePatch,
+        // block: &Block,
+        // prev_block: &Block,
+        // chunk_header: &ShardChunkHeader,
+        // prev_chunk_header: &ShardChunkHeader,
+        // shard_uid: ShardUId,
+        // will_shard_layout_change: bool,
+        // incoming_receipts: &HashMap<u64, Vec<ReceiptProof>>,
+        // state_patch: SandboxStatePatch,
+        // runtime: Arc<dyn RuntimeAdapter>,
+        // epoch_manager: Arc<dyn EpochManagerAdapter>,
+        // split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
+    ) -> Result<Option<ApplyChunkJob>, Error> {
+        // let prev_hash = block.header().prev_hash();
+        // let shard_id = shard_uid.shard_id();
+
+        let prev_chunk_height_included = prev_chunk_header.height_included();
+        let (block_copy, receipts_block_hash, prev_chunk_height_included) = {
+            let chunk_prev_hash = chunk_header.prev_block_hash().clone();
+            let mut block_hash = block.hash().clone();
+            loop {
+                let header = self.get_block_header(&block_hash)?;
+                if header.height() < prev_chunk_height_included {
+                    panic!("...");
+                }
+                let prev_hash = header.prev_hash().clone();
+                if prev_hash == chunk_prev_hash {
+                    break;
+                }
+                block_hash = prev_hash;
+            }
+            if chunk_prev_hash == CryptoHash::default() {
+                (self.get_block(&block_hash)?.clone(), block_hash.clone(), 0)
+            } else {
+                let block = self.get_block(&chunk_prev_hash)?;
+                let prev_prev_chunk_height_included = block.chunks()[shard_id].height_included();
+                (self.get_block(&block_hash)?.clone(), block_hash, prev_prev_chunk_height_included)
+            }
+        };
+        let block = &block_copy;
+        let prev_hash = block.header().prev_hash();
+        if prev_hash == &CryptoHash::default() {
+            // no dummy job - use only for validation
+            return Ok(None);
+        }
+        let prev_header = self.get_block_header(prev_hash)?;
+        let old_receipts = &self.store().get_incoming_receipts_for_shard(
+            self.epoch_manager.as_ref(),
+            shard_id as ShardId,
+            receipts_block_hash,
+            prev_chunk_height_included,
+        )?;
+
+        let receipts = collect_receipts_from_response(old_receipts);
+
+        let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
+
+        let transactions = chunk.transactions();
+        if !validate_transactions_order(transactions) {
+            let merkle_paths = Block::compute_chunk_headers_root(block.chunks().iter()).1;
+            let chunk_proof = ChunkProofs {
+                block_header: borsh::to_vec(&prev_header).expect("Failed to serialize"),
+                merkle_proof: merkle_paths[shard_id].clone(),
+                chunk: MaybeEncodedShardChunk::Decoded(chunk),
+            };
+            return Err(Error::InvalidChunkProofs(Box::new(chunk_proof)));
+        }
+
+        let protocol_version =
+            self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
+
+        if checked_feature!("stable", AccessKeyNonceRange, protocol_version) {
+            let transaction_validity_period = self.transaction_validity_period;
+            for transaction in transactions {
+                self.store()
+                    .check_transaction_validity_period(
+                        &prev_header,
+                        &transaction.transaction.block_hash,
+                        transaction_validity_period,
+                    )
+                    .map_err(|_| Error::from(Error::InvalidTransactions))?;
+            }
+        };
+
+        let chunk_inner = chunk.cloned_header().take_inner();
+        let gas_limit = chunk_inner.gas_limit();
+
+        // This variable is responsible for checking to which block we can apply receipts previously lost in apply_chunks
+        // (see https://github.com/near/nearcore/pull/4248/)
+        // We take the first block with existing chunk in the first epoch in which protocol feature
+        // RestoreReceiptsAfterFixApplyChunks was enabled, and put the restored receipts there.
+        let is_first_block_with_chunk_of_version = check_if_block_is_first_with_chunk_of_version(
+            self.store(),
+            self.epoch_manager.as_ref(),
+            prev_hash,
+            shard_id as ShardId,
+        )?;
+
+        // take seq of blocks from old_receipts, reverse and call apply_transactions.
+        let block_hash = *block.hash();
+        let challenges_result = block.header().challenges_result().clone();
+        let block_timestamp = block.header().raw_timestamp();
+        let next_gas_price = prev_block.header().next_gas_price();
+        let random_seed = *block.header().random_value();
+        let height = chunk_header.height_included();
+        let prev_block_hash = *chunk_header.prev_block_hash();
+
+        Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+            let _span = tracing::debug_span!(
+                target: "chain",
+                parent: parent_span,
+                "new_chunk",
+                shard_id)
+            .entered();
+            let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
+            let storage_config = RuntimeStorageConfig {
+                state_root: *chunk_inner.prev_state_root(),
+                use_flat_storage: true,
+                source: crate::types::StorageDataSource::Db,
+                state_patch,
+                record_storage: false,
+            };
+            match runtime.apply_transactions(
+                shard_id,
+                storage_config,
+                height,
+                block_timestamp,
+                &prev_block_hash,
+                &block_hash,
+                &receipts,
+                chunk.transactions(),
+                chunk_inner.prev_validator_proposals(),
+                next_gas_price,
+                gas_limit,
+                &challenges_result,
+                random_seed,
+                true,
+                is_first_block_with_chunk_of_version,
+            ) {
+                Ok(apply_result) => {
+                    let apply_split_result_or_state_changes = if will_shard_layout_change {
+                        Some(ChainUpdate::apply_split_state_changes(
+                            epoch_manager.as_ref(),
+                            runtime.as_ref(),
+                            &block_hash,
+                            &prev_block_hash,
+                            &apply_result,
+                            split_state_roots,
+                        )?)
+                    } else {
+                        None
+                    };
+                    Ok(ApplyChunkResult::SameHeight(SameHeightResult {
+                        gas_limit,
+                        shard_uid,
+                        apply_result,
+                        apply_split_result_or_state_changes,
+                    }))
+                }
+                Err(err) => Err(err),
+            }
+        })))
     }
 
     /// Returns the apply chunk job when applying a new chunk and applying transactions.
