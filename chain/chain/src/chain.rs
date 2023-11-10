@@ -3882,43 +3882,41 @@ impl Chain {
         let will_shard_layout_change = self.epoch_manager.will_shard_layout_change(prev_hash)?;
         let prev_prev_chunk_headers =
             Chain::get_prev_chunk_headers(self.epoch_manager.as_ref(), &prev_prev_block)?;
-        prev_block
-            .chunks()
-            .iter()
-            .zip(prev_prev_chunk_headers.iter())
-            .enumerate()
-            .map(|(shard_id, (prev_chunk_header, prev_prev_chunk_header))| {
-                // XXX: This is a bit questionable -- sandbox state patching works
-                // only for a single shard. This so far has been enough.
-                let state_patch = state_patch.take();
-                let next_chunk_header = &block.chunks()[shard_id as usize];
+        let mut jobs: Vec<ApplyChunkJob> = vec![];
+        for (shard_id, (prev_chunk_header, prev_prev_chunk_header)) in
+            prev_block.chunks().iter().zip(prev_prev_chunk_headers.iter()).enumerate()
+        {
+            // XXX: This is a bit questionable -- sandbox state patching works
+            // only for a single shard. This so far has been enough.
+            let state_patch = state_patch.take();
+            let next_chunk_header = &block.chunks()[shard_id as usize];
 
-                if next_chunk_header.height_included() == block.header().height() {
-                    let maybe_jobs = self.get_validate_chunk_jobs(
-                        me,
-                        prev_block,             // block,
-                        prev_chunk_header,      // chunk_header,
-                        prev_prev_chunk_header, // prev_chunk_header,
-                        shard_id as ShardId,
-                        mode,
-                        will_shard_layout_change,
-                        state_patch,
-                    );
-                    match maybe_jobs {
-                        Ok(jobs) => jobs,
-                        Err(err) => {
-                            assert!(false, "error");
-                            // if err.is_bad_data() {
-                            //     invalid_chunks.push(next_chunk_header.clone());
-                            // }
-                            Err(err)
-                        }
+            if next_chunk_header.height_included() == block.header().height() {
+                let maybe_jobs = self.get_validate_chunk_jobs(
+                    me,
+                    prev_block,             // block,
+                    prev_chunk_header,      // chunk_header,
+                    prev_prev_chunk_header, // prev_chunk_header,
+                    shard_id as ShardId,
+                    mode,
+                    will_shard_layout_change,
+                    state_patch,
+                );
+                match maybe_jobs {
+                    Ok(new_jobs) => {
+                        jobs.extend(new_jobs);
                     }
-                } else {
-                    vec![]
+                    Err(err) => {
+                        assert!(false, "error");
+                        // if err.is_bad_data() {
+                        //     invalid_chunks.push(next_chunk_header.clone());
+                        // }
+                        return Err(err);
+                    }
                 }
-            })
-            .collect()
+            }
+        }
+        Ok(jobs)
     }
 
     /// Creates jobs that would apply chunks
