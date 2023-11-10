@@ -4033,7 +4033,7 @@ impl Chain {
                     )?;
 
                 Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-                    self.get_apply_chunk_job_new_chunk(
+                    Self::get_apply_chunk_job_new_chunk(
                         parent_span,
                         block,
                         prev_block,
@@ -4050,7 +4050,7 @@ impl Chain {
                 })))
             } else {
                 Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-                    self.get_apply_chunk_job_old_chunk(
+                    Self::get_apply_chunk_job_old_chunk(
                         parent_span,
                         block,
                         prev_block,
@@ -4082,7 +4082,6 @@ impl Chain {
 
     /// Returns the apply chunk job when applying a new chunk and applying transactions.
     fn get_apply_chunk_job_new_chunk(
-        &self,
         parent_span: &Span,
         block: &Block,
         prev_block: &Block,
@@ -4166,7 +4165,6 @@ impl Chain {
 
     /// Returns the apply chunk job when applying an old chunk and applying transactions.
     fn get_apply_chunk_job_old_chunk(
-        &self,
         parent_span: &Span,
         block: &Block,
         prev_block: &Block,
@@ -4178,6 +4176,13 @@ impl Chain {
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
     ) -> Result<ApplyChunkResult, Error> {
+        let _span = tracing::debug_span!(
+            target: "chain",
+            parent: parent_span,
+            "existing_chunk",
+            shard_id)
+        .entered();
+
         let shard_id = shard_uid.shard_id();
         let prev_block_hash = *prev_block.hash();
 
@@ -4196,12 +4201,6 @@ impl Chain {
         let random_seed = *block.header().random_value();
         let height = block.header().height();
 
-        let _span = tracing::debug_span!(
-                target: "chain",
-                parent: parent_span,
-                "existing_chunk",
-                shard_id)
-        .entered();
         let storage_config = RuntimeStorageConfig {
             state_root: *prev_chunk_extra.state_root(),
             use_flat_storage: true,
