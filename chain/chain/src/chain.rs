@@ -4095,6 +4095,7 @@ impl Chain {
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
         is_first_block_with_chunk_of_version: bool,
     ) -> Result<ApplyChunkResult, Error> {
+        let shard_id = shard_uid.shard_id();
         let _span = tracing::debug_span!(
             target: "chain",
             parent: parent_span,
@@ -4102,7 +4103,6 @@ impl Chain {
             shard_id)
         .entered();
         let prev_block_hash = *block.header().prev_hash();
-        let shard_id = shard_uid.shard_id();
 
         let chunk_inner = chunk.cloned_header().take_inner();
         let gas_limit = chunk_inner.gas_limit();
@@ -4176,6 +4176,7 @@ impl Chain {
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
     ) -> Result<ApplyChunkResult, Error> {
+        let shard_id = shard_uid.shard_id();
         let _span = tracing::debug_span!(
             target: "chain",
             parent: parent_span,
@@ -4183,7 +4184,6 @@ impl Chain {
             shard_id)
         .entered();
 
-        let shard_id = shard_uid.shard_id();
         let prev_block_hash = *prev_block.hash();
 
         let block_hash = *block.hash();
