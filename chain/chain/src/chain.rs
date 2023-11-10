@@ -4038,7 +4038,7 @@ impl Chain {
                 let receipts = [new_receipts, old_receipts].concat();
 
                 Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-                    Self::get_apply_chunk_job_new_chunk(
+                    Self::apply_new_chunk(
                         parent_span,
                         block_context,
                         chunk,
@@ -4053,7 +4053,7 @@ impl Chain {
                 })))
             } else {
                 Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-                    Self::get_apply_chunk_job_old_chunk(
+                    Self::apply_old_chunk(
                         parent_span,
                         block_context,
                         prev_chunk_extra,
@@ -4125,7 +4125,7 @@ impl Chain {
     }
 
     /// Returns the apply chunk job when applying a new chunk and applying transactions.
-    fn get_apply_chunk_job_new_chunk(
+    fn apply_new_chunk(
         parent_span: &Span,
         block_context: BlockContext,
         chunk: ShardChunk,
@@ -4197,7 +4197,7 @@ impl Chain {
     }
 
     /// Returns the apply chunk job when applying an old chunk and applying transactions.
-    fn get_apply_chunk_job_old_chunk(
+    fn apply_old_chunk(
         parent_span: &Span,
         block_context: BlockContext,
         prev_chunk_extra: Arc<ChunkExtra>,
