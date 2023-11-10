@@ -4064,8 +4064,7 @@ impl Chain {
         // (see https://github.com/near/nearcore/pull/4248/)
         // We take the first block with existing chunk in the first epoch in which protocol feature
         // RestoreReceiptsAfterFixApplyChunks was enabled, and put the restored receipts there.
-        let epoch_manager = self.epoch_manager.clone();
-        let runtime = self.runtime_adapter.clone();
+
         let height = block.header().height();
         let mut prev_state_root = chunk_header.prev_state_root();
 
@@ -4094,7 +4093,8 @@ impl Chain {
             } else {
                 None
             };
-
+            let epoch_manager = self.epoch_manager.clone();
+            let runtime = self.runtime_adapter.clone();
             let job: ApplyChunkJob =
                 Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
                     let _span = tracing::debug_span!(
@@ -4173,6 +4173,8 @@ impl Chain {
         } else {
             None
         };
+        let epoch_manager = self.epoch_manager.clone();
+        let runtime = self.runtime_adapter.clone();
         let job: ApplyChunkJob = Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
             println!("test_validate_chunk {height} started");
             let _span = tracing::debug_span!(
