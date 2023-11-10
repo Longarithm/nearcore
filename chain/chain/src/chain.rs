@@ -3970,8 +3970,9 @@ impl Chain {
         let epoch_manager = self.epoch_manager.clone();
         let runtime = self.runtime_adapter.clone();
         if should_apply_transactions {
+            let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
+
             if is_new_chunk {
-                let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
                 let prev_chunk_height_included = prev_chunk_header.height_included();
 
                 // Validate that all next chunk information matches previous chunk extra.
@@ -4031,30 +4032,37 @@ impl Chain {
                         shard_id,
                     )?;
 
-                self.get_apply_chunk_job_new_chunk(
-                    block,
-                    prev_block,
-                    chunk,
-                    shard_uid,
-                    will_shard_layout_change,
-                    receipts,
-                    state_patch,
-                    runtime,
-                    epoch_manager,
-                    split_state_roots,
-                    is_first_block_with_chunk_of_version,
-                )
+                Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+                    self.get_apply_chunk_job_new_chunk(
+                        parent_span,
+                        block,
+                        prev_block,
+                        chunk,
+                        shard_uid,
+                        will_shard_layout_change,
+                        receipts,
+                        state_patch,
+                        runtime,
+                        epoch_manager,
+                        split_state_roots,
+                        is_first_block_with_chunk_of_version,
+                    )
+                })))
             } else {
-                self.get_apply_chunk_job_old_chunk(
-                    block,
-                    prev_block,
-                    shard_uid,
-                    will_shard_layout_change,
-                    state_patch,
-                    runtime,
-                    epoch_manager,
-                    split_state_roots,
-                )
+                Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+                    self.get_apply_chunk_job_old_chunk(
+                        parent_span,
+                        block,
+                        prev_block,
+                        prev_chunk_extra,
+                        shard_uid,
+                        will_shard_layout_change,
+                        state_patch,
+                        runtime,
+                        epoch_manager,
+                        split_state_roots,
+                    )
+                })))
             }
         } else if let Some(split_state_roots) = split_state_roots {
             // Case 3), split state are ready. Read the state changes from the
@@ -4075,6 +4083,7 @@ impl Chain {
     /// Returns the apply chunk job when applying a new chunk and applying transactions.
     fn get_apply_chunk_job_new_chunk(
         &self,
+        parent_span: &Span,
         block: &Block,
         prev_block: &Block,
         chunk: ShardChunk,
@@ -4086,7 +4095,13 @@ impl Chain {
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
         is_first_block_with_chunk_of_version: bool,
-    ) -> Result<Option<ApplyChunkJob>, Error> {
+    ) -> Result<ApplyChunkResult, Error> {
+        let _span = tracing::debug_span!(
+            target: "chain",
+            parent: parent_span,
+            "new_chunk",
+            shard_id)
+        .entered();
         let prev_block_hash = *block.header().prev_hash();
         let shard_id = shard_uid.shard_id();
 
@@ -4100,84 +4115,77 @@ impl Chain {
         let random_seed = *block.header().random_value();
         let height = block.header().height();
 
-        Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-            let _span = tracing::debug_span!(
-                target: "chain",
-                parent: parent_span,
-                "new_chunk",
-                shard_id)
-            .entered();
-            let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
-            let storage_config = RuntimeStorageConfig {
-                state_root: *chunk_inner.prev_state_root(),
-                use_flat_storage: true,
-                source: crate::types::StorageDataSource::Db,
-                state_patch,
-                record_storage: false,
-            };
-            match runtime.apply_transactions(
-                shard_id,
-                storage_config,
-                height,
-                block_timestamp,
-                &prev_block_hash,
-                &block_hash,
-                &receipts,
-                chunk.transactions(),
-                chunk_inner.prev_validator_proposals(),
-                next_gas_price,
-                gas_limit,
-                &challenges_result,
-                random_seed,
-                true,
-                is_first_block_with_chunk_of_version,
-            ) {
-                Ok(apply_result) => {
-                    let apply_split_result_or_state_changes = if will_shard_layout_change {
-                        Some(ChainUpdate::apply_split_state_changes(
-                            epoch_manager.as_ref(),
-                            runtime.as_ref(),
-                            &block_hash,
-                            &prev_block_hash,
-                            &apply_result,
-                            split_state_roots,
-                        )?)
-                    } else {
-                        None
-                    };
-                    Ok(ApplyChunkResult::SameHeight(SameHeightResult {
-                        gas_limit,
-                        shard_uid,
-                        apply_result,
-                        apply_split_result_or_state_changes,
-                    }))
-                }
-                Err(err) => Err(err),
+        let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
+        let storage_config = RuntimeStorageConfig {
+            state_root: *chunk_inner.prev_state_root(),
+            use_flat_storage: true,
+            source: crate::types::StorageDataSource::Db,
+            state_patch,
+            record_storage: false,
+        };
+        match runtime.apply_transactions(
+            shard_id,
+            storage_config,
+            height,
+            block_timestamp,
+            &prev_block_hash,
+            &block_hash,
+            &receipts,
+            chunk.transactions(),
+            chunk_inner.prev_validator_proposals(),
+            next_gas_price,
+            gas_limit,
+            &challenges_result,
+            random_seed,
+            true,
+            is_first_block_with_chunk_of_version,
+        ) {
+            Ok(apply_result) => {
+                let apply_split_result_or_state_changes = if will_shard_layout_change {
+                    Some(ChainUpdate::apply_split_state_changes(
+                        epoch_manager.as_ref(),
+                        runtime.as_ref(),
+                        &block_hash,
+                        &prev_block_hash,
+                        &apply_result,
+                        split_state_roots,
+                    )?)
+                } else {
+                    None
+                };
+                Ok(ApplyChunkResult::SameHeight(SameHeightResult {
+                    gas_limit,
+                    shard_uid,
+                    apply_result,
+                    apply_split_result_or_state_changes,
+                }))
             }
-        })))
+            Err(err) => Err(err),
+        }
     }
 
     /// Returns the apply chunk job when applying an old chunk and applying transactions.
     fn get_apply_chunk_job_old_chunk(
         &self,
+        parent_span: &Span,
         block: &Block,
         prev_block: &Block,
+        prev_chunk_extra: Arc<ChunkExtra>,
         shard_uid: ShardUId,
         will_shard_layout_change: bool,
         state_patch: SandboxStatePatch,
         runtime: Arc<dyn RuntimeAdapter>,
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
-    ) -> Result<Option<ApplyChunkJob>, Error> {
+    ) -> Result<ApplyChunkResult, Error> {
         let shard_id = shard_uid.shard_id();
         let prev_block_hash = *prev_block.hash();
-        let new_extra = self.get_chunk_extra(&prev_block_hash, &shard_uid)?;
 
         let block_hash = *block.hash();
         let challenges_result = block.header().challenges_result().clone();
         let block_timestamp = block.header().raw_timestamp();
-        let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(&prev_block_hash)?;
-        let protocol_version = self.epoch_manager.get_epoch_protocol_version(&epoch_id)?;
+        let epoch_id = epoch_manager.get_epoch_id_from_prev_block(&prev_block_hash)?;
+        let protocol_version = epoch_manager.get_epoch_protocol_version(&epoch_id)?;
 
         let next_gas_price =
             if protocol_version >= ProtocolFeature::FixApplyChunks.protocol_version() {
@@ -4188,59 +4196,57 @@ impl Chain {
         let random_seed = *block.header().random_value();
         let height = block.header().height();
 
-        Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-            let _span = tracing::debug_span!(
+        let _span = tracing::debug_span!(
                 target: "chain",
                 parent: parent_span,
                 "existing_chunk",
                 shard_id)
-            .entered();
-            let storage_config = RuntimeStorageConfig {
-                state_root: *new_extra.state_root(),
-                use_flat_storage: true,
-                source: crate::types::StorageDataSource::Db,
-                state_patch,
-                record_storage: false,
-            };
-            match runtime.apply_transactions(
-                shard_id,
-                storage_config,
-                height,
-                block_timestamp,
-                &prev_block_hash,
-                &block_hash,
-                &[],
-                &[],
-                new_extra.validator_proposals(),
-                next_gas_price,
-                new_extra.gas_limit(),
-                &challenges_result,
-                random_seed,
-                false,
-                false,
-            ) {
-                Ok(apply_result) => {
-                    let apply_split_result_or_state_changes = if will_shard_layout_change {
-                        Some(ChainUpdate::apply_split_state_changes(
-                            epoch_manager.as_ref(),
-                            runtime.as_ref(),
-                            &block_hash,
-                            &prev_block_hash,
-                            &apply_result,
-                            split_state_roots,
-                        )?)
-                    } else {
-                        None
-                    };
-                    Ok(ApplyChunkResult::DifferentHeight(DifferentHeightResult {
-                        shard_uid,
-                        apply_result,
-                        apply_split_result_or_state_changes,
-                    }))
-                }
-                Err(err) => Err(err),
+        .entered();
+        let storage_config = RuntimeStorageConfig {
+            state_root: *prev_chunk_extra.state_root(),
+            use_flat_storage: true,
+            source: crate::types::StorageDataSource::Db,
+            state_patch,
+            record_storage: false,
+        };
+        match runtime.apply_transactions(
+            shard_id,
+            storage_config,
+            height,
+            block_timestamp,
+            &prev_block_hash,
+            &block_hash,
+            &[],
+            &[],
+            prev_chunk_extra.validator_proposals(),
+            next_gas_price,
+            prev_chunk_extra.gas_limit(),
+            &challenges_result,
+            random_seed,
+            false,
+            false,
+        ) {
+            Ok(apply_result) => {
+                let apply_split_result_or_state_changes = if will_shard_layout_change {
+                    Some(ChainUpdate::apply_split_state_changes(
+                        epoch_manager.as_ref(),
+                        runtime.as_ref(),
+                        &block_hash,
+                        &prev_block_hash,
+                        &apply_result,
+                        split_state_roots,
+                    )?)
+                } else {
+                    None
+                };
+                Ok(ApplyChunkResult::DifferentHeight(DifferentHeightResult {
+                    shard_uid,
+                    apply_result,
+                    apply_split_result_or_state_changes,
+                }))
             }
-        })))
+            Err(err) => Err(err),
+        }
     }
 
     /// Returns the apply chunk job when just splitting state but not applying transactions.
