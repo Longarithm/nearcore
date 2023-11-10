@@ -2629,7 +2629,7 @@ impl Chain {
             patch,
             // invalid_chunks,
         );
-        if let Err(err) = res {
+        if let Err(err) = &res {
             println!("ERROR {err}");
         }
         let validate_work = res?;
