@@ -4025,6 +4025,18 @@ impl Chain {
         if prev_hash == &CryptoHash::default() {
             return Ok(vec![]);
         }
+        let cares_about_shard_this_epoch =
+            self.shard_tracker.care_about_shard(me.as_ref(), prev_hash, shard_id, true);
+        let cares_about_shard_next_epoch =
+            self.shard_tracker.will_care_about_shard(me.as_ref(), prev_hash, shard_id, true);
+        let should_apply_transactions = get_should_apply_transactions(
+            mode,
+            cares_about_shard_this_epoch,
+            cares_about_shard_next_epoch,
+        );
+        if !should_apply_transactions {
+            return Ok(vec![]);
+        }
 
         // reverse order
         let receipts_response = &self.store().get_incoming_receipts_for_shard(
