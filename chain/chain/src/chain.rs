@@ -4036,6 +4036,7 @@ impl Chain {
         let receipts = collect_receipts_from_response(receipts_response);
 
         let prev_header = self.get_block_header(prev_hash)?;
+        println!("get chunk header on height = {}", chunk_header.height_included());
         let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
 
         let transactions = chunk.transactions();
