@@ -3900,7 +3900,7 @@ impl Chain {
                     shard_id as ShardId,
                     mode,
                     will_shard_layout_change,
-                    state_patch,
+                    // state_patch,
                 );
                 match maybe_jobs {
                     Ok(new_jobs) => {
@@ -3982,8 +3982,14 @@ impl Chain {
         shard_id: ShardId,
         mode: ApplyChunksMode,
         will_shard_layout_change: bool,
-        mut state_patch: SandboxStatePatch,
+        // mut state_patch: SandboxStatePatch,
     ) -> Result<Vec<ApplyChunkJob>, Error> {
+        println!(
+            "get_validate_chunk_jobs {} {} {}",
+            block.header().hash(),
+            block.header().height(),
+            shard_id
+        );
         let prev_chunk_height_included = prev_chunk_header.height_included();
         let (block_copy, receipts_block_hash, prev_chunk_height_included) = {
             let chunk_prev_hash = chunk_header.prev_block_hash().clone();
