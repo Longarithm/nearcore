@@ -3911,7 +3911,7 @@ impl Chain {
                             // if err.is_bad_data() {
                             //     invalid_chunks.push(next_chunk_header.clone());
                             // }
-                            Some(Err(err))
+                            Err(err)
                         }
                     }
                 } else {
