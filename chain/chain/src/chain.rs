@@ -4076,7 +4076,6 @@ impl Chain {
         // RestoreReceiptsAfterFixApplyChunks was enabled, and put the restored receipts there.
 
         let height = block.header().height();
-        let mut prev_state_root = chunk_header.prev_state_root();
 
         let mut jobs: Vec<ApplyChunkJob> = vec![];
         let gas_limit = chunk_header.gas_limit(); // should stay unchanged
@@ -4106,6 +4105,8 @@ impl Chain {
             let epoch_manager = self.epoch_manager.clone();
             let runtime = self.runtime_adapter.clone();
             let chunk_inner = chunk.cloned_header().take_inner();
+            let new_extra = self.get_chunk_extra(&block_context.prev_block_hash, &shard_uid)?;
+            let state_root = new_extra.state_root().clone();
             let job: ApplyChunkJob =
                 Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
                     let _span = tracing::debug_span!(
@@ -4115,7 +4116,7 @@ impl Chain {
                 shard_id)
                     .entered();
                     let storage_config = RuntimeStorageConfig {
-                        state_root: prev_state_root,
+                        state_root,
                         use_flat_storage: true,
                         source: crate::types::StorageDataSource::Db,
                         state_patch: SandboxStatePatch::default(),
@@ -4166,6 +4167,7 @@ impl Chain {
 
         let block_context = last_block;
         let prev_hash = &block_context.prev_block_hash;
+        let state_root = chunk_header.prev_state_root();
         let cares_about_shard_this_epoch =
             self.shard_tracker.care_about_shard(me.as_ref(), prev_hash, shard_id, true);
         let cares_about_shard_next_epoch =
@@ -4198,7 +4200,7 @@ impl Chain {
             let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
 
             let storage_config = RuntimeStorageConfig {
-                state_root: prev_state_root,
+                state_root,
                 use_flat_storage: true,
                 source: crate::types::StorageDataSource::Db,
                 state_patch: SandboxStatePatch::default(),
