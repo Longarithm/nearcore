@@ -4199,7 +4199,7 @@ impl Chain {
     /// Returns the apply chunk job when applying an old chunk and applying transactions.
     fn get_apply_chunk_job_old_chunk(
         parent_span: &Span,
-        block_context: BlockContext
+        block_context: BlockContext,
         prev_chunk_extra: Arc<ChunkExtra>,
         shard_uid: ShardUId,
         will_shard_layout_change: bool,
