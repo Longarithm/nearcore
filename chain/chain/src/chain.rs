@@ -3985,10 +3985,11 @@ impl Chain {
         // mut state_patch: SandboxStatePatch,
     ) -> Result<Vec<ApplyChunkJob>, Error> {
         println!(
-            "get_validate_chunk_jobs {} {} {}",
+            "get_validate_chunk_jobs {} {} {} | TAIL = {}",
             block.header().hash(),
             block.header().height(),
-            shard_id
+            shard_id,
+            self.tail().unwrap()
         );
         let prev_chunk_height_included = prev_chunk_header.height_included();
         let (block_copy, receipts_block_hash, prev_chunk_height_included) = {
