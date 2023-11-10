@@ -3937,18 +3937,92 @@ impl Chain {
         let runtime = self.runtime_adapter.clone();
         if should_apply_transactions {
             if is_new_chunk {
+                let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
+                let prev_chunk_height_included = prev_chunk_header.height_included();
+
+                // Validate that all next chunk information matches previous chunk extra.
+                validate_chunk_with_chunk_extra(
+                    // It's safe here to use ChainStore instead of ChainStoreUpdate
+                    // because we're asking prev_chunk_header for already committed block
+                    self.store(),
+                    self.epoch_manager.as_ref(),
+                    prev_hash,
+                    &prev_chunk_extra,
+                    prev_chunk_height_included,
+                    chunk_header,
+                )
+                .map_err(|err| {
+                    warn!(
+                        target: "chain",
+                        ?err,
+                        prev_block_hash=?prev_hash,
+                        block_hash=?block.header().hash(),
+                        shard_id,
+                        prev_chunk_height_included,
+                        ?prev_chunk_extra,
+                        ?chunk_header,
+                        "Failed to validate chunk extra"
+                    );
+                    byzantine_assert!(false);
+                    match self.create_chunk_state_challenge(prev_block, block, chunk_header) {
+                        Ok(chunk_state) => Error::InvalidChunkState(Box::new(chunk_state)),
+                        Err(err) => err,
+                    }
+                })?;
+
+                let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
+
+                let protocol_version =
+                    self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
+                if checked_feature!("stable", AccessKeyNonceRange, protocol_version) {
+                    let transaction_validity_period = self.transaction_validity_period;
+                    for transaction in chunk.transactions() {
+                        self.store()
+                            .check_transaction_validity_period(
+                                prev_block.header(),
+                                &transaction.transaction.block_hash,
+                                transaction_validity_period,
+                            )
+                            .map_err(|_| Error::from(Error::InvalidTransactions))?;
+                    }
+                };
+
+                // we can't use hash from the current block here yet because the incoming receipts
+                // for this block is not stored yet
+                let new_receipts = collect_receipts(incoming_receipts.get(&shard_id).unwrap());
+                let old_receipts = &self.store().get_incoming_receipts_for_shard(
+                    self.epoch_manager.as_ref(),
+                    shard_id,
+                    *prev_hash,
+                    prev_chunk_height_included,
+                )?;
+                let old_receipts = collect_receipts_from_response(old_receipts);
+                let receipts = [new_receipts, old_receipts].concat();
+
+                // This variable is responsible for checking to which block we can apply receipts previously lost in apply_chunks
+                // (see https://github.com/near/nearcore/pull/4248/)
+                // We take the first block with existing chunk in the first epoch in which protocol feature
+                // RestoreReceiptsAfterFixApplyChunks was enabled, and put the restored receipts there.
+                let is_first_block_with_chunk_of_version =
+                    check_if_block_is_first_with_chunk_of_version(
+                        self.store(),
+                        epoch_manager.as_ref(),
+                        prev_block.hash(),
+                        shard_id,
+                    )?;
+
                 self.get_apply_chunk_job_new_chunk(
                     block,
                     prev_block,
-                    chunk_header,
-                    prev_chunk_header,
+                    chunk,
                     shard_uid,
                     will_shard_layout_change,
-                    incoming_receipts,
+                    receipts,
                     state_patch,
                     runtime,
                     epoch_manager,
                     split_state_roots,
+                    is_first_block_with_chunk_of_version,
                 )
             } else {
                 self.get_apply_chunk_job_old_chunk(
@@ -3983,64 +4057,18 @@ impl Chain {
         &self,
         block: &Block,
         prev_block: &Block,
-        chunk_header: &ShardChunkHeader,
-        prev_chunk_header: &ShardChunkHeader,
+        chunk: ShardChunk,
         shard_uid: ShardUId,
         will_shard_layout_change: bool,
-        incoming_receipts: &HashMap<u64, Vec<ReceiptProof>>,
+        receipts: Vec<Receipt>,
         state_patch: SandboxStatePatch,
         runtime: Arc<dyn RuntimeAdapter>,
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
+        is_first_block_with_chunk_of_version: bool,
     ) -> Result<Option<ApplyChunkJob>, Error> {
-        let prev_hash = block.header().prev_hash();
+        let prev_block_hash = *block.header().prev_hash();
         let shard_id = shard_uid.shard_id();
-
-        let prev_chunk_height_included = prev_chunk_header.height_included();
-        // Validate state root.
-        let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
-
-        // Validate that all next chunk information matches previous chunk extra.
-        validate_chunk_with_chunk_extra(
-            // It's safe here to use ChainStore instead of ChainStoreUpdate
-            // because we're asking prev_chunk_header for already committed block
-            self.store(),
-            self.epoch_manager.as_ref(),
-            prev_hash,
-            &prev_chunk_extra,
-            prev_chunk_height_included,
-            chunk_header,
-        )
-        .map_err(|err| {
-            warn!(
-                target: "chain",
-                ?err,
-                prev_block_hash=?prev_hash,
-                block_hash=?block.header().hash(),
-                shard_id,
-                prev_chunk_height_included,
-                ?prev_chunk_extra,
-                ?chunk_header,
-                "Failed to validate chunk extra");
-            byzantine_assert!(false);
-            match self.create_chunk_state_challenge(prev_block, block, chunk_header) {
-                Ok(chunk_state) => Error::InvalidChunkState(Box::new(chunk_state)),
-                Err(err) => err,
-            }
-        })?;
-        // we can't use hash from the current block here yet because the incoming receipts
-        // for this block is not stored yet
-        let new_receipts = collect_receipts(incoming_receipts.get(&shard_id).unwrap());
-        let old_receipts = &self.store().get_incoming_receipts_for_shard(
-            self.epoch_manager.as_ref(),
-            shard_id,
-            *prev_hash,
-            prev_chunk_height_included,
-        )?;
-        let old_receipts = collect_receipts_from_response(old_receipts);
-        let receipts = [new_receipts, old_receipts].concat();
-
-        let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
 
         let transactions = chunk.transactions();
         if !validate_transactions_order(transactions) {
@@ -4053,43 +4081,15 @@ impl Chain {
             return Err(Error::InvalidChunkProofs(Box::new(chunk_proof)));
         }
 
-        let protocol_version =
-            self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
-
-        if checked_feature!("stable", AccessKeyNonceRange, protocol_version) {
-            let transaction_validity_period = self.transaction_validity_period;
-            for transaction in transactions {
-                self.store()
-                    .check_transaction_validity_period(
-                        prev_block.header(),
-                        &transaction.transaction.block_hash,
-                        transaction_validity_period,
-                    )
-                    .map_err(|_| Error::from(Error::InvalidTransactions))?;
-            }
-        };
-
         let chunk_inner = chunk.cloned_header().take_inner();
         let gas_limit = chunk_inner.gas_limit();
-
-        // This variable is responsible for checking to which block we can apply receipts previously lost in apply_chunks
-        // (see https://github.com/near/nearcore/pull/4248/)
-        // We take the first block with existing chunk in the first epoch in which protocol feature
-        // RestoreReceiptsAfterFixApplyChunks was enabled, and put the restored receipts there.
-        let is_first_block_with_chunk_of_version = check_if_block_is_first_with_chunk_of_version(
-            self.store(),
-            epoch_manager.as_ref(),
-            prev_block.hash(),
-            shard_id,
-        )?;
 
         let block_hash = *block.hash();
         let challenges_result = block.header().challenges_result().clone();
         let block_timestamp = block.header().raw_timestamp();
         let next_gas_price = prev_block.header().next_gas_price();
         let random_seed = *block.header().random_value();
-        let height = chunk_header.height_included();
-        let prev_block_hash = *chunk_header.prev_block_hash();
+        let height = block.header().height();
 
         Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
             let _span = tracing::debug_span!(
