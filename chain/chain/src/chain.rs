@@ -502,6 +502,17 @@ pub enum VerifyBlockHashAndSignatureResult {
     CannotVerifyBecauseBlockIsOrphan,
 }
 
+struct BlockContext {
+    block_hash: CryptoHash,
+    prev_block_hash: CryptoHash,
+    challenges_result: ChallengesResult,
+    block_timestamp: u64,
+    gas_price: Balance,
+    height: BlockHeight,
+    random_seed: CryptoHash,
+    is_first_block_with_chunk_of_version: bool,
+}
+
 impl Chain {
     pub fn make_genesis_block(
         epoch_manager: &dyn EpochManagerAdapter,
@@ -3971,6 +3982,12 @@ impl Chain {
         let runtime = self.runtime_adapter.clone();
         if should_apply_transactions {
             let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
+            let block_context = self.get_block_context(
+                block.header(),
+                prev_block.header(),
+                shard_id,
+                is_new_chunk,
+            )?;
 
             if is_new_chunk {
                 let prev_chunk_height_included = prev_chunk_header.height_included();
@@ -4020,23 +4037,10 @@ impl Chain {
                 let old_receipts = collect_receipts_from_response(old_receipts);
                 let receipts = [new_receipts, old_receipts].concat();
 
-                // This variable is responsible for checking to which block we can apply receipts previously lost in apply_chunks
-                // (see https://github.com/near/nearcore/pull/4248/)
-                // We take the first block with existing chunk in the first epoch in which protocol feature
-                // RestoreReceiptsAfterFixApplyChunks was enabled, and put the restored receipts there.
-                let is_first_block_with_chunk_of_version =
-                    check_if_block_is_first_with_chunk_of_version(
-                        self.store(),
-                        epoch_manager.as_ref(),
-                        prev_block.hash(),
-                        shard_id,
-                    )?;
-
                 Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
                     Self::get_apply_chunk_job_new_chunk(
                         parent_span,
-                        block,
-                        prev_block,
+                        block_context,
                         chunk,
                         shard_uid,
                         will_shard_layout_change,
@@ -4045,15 +4049,13 @@ impl Chain {
                         runtime,
                         epoch_manager,
                         split_state_roots,
-                        is_first_block_with_chunk_of_version,
                     )
                 })))
             } else {
                 Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
                     Self::get_apply_chunk_job_old_chunk(
                         parent_span,
-                        block,
-                        prev_block,
+                        block_context,
                         prev_chunk_extra,
                         shard_uid,
                         will_shard_layout_change,
@@ -4080,11 +4082,52 @@ impl Chain {
         }
     }
 
+    fn get_block_context(
+        &self,
+        block_header: &BlockHeader,
+        prev_block_header: &BlockHeader,
+        shard_id: ShardId,
+        is_new_chunk: bool,
+    ) -> Result<BlockContext, Error> {
+        // backwards compatibility
+        let epoch_id = block_header.epoch_id();
+        let protocol_version = self.epoch_manager.get_epoch_protocol_version(epoch_id)?;
+        let gas_price = if !is_new_chunk
+            && protocol_version < ProtocolFeature::FixApplyChunks.protocol_version()
+        {
+            block_header.next_gas_price()
+        } else {
+            prev_block_header.next_gas_price()
+        };
+
+        // This variable is responsible for checking to which block we can apply receipts previously lost in apply_chunks
+        // (see https://github.com/near/nearcore/pull/4248/)
+        // We take the first block with existing chunk in the first epoch in which protocol feature
+        // RestoreReceiptsAfterFixApplyChunks was enabled, and put the restored receipts there.
+        let is_first_block_with_chunk_of_version = is_new_chunk
+            && check_if_block_is_first_with_chunk_of_version(
+                self.store(),
+                self.epoch_manager.as_ref(),
+                prev_block_header.hash(),
+                shard_id,
+            )?;
+
+        Ok(BlockContext {
+            block_hash: *block_header.hash(),
+            prev_block_hash: *block_header.prev_hash(),
+            challenges_result: block_header.challenges_result().clone(),
+            block_timestamp: block_header.raw_timestamp(),
+            gas_price,
+            height: block_header.height(),
+            random_seed: *block_header.random_value(),
+            is_first_block_with_chunk_of_version,
+        })
+    }
+
     /// Returns the apply chunk job when applying a new chunk and applying transactions.
     fn get_apply_chunk_job_new_chunk(
         parent_span: &Span,
-        block: &Block,
-        prev_block: &Block,
+        block_context: BlockContext,
         chunk: ShardChunk,
         shard_uid: ShardUId,
         will_shard_layout_change: bool,
@@ -4093,7 +4136,6 @@ impl Chain {
         runtime: Arc<dyn RuntimeAdapter>,
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
-        is_first_block_with_chunk_of_version: bool,
     ) -> Result<ApplyChunkResult, Error> {
         let shard_id = shard_uid.shard_id();
         let _span = tracing::debug_span!(
@@ -4102,17 +4144,8 @@ impl Chain {
             "new_chunk",
             shard_id)
         .entered();
-        let prev_block_hash = *block.header().prev_hash();
-
         let chunk_inner = chunk.cloned_header().take_inner();
         let gas_limit = chunk_inner.gas_limit();
-
-        let block_hash = *block.hash();
-        let challenges_result = block.header().challenges_result().clone();
-        let block_timestamp = block.header().raw_timestamp();
-        let next_gas_price = prev_block.header().next_gas_price();
-        let random_seed = *block.header().random_value();
-        let height = block.header().height();
 
         let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
         let storage_config = RuntimeStorageConfig {
@@ -4125,27 +4158,27 @@ impl Chain {
         match runtime.apply_transactions(
             shard_id,
             storage_config,
-            height,
-            block_timestamp,
-            &prev_block_hash,
-            &block_hash,
+            block_context.height,
+            block_context.block_timestamp,
+            &block_context.prev_block_hash,
+            &block_context.block_hash,
             &receipts,
             chunk.transactions(),
             chunk_inner.prev_validator_proposals(),
-            next_gas_price,
+            block_context.gas_price,
             gas_limit,
-            &challenges_result,
-            random_seed,
+            &block_context.challenges_result,
+            block_context.random_seed,
             true,
-            is_first_block_with_chunk_of_version,
+            block_context.is_first_block_with_chunk_of_version,
         ) {
             Ok(apply_result) => {
                 let apply_split_result_or_state_changes = if will_shard_layout_change {
                     Some(ChainUpdate::apply_split_state_changes(
                         epoch_manager.as_ref(),
                         runtime.as_ref(),
-                        &block_hash,
-                        &prev_block_hash,
+                        &block_context.block_hash,
+                        &block_context.prev_block_hash,
                         &apply_result,
                         split_state_roots,
                     )?)
@@ -4166,8 +4199,7 @@ impl Chain {
     /// Returns the apply chunk job when applying an old chunk and applying transactions.
     fn get_apply_chunk_job_old_chunk(
         parent_span: &Span,
-        block: &Block,
-        prev_block: &Block,
+        block_context: BlockContext
         prev_chunk_extra: Arc<ChunkExtra>,
         shard_uid: ShardUId,
         will_shard_layout_change: bool,
@@ -4184,23 +4216,6 @@ impl Chain {
             shard_id)
         .entered();
 
-        let prev_block_hash = *prev_block.hash();
-
-        let block_hash = *block.hash();
-        let challenges_result = block.header().challenges_result().clone();
-        let block_timestamp = block.header().raw_timestamp();
-        let epoch_id = epoch_manager.get_epoch_id_from_prev_block(&prev_block_hash)?;
-        let protocol_version = epoch_manager.get_epoch_protocol_version(&epoch_id)?;
-
-        let next_gas_price =
-            if protocol_version >= ProtocolFeature::FixApplyChunks.protocol_version() {
-                prev_block.header().next_gas_price()
-            } else {
-                block.header().next_gas_price()
-            };
-        let random_seed = *block.header().random_value();
-        let height = block.header().height();
-
         let storage_config = RuntimeStorageConfig {
             state_root: *prev_chunk_extra.state_root(),
             use_flat_storage: true,
@@ -4211,17 +4226,17 @@ impl Chain {
         match runtime.apply_transactions(
             shard_id,
             storage_config,
-            height,
-            block_timestamp,
-            &prev_block_hash,
-            &block_hash,
+            block_context.height,
+            block_context.block_timestamp,
+            &block_context.prev_block_hash,
+            &block_context.block_hash,
             &[],
             &[],
             prev_chunk_extra.validator_proposals(),
-            next_gas_price,
+            block_context.gas_price,
             prev_chunk_extra.gas_limit(),
-            &challenges_result,
-            random_seed,
+            &block_context.challenges_result,
+            block_context.random_seed,
             false,
             false,
         ) {
@@ -4230,8 +4245,8 @@ impl Chain {
                     Some(ChainUpdate::apply_split_state_changes(
                         epoch_manager.as_ref(),
                         runtime.as_ref(),
-                        &block_hash,
-                        &prev_block_hash,
+                        &block_context.block_hash,
+                        &block_context.prev_block_hash,
                         &apply_result,
                         split_state_roots,
                     )?)
