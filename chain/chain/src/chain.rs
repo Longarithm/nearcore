@@ -4095,60 +4095,61 @@ impl Chain {
                 None
             };
 
-            let job = Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-                let _span = tracing::debug_span!(
+            let job: ApplyChunkJob =
+                Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+                    let _span = tracing::debug_span!(
                 target: "chain",
                 parent: parent_span,
                 "existing_chunk",
                 shard_id)
-                .entered();
-                let storage_config = RuntimeStorageConfig {
-                    state_root: prev_state_root,
-                    use_flat_storage: true,
-                    source: crate::types::StorageDataSource::Db,
-                    state_patch: state_patch.take(),
-                    record_storage: false,
-                };
-                // how does flat storage work here?! ultimately it shouldn't, because state witness is storage.
-                match runtime.apply_transactions(
-                    shard_id,
-                    storage_config,
-                    block_context.height,
-                    block_context.block_timestamp,
-                    &block_context.prev_block_hash,
-                    &block_context.block_hash,
-                    &[],
-                    &[],
-                    chunk_inner.prev_validator_proposals(), // unchanged
-                    block_context.gas_price,
-                    gas_limit,
-                    &block_context.challenges_result,
-                    block_context.random_seed,
-                    false,
-                    block_context.is_first_block_with_chunk_of_version,
-                ) {
-                    Ok(apply_result) => {
-                        let apply_split_result_or_state_changes = if will_shard_layout_change {
-                            Some(ChainUpdate::apply_split_state_changes(
-                                epoch_manager.as_ref(),
-                                runtime.as_ref(),
-                                &block_context.block_hash,
-                                &block_context.prev_block_hash,
-                                &apply_result,
-                                split_state_roots,
-                            )?)
-                        } else {
-                            None
-                        };
-                        Ok(ApplyChunkResult::ValidatedDiffHeight(DifferentHeightResult {
-                            shard_uid,
-                            apply_result,
-                            apply_split_result_or_state_changes,
-                        }))
+                    .entered();
+                    let storage_config = RuntimeStorageConfig {
+                        state_root: prev_state_root,
+                        use_flat_storage: true,
+                        source: crate::types::StorageDataSource::Db,
+                        state_patch: state_patch.take(),
+                        record_storage: false,
+                    };
+                    // how does flat storage work here?! ultimately it shouldn't, because state witness is storage.
+                    match runtime.apply_transactions(
+                        shard_id,
+                        storage_config,
+                        block_context.height,
+                        block_context.block_timestamp,
+                        &block_context.prev_block_hash,
+                        &block_context.block_hash,
+                        &[],
+                        &[],
+                        chunk_inner.prev_validator_proposals(), // unchanged
+                        block_context.gas_price,
+                        gas_limit,
+                        &block_context.challenges_result,
+                        block_context.random_seed,
+                        false,
+                        block_context.is_first_block_with_chunk_of_version,
+                    ) {
+                        Ok(apply_result) => {
+                            let apply_split_result_or_state_changes = if will_shard_layout_change {
+                                Some(ChainUpdate::apply_split_state_changes(
+                                    epoch_manager.as_ref(),
+                                    runtime.as_ref(),
+                                    &block_context.block_hash,
+                                    &block_context.prev_block_hash,
+                                    &apply_result,
+                                    split_state_roots,
+                                )?)
+                            } else {
+                                None
+                            };
+                            Ok(ApplyChunkResult::ValidatedDiffHeight(DifferentHeightResult {
+                                shard_uid,
+                                apply_result,
+                                apply_split_result_or_state_changes,
+                            }))
+                        }
+                        Err(err) => Err(err),
                     }
-                    Err(err) => Err(err),
-                }
-            });
+                });
             jobs.push(job);
         }
 
@@ -4172,7 +4173,7 @@ impl Chain {
         } else {
             None
         };
-        let job = Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+        let job: ApplyChunkJob = Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
             println!("test_validate_chunk {height} started");
             let _span = tracing::debug_span!(
                 target: "chain",
