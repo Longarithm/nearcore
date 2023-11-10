@@ -4180,18 +4180,6 @@ impl Chain {
         let block_context = last_block;
         let prev_hash = &block_context.prev_block_hash;
         let state_root = chunk_header.prev_state_root();
-        let cares_about_shard_this_epoch =
-            self.shard_tracker.care_about_shard(me.as_ref(), prev_hash, shard_id, true);
-        let cares_about_shard_next_epoch =
-            self.shard_tracker.will_care_about_shard(me.as_ref(), prev_hash, shard_id, true);
-        let should_apply_transactions = get_should_apply_transactions(
-            mode,
-            cares_about_shard_this_epoch,
-            cares_about_shard_next_epoch,
-        );
-        if !should_apply_transactions {
-            return Ok(jobs);
-        }
         let need_to_split_states = will_shard_layout_change && cares_about_shard_next_epoch;
         let split_state_roots = if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp {
             Some(self.get_split_state_roots(block, shard_id)?)
