@@ -3907,7 +3907,7 @@ impl Chain {
                         jobs.extend(new_jobs);
                     }
                     Err(err) => {
-                        assert!(false, "error");
+                        assert!(false, "error: {err} {} {}", block.header().height(), shard_id);
                         // if err.is_bad_data() {
                         //     invalid_chunks.push(next_chunk_header.clone());
                         // }
