@@ -3884,6 +3884,40 @@ impl Chain {
             .collect()
     }
 
+    fn validate_chunk_transactions(
+        &self,
+        block: &Block,
+        prev_block_header: &BlockHeader,
+        chunk: &ShardChunk,
+    ) -> Result<(), Error> {
+        let protocol_version =
+            self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
+        if checked_feature!("stable", AccessKeyNonceRange, protocol_version) {
+            let transaction_validity_period = self.transaction_validity_period;
+            for transaction in chunk.transactions() {
+                self.store()
+                    .check_transaction_validity_period(
+                        prev_block_header,
+                        &transaction.transaction.block_hash,
+                        transaction_validity_period,
+                    )
+                    .map_err(|_| Error::from(Error::InvalidTransactions))?;
+            }
+        };
+
+        if !validate_transactions_order(chunk.transactions()) {
+            let merkle_paths = Block::compute_chunk_headers_root(block.chunks().iter()).1;
+            let chunk_proof = ChunkProofs {
+                block_header: borsh::to_vec(&block.header()).expect("Failed to serialize"),
+                merkle_proof: merkle_paths[chunk.shard_id() as usize].clone(),
+                chunk: MaybeEncodedShardChunk::Decoded(chunk.clone()),
+            };
+            return Err(Error::InvalidChunkProofs(Box::new(chunk_proof)));
+        }
+
+        return Ok(());
+    }
+
     /// This method returns the closure that is responsible for applying of a single chunk.
     fn get_apply_chunk_job(
         &self,
@@ -3971,21 +4005,7 @@ impl Chain {
                 })?;
 
                 let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
-
-                let protocol_version =
-                    self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
-                if checked_feature!("stable", AccessKeyNonceRange, protocol_version) {
-                    let transaction_validity_period = self.transaction_validity_period;
-                    for transaction in chunk.transactions() {
-                        self.store()
-                            .check_transaction_validity_period(
-                                prev_block.header(),
-                                &transaction.transaction.block_hash,
-                                transaction_validity_period,
-                            )
-                            .map_err(|_| Error::from(Error::InvalidTransactions))?;
-                    }
-                };
+                self.validate_chunk_transactions(&block, prev_block.header(), &chunk)?;
 
                 // we can't use hash from the current block here yet because the incoming receipts
                 // for this block is not stored yet
@@ -4069,17 +4089,6 @@ impl Chain {
     ) -> Result<Option<ApplyChunkJob>, Error> {
         let prev_block_hash = *block.header().prev_hash();
         let shard_id = shard_uid.shard_id();
-
-        let transactions = chunk.transactions();
-        if !validate_transactions_order(transactions) {
-            let merkle_paths = Block::compute_chunk_headers_root(block.chunks().iter()).1;
-            let chunk_proof = ChunkProofs {
-                block_header: borsh::to_vec(&block.header()).expect("Failed to serialize"),
-                merkle_proof: merkle_paths[shard_id as usize].clone(),
-                chunk: MaybeEncodedShardChunk::Decoded(chunk),
-            };
-            return Err(Error::InvalidChunkProofs(Box::new(chunk_proof)));
-        }
 
         let chunk_inner = chunk.cloned_header().take_inner();
         let gas_limit = chunk_inner.gas_limit();
