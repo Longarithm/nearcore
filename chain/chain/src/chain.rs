@@ -4107,7 +4107,7 @@ impl Chain {
                         state_root: prev_state_root,
                         use_flat_storage: true,
                         source: crate::types::StorageDataSource::Db,
-                        state_patch: state_patch.take(),
+                        state_patch: SandboxStatePatch::default(),
                         record_storage: false,
                     };
                     // how does flat storage work here?! ultimately it shouldn't, because state witness is storage.
@@ -4189,7 +4189,7 @@ impl Chain {
                 state_root: prev_state_root,
                 use_flat_storage: true,
                 source: crate::types::StorageDataSource::Db,
-                state_patch: state_patch.take(),
+                state_patch: SandboxStatePatch::default(),
                 record_storage: false,
             };
             match runtime.apply_transactions(
