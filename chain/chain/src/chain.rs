@@ -4058,8 +4058,6 @@ impl Chain {
             }
         };
 
-        let chunk_inner = chunk.cloned_header().take_inner();
-
         // This variable is responsible for checking to which block we can apply receipts previously lost in apply_chunks
         // (see https://github.com/near/nearcore/pull/4248/)
         // We take the first block with existing chunk in the first epoch in which protocol feature
@@ -4095,6 +4093,7 @@ impl Chain {
             };
             let epoch_manager = self.epoch_manager.clone();
             let runtime = self.runtime_adapter.clone();
+            let chunk_inner = chunk.cloned_header().take_inner();
             let job: ApplyChunkJob =
                 Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
                     let _span = tracing::debug_span!(
@@ -4173,6 +4172,7 @@ impl Chain {
         } else {
             None
         };
+        let chunk_inner = chunk.cloned_header().take_inner();
         let epoch_manager = self.epoch_manager.clone();
         let runtime = self.runtime_adapter.clone();
         let job: ApplyChunkJob = Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
