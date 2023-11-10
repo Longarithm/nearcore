@@ -8,6 +8,7 @@ use near_epoch_manager::{EpochManager, EpochManagerAdapter, EpochManagerHandle};
 use near_mirror::key_mapping::{map_account, map_key};
 use near_o11y::default_subscriber_with_opentelemetry;
 use near_o11y::env_filter::make_env_filter;
+use near_primitives::account::id::AccountType;
 use near_primitives::account::{AccessKey, AccessKeyPermission, Account};
 use near_primitives::borsh;
 use near_primitives::hash::CryptoHash;
@@ -24,8 +25,8 @@ use near_primitives::types::{
 };
 use near_primitives::version::PROTOCOL_VERSION;
 use near_store::db::RocksDB;
-use near_store::flat::FlatStorageStatus;
 use near_store::flat::{store_helper, BlockInfo};
+use near_store::flat::{FlatStorageManager, FlatStorageStatus};
 use near_store::{
     checkpoint_hot_storage_and_cleanup_columns, DBCol, Store, TrieDBStorage, TrieStorage,
     FINAL_HEAD_KEY,
@@ -104,7 +105,7 @@ struct SetValidatorsCmd {
     pub validators: PathBuf,
     #[arg(short, long, default_value = "1000")]
     pub epoch_length: NumBlocks,
-    #[arg(long, default_value = "-fork")]
+    #[arg(long, default_value = "-fork", allow_hyphen_values = true)]
     pub chain_id_suffix: String,
 }
 
@@ -236,30 +237,52 @@ impl ForkNetworkCommand {
         let head = store.get_ser::<Tip>(DBCol::BlockMisc, FINAL_HEAD_KEY)?.unwrap();
         let shard_layout = epoch_manager.get_shard_layout(&head.epoch_id)?;
         let all_shard_uids = shard_layout.get_shard_uids();
-        let fork_head = get_fork_head(&all_shard_uids, store.clone())?;
-        tracing::info!(?fork_head);
+        let num_shards = all_shard_uids.len();
+        // Flat state can be at different heights for different shards.
+        // That is fine, we'll simply lookup state root for each .
+        let fork_heads = get_fork_heads(&all_shard_uids, store.clone())?;
+        tracing::info!(?fork_heads);
 
         let chain =
             ChainStore::new(store.clone(), near_config.genesis.config.genesis_height, false);
 
-        let header = chain.get_block_header(&fork_head.hash)?;
-        let epoch_id = header.epoch_id();
-        let num_shards = shard_layout.num_shards();
-        let block_hash = fork_head.hash;
-        let block_height = fork_head.height + 1;
+        // Move flat storage to the max height for consistency across shards.
+        let (block_height, desired_block_hash) =
+            fork_heads.iter().map(|head| (head.height, head.hash)).max().unwrap();
 
+        let desired_block_header = chain.get_block_header(&desired_block_hash)?;
+        let epoch_id = desired_block_header.epoch_id();
+        let flat_storage_manager = FlatStorageManager::new(store.clone());
+
+        // Advance flat heads to the same (max) block height to ensure
+        // consistency of state across the shards.
         let state_roots: Vec<StateRoot> = (0..num_shards)
             .map(|shard_id| {
-                let shard_uid = epoch_manager.shard_id_to_uid(shard_id, &epoch_id).unwrap();
-                let chunk_extra = chain.get_chunk_extra(&fork_head.hash, &shard_uid).unwrap();
-                *chunk_extra.state_root()
+                let shard_uid =
+                    epoch_manager.shard_id_to_uid(shard_id as ShardId, epoch_id).unwrap();
+                flat_storage_manager.create_flat_storage_for_shard(shard_uid).unwrap();
+                let flat_storage =
+                    flat_storage_manager.get_flat_storage_for_shard(shard_uid).unwrap();
+                flat_storage.update_flat_head(&desired_block_hash, true).unwrap();
+                let chunk_extra = chain.get_chunk_extra(&desired_block_hash, &shard_uid).unwrap();
+                let state_root = chunk_extra.state_root();
+                tracing::info!(?shard_id, ?epoch_id, ?state_root);
+                *state_root
             })
             .collect();
 
-        tracing::info!(?epoch_id, ?block_hash, block_height, ?state_roots);
+        // Increment height to represent that some changes were made to the original state.
+        tracing::info!(
+            block_height,
+            ?desired_block_hash,
+            ?state_roots,
+            ?epoch_id,
+            "Moved flat heads to a common block"
+        );
+        let block_height = block_height + 1;
+
         let mut store_update = store.store_update();
         store_update.set_ser(DBCol::Misc, b"FORK_TOOL_EPOCH_ID", epoch_id)?;
-        store_update.set_ser(DBCol::Misc, b"FORK_TOOL_BLOCK_HASH", &block_hash)?;
         store_update.set(DBCol::Misc, b"FORK_TOOL_BLOCK_HEIGHT", &block_height.to_le_bytes());
         for (shard_id, state_root) in state_roots.iter().enumerate() {
             store_update.set_ser(
@@ -284,7 +307,7 @@ impl ForkNetworkCommand {
         let storage = open_storage(&home_dir, near_config).unwrap();
         let store = storage.get_hot_store();
 
-        let (prev_state_roots, prev_hash, epoch_id, _block_height) =
+        let (prev_state_roots, epoch_id, _block_height) =
             self.get_state_roots_and_hash(store.clone())?;
 
         let epoch_manager =
@@ -298,12 +321,7 @@ impl ForkNetworkCommand {
 
         let make_storage_mutator: MakeSingleShardStorageMutatorFn =
             Arc::new(move |shard_id, prev_state_root| {
-                SingleShardStorageMutator::new(
-                    shard_id,
-                    &runtime.clone(),
-                    prev_hash,
-                    prev_state_root,
-                )
+                SingleShardStorageMutator::new(shard_id, &runtime.clone(), prev_state_root)
             });
 
         let new_state_roots = self.prepare_state(
@@ -332,7 +350,7 @@ impl ForkNetworkCommand {
         let storage = open_storage(&home_dir, near_config).unwrap();
         let store = storage.get_hot_store();
 
-        let (prev_state_roots, prev_hash, epoch_id, block_height) =
+        let (prev_state_roots, epoch_id, block_height) =
             self.get_state_roots_and_hash(store.clone())?;
 
         let epoch_manager =
@@ -348,7 +366,6 @@ impl ForkNetworkCommand {
             epoch_manager.clone(),
             &runtime,
             epoch_id.clone(),
-            prev_hash,
             prev_state_roots,
         )?;
         let (new_state_roots, new_validator_accounts) =
@@ -393,9 +410,8 @@ impl ForkNetworkCommand {
     fn get_state_roots_and_hash(
         &self,
         store: Store,
-    ) -> anyhow::Result<(Vec<StateRoot>, CryptoHash, EpochId, BlockHeight)> {
+    ) -> anyhow::Result<(Vec<StateRoot>, EpochId, BlockHeight)> {
         let epoch_id = EpochId(store.get_ser(DBCol::Misc, b"FORK_TOOL_EPOCH_ID")?.unwrap());
-        let block_hash = store.get_ser(DBCol::Misc, b"FORK_TOOL_BLOCK_HASH")?.unwrap();
         let block_height = store.get(DBCol::Misc, b"FORK_TOOL_BLOCK_HEIGHT")?.unwrap();
         let block_height = u64::from_le_bytes(block_height.as_slice().try_into().unwrap());
         let mut state_roots = vec![];
@@ -408,8 +424,8 @@ impl ForkNetworkCommand {
             assert_eq!(key, format!("FORK_TOOL_SHARD_ID:{shard_id}"));
             state_roots.push(state_root);
         }
-        tracing::info!(?state_roots, ?block_hash, ?epoch_id, block_height);
-        Ok((state_roots, block_hash, epoch_id, block_height))
+        tracing::info!(?state_roots, ?epoch_id, block_height);
+        Ok((state_roots, epoch_id, block_height))
     }
 
     /// Checks that `~/.near/data/fork-snapshot/data` exists.
@@ -486,7 +502,8 @@ impl ForkNetworkCommand {
             if let Some(sr) = StateRecord::from_raw_key_value(key.clone(), value.clone()) {
                 match sr {
                     StateRecord::AccessKey { account_id, public_key, access_key } => {
-                        if !account_id.is_implicit()
+                        // TODO(eth-implicit) Change back to is_implicit() when ETH-implicit accounts are supported.
+                        if account_id.get_account_type() != AccountType::NearImplicitAccount
                             && access_key.permission == AccessKeyPermission::FullAccess
                         {
                             has_full_key.insert(account_id.clone());
@@ -503,7 +520,8 @@ impl ForkNetworkCommand {
                     }
 
                     StateRecord::Account { account_id, account } => {
-                        if account_id.is_implicit() {
+                        // TODO(eth-implicit) Change back to is_implicit() when ETH-implicit accounts are supported.
+                        if account_id.get_account_type() == AccountType::NearImplicitAccount {
                             let new_account_id = map_account(&account_id, None);
                             storage_mutator.delete_account(account_id)?;
                             storage_mutator.set_account(new_account_id, account)?;
@@ -511,7 +529,8 @@ impl ForkNetworkCommand {
                         }
                     }
                     StateRecord::Data { account_id, data_key, value } => {
-                        if account_id.is_implicit() {
+                        // TODO(eth-implicit) Change back to is_implicit() when ETH-implicit accounts are supported.
+                        if account_id.get_account_type() == AccountType::NearImplicitAccount {
                             let new_account_id = map_account(&account_id, None);
                             storage_mutator.delete_data(account_id, &data_key)?;
                             storage_mutator.set_data(new_account_id, &data_key, value)?;
@@ -519,7 +538,8 @@ impl ForkNetworkCommand {
                         }
                     }
                     StateRecord::Contract { account_id, code } => {
-                        if account_id.is_implicit() {
+                        // TODO(eth-implicit) Change back to is_implicit() when ETH-implicit accounts are supported.
+                        if account_id.get_account_type() == AccountType::NearImplicitAccount {
                             let new_account_id = map_account(&account_id, None);
                             storage_mutator.delete_code(account_id)?;
                             storage_mutator.set_code(new_account_id, code)?;
@@ -527,7 +547,11 @@ impl ForkNetworkCommand {
                         }
                     }
                     StateRecord::PostponedReceipt(receipt) => {
-                        if receipt.predecessor_id.is_implicit() || receipt.receiver_id.is_implicit()
+                        // TODO(eth-implicit) Change back to is_implicit() when ETH-implicit accounts are supported.
+                        if receipt.predecessor_id.get_account_type()
+                            == AccountType::NearImplicitAccount
+                            || receipt.receiver_id.get_account_type()
+                                == AccountType::NearImplicitAccount
                         {
                             let new_receipt = Receipt {
                                 predecessor_id: map_account(&receipt.predecessor_id, None),
@@ -541,7 +565,8 @@ impl ForkNetworkCommand {
                         }
                     }
                     StateRecord::ReceivedData { account_id, data_id, data } => {
-                        if account_id.is_implicit() {
+                        // TODO(eth-implicit) Change back to is_implicit() when ETH-implicit accounts are supported.
+                        if account_id.get_account_type() == AccountType::NearImplicitAccount {
                             let new_account_id = map_account(&account_id, None);
                             storage_mutator.delete_received_data(account_id, data_id)?;
                             storage_mutator.set_received_data(new_account_id, data_id, &data)?;
@@ -549,7 +574,11 @@ impl ForkNetworkCommand {
                         }
                     }
                     StateRecord::DelayedReceipt(receipt) => {
-                        if receipt.predecessor_id.is_implicit() || receipt.receiver_id.is_implicit()
+                        // TODO(eth-implicit) Change back to is_implicit() when ETH-implicit accounts are supported.
+                        if receipt.predecessor_id.get_account_type()
+                            == AccountType::NearImplicitAccount
+                            || receipt.receiver_id.get_account_type()
+                                == AccountType::NearImplicitAccount
                         {
                             let new_receipt = Receipt {
                                 predecessor_id: map_account(&receipt.predecessor_id, None),
@@ -774,7 +803,8 @@ fn backup_genesis_file_path(home_dir: &Path, genesis_file: &str) -> PathBuf {
 /// Returns hash of flat head.
 /// Checks that all shards have flat storage.
 /// Checks that flat heads of all shards match.
-fn get_fork_head(all_shard_uids: &[ShardUId], store: Store) -> anyhow::Result<BlockInfo> {
+fn get_fork_heads(all_shard_uids: &[ShardUId], store: Store) -> anyhow::Result<Vec<BlockInfo>> {
+    // Iterate over each shard to check that flat storage is Ready.
     let flat_heads :Vec<BlockInfo> = all_shard_uids.iter().map(|shard_uid|{
         let flat_storage_status = store
             .get_ser::<FlatStorageStatus>(DBCol::FlatStorageStatus, &shard_uid.to_bytes()).unwrap()
@@ -785,9 +815,7 @@ fn get_fork_head(all_shard_uids: &[ShardUId], store: Store) -> anyhow::Result<Bl
             panic!("Flat storage is not ready for shard {shard_uid}: {flat_storage_status:?}. Please reset the fork, and run the node for longer");
         }
     }).collect();
-    let flat_head = flat_heads[0];
-    assert!(flat_heads.iter().all(|x| x == &flat_head));
-    Ok(flat_head)
+    Ok(flat_heads)
 }
 
 fn backup_genesis_file(home_dir: &Path, near_config: &NearConfig) -> anyhow::Result<()> {

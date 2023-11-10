@@ -25,7 +25,7 @@ use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::trie_key_parsers::parse_account_id_prefix;
 use near_primitives::trie_key::TrieKey;
 pub use near_primitives::types::TrieNodesCount;
-use near_primitives::types::{AccountId, BlockHeight, StateRoot, StateRootNode};
+use near_primitives::types::{AccountId, StateRoot, StateRootNode};
 use near_vm_runner::ContractCode;
 pub use raw_node::{Children, RawTrieNode, RawTrieNodeWithSize};
 use std::cell::RefCell;
@@ -486,7 +486,6 @@ impl TrieRefcountDeltaMap {
 pub struct MemTrieChanges {
     node_ids_with_hashes: Vec<(UpdatedMemTrieNodeId, CryptoHash)>,
     updated_nodes: Vec<Option<UpdatedMemTrieNode>>,
-    block_height: BlockHeight,
 }
 
 ///
@@ -556,6 +555,57 @@ pub struct ApplyStatePartResult {
 enum NodeOrValue {
     Node(RawTrieNodeWithSize),
     Value(std::sync::Arc<[u8]>),
+}
+
+/// Like a ValueRef, but allows for optimized retrieval of the value if the
+/// value were already readily available when the ValueRef was retrieved.
+///
+/// This can be the case if the value came from flat storage, for example,
+/// when some values are inlined into the storage.
+///
+/// Information-wise, this struct contains the same information as a
+/// FlatStateValue; however, we make this a separate struct because
+/// dereferencing a ValueRef (and likewise, OptimizedValueRef) requires proper
+/// gas accounting; it is not a free operation. Therefore, while
+/// OptimizedValueRef can be directly converted to a ValueRef, dereferencing
+/// the value, even if the value is already available, can only be done via
+/// `Trie::deref_optimized`.
+#[derive(Debug, PartialEq, Eq)]
+pub enum OptimizedValueRef {
+    Ref(ValueRef),
+    AvailableValue(ValueAccessToken),
+}
+
+/// Opaque wrapper around Vec<u8> so that the value cannot be used directly and
+/// must instead be dereferenced via `Trie::deref_optimized`, so that gas
+/// accounting is never skipped.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ValueAccessToken {
+    // Must stay private.
+    value: Vec<u8>,
+}
+
+impl OptimizedValueRef {
+    fn from_flat_value(value: FlatStateValue) -> Self {
+        match value {
+            FlatStateValue::Ref(value_ref) => Self::Ref(value_ref),
+            FlatStateValue::Inlined(value) => Self::AvailableValue(ValueAccessToken { value }),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Ref(value_ref) => value_ref.len(),
+            Self::AvailableValue(token) => token.value.len(),
+        }
+    }
+
+    pub fn into_value_ref(self) -> ValueRef {
+        match self {
+            Self::Ref(value_ref) => value_ref,
+            Self::AvailableValue(token) => ValueRef::new(&token.value),
+        }
+    }
 }
 
 impl Trie {
@@ -1096,13 +1146,9 @@ impl Trie {
     fn lookup_from_flat_storage(
         &self,
         key: &[u8],
-        ref_only: bool,
-    ) -> Result<Option<FlatStateValue>, StorageError> {
+    ) -> Result<Option<OptimizedValueRef>, StorageError> {
         let flat_storage_chunk_view = self.flat_storage_chunk_view.as_ref().unwrap();
-        let mut value = flat_storage_chunk_view.get_value(key)?;
-        if ref_only {
-            value = value.map(|value| FlatStateValue::Ref(value.to_value_ref()));
-        }
+        let value = flat_storage_chunk_view.get_value(key)?;
         if self.recorder.is_some() {
             // If recording, we need to look up in the trie as well to record the trie nodes,
             // as they are needed to prove the value. Also, it's important that this lookup
@@ -1110,28 +1156,12 @@ impl Trie {
             // needed to prove the non-existence of the key.
             let value_ref_from_trie =
                 self.lookup_from_state_column(NibbleSlice::new(key), false)?;
-            match &value {
-                Some(FlatStateValue::Inlined(value)) => {
-                    assert!(value_ref_from_trie.is_some());
-                    let value_from_trie =
-                        self.retrieve_value(&value_ref_from_trie.unwrap().hash)?;
-                    assert_eq!(&value_from_trie, value);
-                }
-                Some(FlatStateValue::Ref(value_ref)) => {
-                    assert_eq!(value_ref_from_trie.as_ref(), Some(value_ref));
-                }
-                None => {
-                    assert!(value_ref_from_trie.is_none());
-                }
-            }
-        } else {
-            if let Some(FlatStateValue::Inlined(value)) = &value {
-                self.accounting_cache
-                    .borrow_mut()
-                    .retroactively_account(hash(value), value.clone().into());
-            }
+            debug_assert_eq!(
+                &value_ref_from_trie,
+                &value.as_ref().map(|value| value.to_value_ref())
+            );
         }
-        Ok(value)
+        Ok(value.map(OptimizedValueRef::from_flat_value))
     }
 
     /// Looks up the given key by walking the trie nodes stored in the
@@ -1266,7 +1296,8 @@ impl Trie {
         Ok(bytes.to_vec())
     }
 
-    /// Return the value reference to the `key`
+    /// Retrieves an `OptimizedValueRef`` for the given key. See `OptimizedValueRef`.
+    ///
     /// `mode`: whether we will try to perform the lookup through flat storage or trie.
     ///         Note that even if `mode == KeyLookupMode::FlatStorage`, we still may not use
     ///         flat storage if the trie is not created with a flat storage object in it.
@@ -1276,43 +1307,51 @@ impl Trie {
     ///         storage for key lookup performed in `storage_write`, so we need
     ///         the `use_flat_storage` to differentiate whether the lookup is performed for
     ///         storage_write or not.
-    pub fn get_ref(
+    pub fn get_optimized_ref(
         &self,
         key: &[u8],
         mode: KeyLookupMode,
-    ) -> Result<Option<ValueRef>, StorageError> {
-        let use_flat_storage =
-            mode == KeyLookupMode::FlatStorage && self.flat_storage_chunk_view.is_some();
-        let charge_gas_for_trie_node_access =
-            mode == KeyLookupMode::Trie || self.charge_gas_for_trie_node_access;
-        if use_flat_storage {
-            Ok(self.lookup_from_flat_storage(key, true)?.map(|value| value.to_value_ref()))
-        } else {
-            self.lookup_from_state_column(NibbleSlice::new(key), charge_gas_for_trie_node_access)
-        }
-    }
-
-    /// Retrieves a value, which may or may not be the complete value, for the given key.
-    /// If the full value could be obtained cheaply it is returned; otherwise only the reference
-    /// is returned.
-    fn get_flat_value(&self, key: &[u8]) -> Result<Option<FlatStateValue>, StorageError> {
-        if self.flat_storage_chunk_view.is_some() {
-            self.lookup_from_flat_storage(key, false)
+    ) -> Result<Option<OptimizedValueRef>, StorageError> {
+        if mode == KeyLookupMode::FlatStorage && self.flat_storage_chunk_view.is_some() {
+            self.lookup_from_flat_storage(key)
         } else {
             Ok(self
                 .lookup_from_state_column(
                     NibbleSlice::new(key),
-                    self.charge_gas_for_trie_node_access,
+                    mode == KeyLookupMode::Trie || self.charge_gas_for_trie_node_access,
                 )?
-                .map(|value| FlatStateValue::Ref(value)))
+                .map(OptimizedValueRef::Ref))
+        }
+    }
+
+    /// Dereferences an `OptimizedValueRef` into the full value, and properly
+    /// accounts for the gas, caching, and recording (if enabled). This may or
+    /// may not incur a on-disk lookup, depending on whether the
+    /// `OptimizedValueRef` contains an already available value.
+    pub fn deref_optimized(
+        &self,
+        optimized_value_ref: &OptimizedValueRef,
+    ) -> Result<Vec<u8>, StorageError> {
+        match optimized_value_ref {
+            OptimizedValueRef::Ref(value_ref) => self.retrieve_value(&value_ref.hash),
+            OptimizedValueRef::AvailableValue(ValueAccessToken { value }) => {
+                let value_hash = hash(value);
+                let arc_value: Arc<[u8]> = value.clone().into();
+                self.accounting_cache
+                    .borrow_mut()
+                    .retroactively_account(value_hash, arc_value.clone());
+                if let Some(recorder) = &self.recorder {
+                    recorder.borrow_mut().record(&value_hash, arc_value);
+                }
+                Ok(value.clone())
+            }
         }
     }
 
     /// Retrieves the full value for the given key.
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
-        match self.get_flat_value(key)? {
-            Some(FlatStateValue::Ref(value_ref)) => self.retrieve_value(&value_ref.hash).map(Some),
-            Some(FlatStateValue::Inlined(value)) => Ok(Some(value)),
+        match self.get_optimized_ref(key, KeyLookupMode::FlatStorage)? {
+            Some(optimized_ref) => Ok(Some(self.deref_optimized(&optimized_ref)?)),
             None => Ok(None),
         }
     }
@@ -1401,8 +1440,7 @@ mod tests {
     use rand::Rng;
 
     use crate::test_utils::{
-        create_test_store, create_tries, create_tries_complex, gen_changes, simplify_changes,
-        test_populate_trie,
+        create_test_store, gen_changes, simplify_changes, test_populate_trie, TestTriesBuilder,
     };
     use crate::{DBCol, MissingTrieValueContext};
 
@@ -1434,7 +1472,7 @@ mod tests {
     #[test]
     fn test_basic_trie() {
         // test trie version > 0
-        let tries = create_tries_complex(SHARD_VERSION, 2);
+        let tries = TestTriesBuilder::new().with_shard_layout(SHARD_VERSION, 2).build();
         let shard_uid = ShardUId { version: SHARD_VERSION, shard_id: 0 };
         let trie = tries.get_trie_for_shard(shard_uid, Trie::EMPTY_ROOT);
         assert_eq!(trie.get(&[122]), Ok(None));
@@ -1454,7 +1492,7 @@ mod tests {
 
     #[test]
     fn test_trie_iter() {
-        let tries = create_tries_complex(SHARD_VERSION, 2);
+        let tries = TestTriesBuilder::new().with_shard_layout(SHARD_VERSION, 2).build();
         let shard_uid = ShardUId { version: SHARD_VERSION, shard_id: 0 };
         let pairs = vec![
             (b"a".to_vec(), Some(b"111".to_vec())),
@@ -1488,7 +1526,7 @@ mod tests {
 
     #[test]
     fn test_trie_leaf_into_branch() {
-        let tries = create_tries_complex(SHARD_VERSION, 2);
+        let tries = TestTriesBuilder::new().with_shard_layout(SHARD_VERSION, 2).build();
         let shard_uid = ShardUId { version: SHARD_VERSION, shard_id: 0 };
         let changes = vec![
             (b"dog".to_vec(), Some(b"puppy".to_vec())),
@@ -1500,7 +1538,7 @@ mod tests {
 
     #[test]
     fn test_trie_same_node() {
-        let tries = create_tries();
+        let tries = TestTriesBuilder::new().build();
         let changes = vec![
             (b"dogaa".to_vec(), Some(b"puppy".to_vec())),
             (b"dogbb".to_vec(), Some(b"puppy".to_vec())),
@@ -1513,7 +1551,7 @@ mod tests {
 
     #[test]
     fn test_trie_iter_seek_stop_at_extension() {
-        let tries = create_tries();
+        let tries = TestTriesBuilder::new().build();
         let changes = vec![
             (vec![0, 116, 101, 115, 116], Some(vec![0])),
             (vec![2, 116, 101, 115, 116], Some(vec![0])),
@@ -1557,7 +1595,7 @@ mod tests {
 
     #[test]
     fn test_trie_remove_non_existent_key() {
-        let tries = create_tries();
+        let tries = TestTriesBuilder::new().build();
         let initial = vec![
             (vec![99, 44, 100, 58, 58, 49], Some(vec![1])),
             (vec![99, 44, 100, 58, 58, 50], Some(vec![1])),
@@ -1583,7 +1621,7 @@ mod tests {
             (vec![2, 2, 3], Some(vec![1])),
             (vec![3, 2, 3], Some(vec![1])),
         ];
-        let tries = create_tries();
+        let tries = TestTriesBuilder::new().build();
         let root = test_populate_trie(&tries, &Trie::EMPTY_ROOT, ShardUId::single_shard(), initial);
         tries.get_trie_for_shard(ShardUId::single_shard(), root).iter().unwrap().for_each(
             |result| {
@@ -1604,7 +1642,7 @@ mod tests {
     fn test_trie_unique() {
         let mut rng = rand::thread_rng();
         for _ in 0..100 {
-            let tries = create_tries();
+            let tries = TestTriesBuilder::new().build();
             let trie = tries.get_trie_for_shard(ShardUId::single_shard(), Trie::EMPTY_ROOT);
             let trie_changes = gen_changes(&mut rng, 20);
             let simplified_changes = simplify_changes(&trie_changes);
@@ -1626,7 +1664,7 @@ mod tests {
     fn test_iterator_seek_prefix() {
         let mut rng = rand::thread_rng();
         for _test_run in 0..10 {
-            let tries = create_tries();
+            let tries = TestTriesBuilder::new().build();
             let trie_changes = gen_changes(&mut rng, 500);
             let state_root = test_populate_trie(
                 &tries,
@@ -1663,7 +1701,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         for _test_run in 0..10 {
             let num_iterations = rng.gen_range(1..20);
-            let tries = create_tries();
+            let tries = TestTriesBuilder::new().build();
             let store = tries.get_store();
             let mut state_root = Trie::EMPTY_ROOT;
             for _ in 0..num_iterations {
@@ -1697,7 +1735,7 @@ mod tests {
     #[test]
     fn test_trie_restart() {
         let store = create_test_store();
-        let tries = ShardTries::test(store.clone(), 1);
+        let tries = TestTriesBuilder::new().with_store(store.clone()).build();
         let empty_root = Trie::EMPTY_ROOT;
         let changes = vec![
             (b"doge".to_vec(), Some(b"coin".to_vec())),
@@ -1709,7 +1747,7 @@ mod tests {
         ];
         let root = test_populate_trie(&tries, &empty_root, ShardUId::single_shard(), changes);
 
-        let tries2 = ShardTries::test(store, 1);
+        let tries2 = TestTriesBuilder::new().with_store(store).build();
         let trie2 = tries2.get_trie_for_shard(ShardUId::single_shard(), root);
         assert_eq!(trie2.get(b"doge"), Ok(Some(b"coin".to_vec())));
     }
@@ -1717,8 +1755,7 @@ mod tests {
     // TODO: somehow also test that we don't record unnecessary nodes
     #[test]
     fn test_trie_recording_reads() {
-        let store = create_test_store();
-        let tries = ShardTries::test(store, 1);
+        let tries = TestTriesBuilder::new().build();
         let empty_root = Trie::EMPTY_ROOT;
         let changes = vec![
             (b"doge".to_vec(), Some(b"coin".to_vec())),
@@ -1750,8 +1787,7 @@ mod tests {
 
     #[test]
     fn test_trie_recording_reads_update() {
-        let store = create_test_store();
-        let tries = ShardTries::test(store, 1);
+        let tries = TestTriesBuilder::new().build();
         let empty_root = Trie::EMPTY_ROOT;
         let changes = vec![
             (b"doge".to_vec(), Some(b"coin".to_vec())),
@@ -1786,7 +1822,7 @@ mod tests {
     #[test]
     fn test_dump_load_trie() {
         let store = create_test_store();
-        let tries = ShardTries::test(store.clone(), 1);
+        let tries = TestTriesBuilder::new().with_store(store.clone()).build();
         let empty_root = Trie::EMPTY_ROOT;
         let changes = vec![
             (b"doge".to_vec(), Some(b"coin".to_vec())),
@@ -1797,7 +1833,7 @@ mod tests {
         store.save_state_to_file(&dir.path().join("test.bin")).unwrap();
         let store2 = create_test_store();
         store2.load_state_from_file(&dir.path().join("test.bin")).unwrap();
-        let tries2 = ShardTries::test(store2, 1);
+        let tries2 = TestTriesBuilder::new().with_store(store2).build();
         let trie2 = tries2.get_trie_for_shard(ShardUId::single_shard(), root);
         assert_eq!(trie2.get(b"doge").unwrap().unwrap(), b"coin");
     }

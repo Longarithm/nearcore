@@ -111,6 +111,8 @@ pub enum StorageError {
     /// We guarantee that such block cannot become final, thus block processing
     /// must resume normally.
     FlatStorageBlockNotSupported(String),
+    /// In-memory trie could not be loaded for some reason.
+    MemTrieLoadingError(String),
 }
 
 impl std::fmt::Display for StorageError {
@@ -1201,5 +1203,28 @@ impl From<near_vm_runner::logic::errors::FunctionCallError> for FunctionCallErro
             FCE::LinkError { msg } => Self::ExecutionError(format!("Link Error: {}", msg)),
             FCE::WasmTrap(ref _e) => Self::ExecutionError(outer_err.to_string()),
         }
+    }
+}
+
+#[cfg(feature = "new_epoch_sync")]
+pub mod epoch_sync {
+    use near_primitives_core::hash::CryptoHash;
+    use near_primitives_core::types::EpochHeight;
+    use std::fmt::Debug;
+
+    #[derive(Eq, PartialEq, Clone, strum::Display, Debug)]
+    pub enum EpochSyncHashType {
+        LastFinalBlock,
+        FirstEpochBlock,
+        NextEpochFirstBlock,
+        Other,
+    }
+
+    #[derive(Eq, PartialEq, Clone, thiserror::Error, Debug)]
+    pub enum EpochSyncInfoError {
+        #[error("{hash_type} hash {hash:?} not a part of EpochSyncInfo for epoch {epoch_height}")]
+        HashNotFound { hash: CryptoHash, hash_type: EpochSyncHashType, epoch_height: EpochHeight },
+        #[error("all_block_hashes.len() < 2 for epoch {epoch_height}")]
+        ShortEpoch { epoch_height: EpochHeight },
     }
 }
