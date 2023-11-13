@@ -3858,7 +3858,7 @@ impl Chain {
         let will_shard_layout_change = self.epoch_manager.will_shard_layout_change(prev_hash)?;
         let prev_chunk_headers =
             Chain::get_prev_chunk_headers(self.epoch_manager.as_ref(), prev_block)?;
-        let jobs: Vec<Vec<ApplyChunkJob>> = block
+        Ok(block
             .chunks()
             .iter()
             .zip(prev_chunk_headers.iter())
@@ -3891,9 +3891,9 @@ impl Chain {
                     }
                 }
             })
-            .collect()?;
-
-        Ok(jobs.into_iter().flatten().collect())
+            .collect()?
+            .flatten()
+            .collect())
     }
 
     fn validate_chunk_transactions(
