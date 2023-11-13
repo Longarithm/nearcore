@@ -4141,7 +4141,7 @@ impl Chain {
                 let receipts = [new_receipts, old_receipts].concat();
 
                 jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
-                    NewApplyChunkResult::Classic(Self::apply_new_chunk(
+                    Ok(NewApplyChunkResult::Classic(Self::apply_new_chunk(
                         parent_span,
                         block_context,
                         chunk,
@@ -4152,11 +4152,11 @@ impl Chain {
                         runtime,
                         epoch_manager,
                         split_state_roots,
-                    )?)
+                    )?))
                 }));
             } else {
                 jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
-                    NewApplyChunkResult::Classic(Self::apply_old_chunk(
+                    Ok(NewApplyChunkResult::Classic(Self::apply_old_chunk(
                         parent_span,
                         block_context,
                         prev_chunk_extra.as_ref(),
@@ -4166,7 +4166,7 @@ impl Chain {
                         runtime,
                         epoch_manager,
                         split_state_roots,
-                    )?)
+                    )?))
                 }));
             }
         } else if let Some(split_state_roots) = split_state_roots {
@@ -4381,7 +4381,7 @@ impl Chain {
         let state_changes =
             self.store().get_state_changes_for_split_states(block.hash(), shard_id)?;
         let block_hash = *block.hash();
-        Ok(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+        Ok(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
             let _span = tracing::debug_span!(
                 target: "chain",
                 parent: parent_span,
@@ -4395,7 +4395,10 @@ impl Chain {
                 &next_epoch_shard_layout,
                 state_changes,
             )?;
-            Ok(ApplyChunkResult::SplitState(SplitStateResult { shard_uid, results }))
+            Ok(NewApplyChunkResult::Classic(ApplyChunkResult::SplitState(SplitStateResult {
+                shard_uid,
+                results,
+            })))
         }))
     }
 
