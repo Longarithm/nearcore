@@ -488,7 +488,7 @@ impl Drop for Chain {
 
 /// ApplyChunkJob is a closure that is responsible for applying of a single chunk.
 /// All of the chunk details and other arguments are already captured within.
-type ApplyChunkJob = Box<dyn FnOnce(&Span) -> Result<ApplyChunkResult, Error> + Send + 'static>;
+type ApplyChunkJob = Box<dyn FnOnce(&Span) -> Result<NewApplyChunkResult, Error> + Send + 'static>;
 
 /// PreprocessBlockResult is a tuple where the first element is a vector of jobs
 /// to apply chunks the second element is BlockPreprocessInfo
@@ -4053,9 +4053,10 @@ impl Chain {
                 let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header)?;
                 let epoch_manager = self.epoch_manager.clone();
                 let runtime = self.runtime_adapter.clone();
-                jobs.push(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+                jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
+                    let mut result = vec![];
                     for block_context in first_blocks {
-                        if let ApplyChunkResult::DifferentHeight(result) = Self::apply_old_chunk(
+                        result.push(Self::apply_old_chunk(
                             parent_span,
                             block_context,
                             &prev_chunk_extra,
@@ -4065,11 +4066,9 @@ impl Chain {
                             runtime.clone(),
                             epoch_manager.clone(),
                             None, // split_state_roots,
-                        )? {
-                            *prev_chunk_extra.state_root_mut() = result.apply_result.new_root;
-                        }
+                        )?);
                     }
-                    Self::apply_new_chunk(
+                    result.push(Self::apply_new_chunk(
                         parent_span,
                         last_block,
                         prev_chunk,
@@ -4080,7 +4079,8 @@ impl Chain {
                         runtime.clone(),
                         epoch_manager.clone(),
                         None, // split_state_roots,
-                    )
+                    )?);
+                    Ok(NewApplyChunkResult::Shadow(result))
                 }));
             }
 
@@ -4140,8 +4140,8 @@ impl Chain {
                 let old_receipts = collect_receipts_from_response(old_receipts);
                 let receipts = [new_receipts, old_receipts].concat();
 
-                jobs.push(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-                    Self::apply_new_chunk(
+                jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
+                    NewApplyChunkResult::Classic(Self::apply_new_chunk(
                         parent_span,
                         block_context,
                         chunk,
@@ -4152,11 +4152,11 @@ impl Chain {
                         runtime,
                         epoch_manager,
                         split_state_roots,
-                    )
+                    )?)
                 }));
             } else {
-                jobs.push(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
-                    Self::apply_old_chunk(
+                jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
+                    NewApplyChunkResult::Classic(Self::apply_old_chunk(
                         parent_span,
                         block_context,
                         prev_chunk_extra.as_ref(),
@@ -4166,7 +4166,7 @@ impl Chain {
                         runtime,
                         epoch_manager,
                         split_state_roots,
-                    )
+                    )?)
                 }));
             }
         } else if let Some(split_state_roots) = split_state_roots {
@@ -5163,6 +5163,11 @@ pub enum ApplyChunkResult {
     SameHeight(SameHeightResult),
     DifferentHeight(DifferentHeightResult),
     SplitState(SplitStateResult),
+}
+
+pub enum NewApplyChunkResult {
+    Classic(ApplyChunkResult),
+    Shadow(Vec<ApplyChunkResult>),
 }
 
 impl<'a> ChainUpdate<'a> {
