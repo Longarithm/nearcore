@@ -273,7 +273,7 @@ impl FlatStorage {
             shard_uid,
             flat_head,
             deltas,
-            move_head_enabled: true,
+            move_head_enabled: false, // true,
             metrics,
         };
         inner.update_delta_metrics();
