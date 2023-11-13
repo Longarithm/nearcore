@@ -3892,6 +3892,7 @@ impl Chain {
                 }
             })
             .collect::<Result<Vec<Vec<_>>, Error>>()?
+            .into_iter()
             .flatten()
             .collect::<Vec<_>>())
     }
