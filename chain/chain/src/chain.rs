@@ -4060,7 +4060,7 @@ impl Chain {
                     for block_context in first_blocks {
                         let r = Self::apply_old_chunk(
                             parent_span,
-                            block_context,
+                            block_context.clone(),
                             &prev_chunk_extra,
                             shard_uid,
                             will_shard_layout_change,
@@ -4072,7 +4072,7 @@ impl Chain {
                         if let ApplyChunkResult::DifferentHeight(r) = &r {
                             *prev_chunk_extra.state_root_mut() = r.apply_result.new_root;
                         }
-                        result.push((block_context.clone(), r));
+                        result.push((block_context, r));
                     }
                     result.push((
                         last_block.clone(),
