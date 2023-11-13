@@ -4058,20 +4058,21 @@ impl Chain {
                 jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
                     let mut result = vec![];
                     for block_context in first_blocks {
-                        result.push((
-                            block_context.clone(),
-                            Self::apply_old_chunk(
-                                parent_span,
-                                block_context,
-                                &prev_chunk_extra,
-                                shard_uid,
-                                will_shard_layout_change,
-                                SandboxStatePatch::default(),
-                                runtime.clone(),
-                                epoch_manager.clone(),
-                                None, // split_state_roots,
-                            )?,
-                        ));
+                        let r = Self::apply_old_chunk(
+                            parent_span,
+                            block_context,
+                            &prev_chunk_extra,
+                            shard_uid,
+                            will_shard_layout_change,
+                            SandboxStatePatch::default(),
+                            runtime.clone(),
+                            epoch_manager.clone(),
+                            None, // split_state_roots,
+                        )?;
+                        if let ApplyChunkResult::DifferentHeight(r) = &r {
+                            *prev_chunk_extra.state_root_mut() = r.apply_result.new_root;
+                        }
+                        result.push((block_context.clone(), r));
                     }
                     result.push((
                         last_block.clone(),
