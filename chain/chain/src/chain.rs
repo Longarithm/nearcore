@@ -2398,7 +2398,7 @@ impl Chain {
             .unwrap();
         if new_flat_head != CryptoHash::default() {
             let new_flat_head_header = self.get_block_header(&new_flat_head)?;
-            new_flat_head = *new_flat_head.last_final_block();
+            new_flat_head = *new_flat_head_header.last_final_block();
         }
 
         for shard_id in 0..self.epoch_manager.num_shards(epoch_id)? {
