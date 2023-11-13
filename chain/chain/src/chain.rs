@@ -423,7 +423,7 @@ pub fn check_known(
     check_known_store(chain, block_hash)
 }
 
-type BlockApplyChunksResult = (CryptoHash, Vec<Result<ApplyChunkResult, Error>>);
+type BlockApplyChunksResult = (CryptoHash, Vec<Result<NewApplyChunkResult, Error>>);
 
 /// Facade to the blockchain block processing and storage.
 /// Provides current view on the state according to the chain state.
