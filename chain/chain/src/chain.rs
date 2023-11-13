@@ -4051,6 +4051,8 @@ impl Chain {
                 let last_block = block_contexts.pop().unwrap();
                 let first_blocks = block_contexts.into_iter();
                 let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header)?;
+                let epoch_manager = self.epoch_manager.clone();
+                let runtime = self.runtime_adapter.clone();
                 jobs.push(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
                     for block_context in first_blocks {
                         if let ApplyChunkResult::DifferentHeight(result) = Self::apply_old_chunk(
