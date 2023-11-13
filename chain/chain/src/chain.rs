@@ -502,7 +502,7 @@ pub enum VerifyBlockHashAndSignatureResult {
     CannotVerifyBecauseBlockIsOrphan,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 struct BlockContext {
     block_hash: CryptoHash,
     prev_block_hash: CryptoHash,
