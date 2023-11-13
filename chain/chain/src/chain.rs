@@ -4053,7 +4053,7 @@ impl Chain {
                 let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header)?;
                 jobs.push(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
                     for block_context in first_blocks {
-                        let ApplyChunkResult::DifferentHeight(result) = Self::apply_old_chunk(
+                        if let ApplyChunkResult::DifferentHeight(result) = Self::apply_old_chunk(
                             parent_span,
                             block_context,
                             &prev_chunk_extra,
@@ -4063,8 +4063,9 @@ impl Chain {
                             runtime.clone(),
                             epoch_manager.clone(),
                             None, // split_state_roots,
-                        )?;
-                        *prev_chunk_extra.state_root_mut() = result.apply_result.new_root;
+                        )? {
+                            *prev_chunk_extra.state_root_mut() = result.apply_result.new_root;
+                        }
                     }
                     Self::apply_new_chunk(
                         parent_span,
