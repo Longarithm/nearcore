@@ -5293,7 +5293,7 @@ impl<'a> ChainUpdate<'a> {
                     self.process_apply_chunk_result(block, result)?
                 }
                 NewApplyChunkResult::Shadow(results) => {
-                    for (block_context, _result) in results {
+                    for (block_context, result) in results {
                         // let block_hash = result.
                         eprintln!(
                             "catch {} -> {} | {}",
@@ -5301,6 +5301,47 @@ impl<'a> ChainUpdate<'a> {
                             block_context.block_hash,
                             block_context.height
                         );
+
+                        match result {
+                            ApplyChunkResult::SameHeight(SameHeightResult {
+                                gas_limit,
+                                shard_uid,
+                                apply_result,
+                                apply_split_result_or_state_changes,
+                            }) => {
+                                let (outcome_root, _) =
+                                    ApplyTransactionResult::compute_outcomes_proof(
+                                        &apply_result.outcomes,
+                                    );
+                                let ce = ChunkExtra::new(
+                                    &apply_result.new_root,
+                                    outcome_root,
+                                    apply_result.validator_proposals,
+                                    apply_result.total_gas_burnt,
+                                    gas_limit,
+                                    apply_result.total_balance_burnt,
+                                );
+                                let correct_ce = self
+                                    .chain_store_update
+                                    .get_chunk_extra(&block_context.block_hash, &shard_uid)?;
+                                assert_eq!(Arc::new(ce), correct_ce, "unequal chunk extras");
+                            }
+                            ApplyChunkResult::DifferentHeight(DifferentHeightResult {
+                                shard_uid,
+                                apply_result,
+                                apply_split_result_or_state_changes,
+                            }) => {
+                                let correct_ce = self
+                                    .chain_store_update
+                                    .get_chunk_extra(&block_context.block_hash, &shard_uid)?;
+                                assert_eq!(
+                                    &apply_result.new_root,
+                                    correct_ce.state_root(),
+                                    "unequal state roots"
+                                );
+                            }
+                            _ => {}
+                        }
                     }
                 }
             }
