@@ -3868,7 +3868,7 @@ impl Chain {
                 // only for a single shard. This so far has been enough.
                 let state_patch = state_patch.take();
 
-                let apply_chunk_job = self.get_apply_chunk_job(
+                let apply_chunk_job = self.get_apply_chunk_jobs(
                     me,
                     block,
                     prev_block,
@@ -3882,8 +3882,7 @@ impl Chain {
                 );
 
                 match apply_chunk_job {
-                    Ok(Some(processor)) => Some(Ok(processor)),
-                    Ok(None) => None,
+                    Ok(processor) => Some(processor),
                     Err(err) => {
                         if err.is_bad_data() {
                             invalid_chunks.push(chunk_header.clone());
@@ -3892,6 +3891,7 @@ impl Chain {
                     }
                 }
             })
+            .flatten()
             .collect()
     }
 
@@ -3930,7 +3930,7 @@ impl Chain {
     }
 
     /// This method returns the closure that is responsible for applying of a single chunk.
-    fn get_apply_chunk_job(
+    fn get_apply_chunk_jobs(
         &self,
         me: &Option<AccountId>,
         block: &Block,
@@ -3942,7 +3942,7 @@ impl Chain {
         will_shard_layout_change: bool,
         incoming_receipts: &HashMap<u64, Vec<ReceiptProof>>,
         state_patch: SandboxStatePatch,
-    ) -> Result<Option<ApplyChunkJob>, Error> {
+    ) -> Result<Vec<ApplyChunkJob>, Error> {
         let shard_id = shard_id as ShardId;
         let prev_hash = block.header().prev_hash();
         let cares_about_shard_this_epoch =
@@ -3980,6 +3980,8 @@ impl Chain {
         let is_new_chunk = chunk_header.height_included() == block.header().height();
         let epoch_manager = self.epoch_manager.clone();
         let runtime = self.runtime_adapter.clone();
+        let mut jobs: Vec<ApplyChunkJob> = vec![];
+
         if should_apply_transactions {
             let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
             let block_context = self.get_block_context(
@@ -4037,7 +4039,7 @@ impl Chain {
                 let old_receipts = collect_receipts_from_response(old_receipts);
                 let receipts = [new_receipts, old_receipts].concat();
 
-                Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+                jobs.push(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
                     Self::apply_new_chunk(
                         parent_span,
                         block_context,
@@ -4050,9 +4052,9 @@ impl Chain {
                         epoch_manager,
                         split_state_roots,
                     )
-                })))
+                }));
             } else {
-                Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+                jobs.push(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
                     Self::apply_old_chunk(
                         parent_span,
                         block_context,
@@ -4064,22 +4066,22 @@ impl Chain {
                         epoch_manager,
                         split_state_roots,
                     )
-                })))
+                }));
             }
         } else if let Some(split_state_roots) = split_state_roots {
             // Case 3), split state are ready. Read the state changes from the
             // database and apply them to the split states.
             assert!(mode == ApplyChunksMode::CatchingUp && cares_about_shard_this_epoch);
-            self.get_apply_chunk_job_split_state(
+            jobs.push(self.get_apply_chunk_job_split_state(
                 block,
                 shard_uid,
                 runtime,
                 epoch_manager,
                 split_state_roots,
-            )
-        } else {
-            Ok(None)
+            )?);
         }
+
+        Ok(jobs)
     }
 
     fn get_block_context(
@@ -4271,14 +4273,14 @@ impl Chain {
         runtime: Arc<dyn RuntimeAdapter>,
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: HashMap<ShardUId, CryptoHash>,
-    ) -> Result<Option<ApplyChunkJob>, Error> {
+    ) -> Result<ApplyChunkJob, Error> {
         let shard_id = shard_uid.shard_id();
         let next_epoch_shard_layout =
             epoch_manager.get_shard_layout(block.header().next_epoch_id())?;
         let state_changes =
             self.store().get_state_changes_for_split_states(block.hash(), shard_id)?;
         let block_hash = *block.hash();
-        Ok(Some(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
+        Ok(Box::new(move |parent_span| -> Result<ApplyChunkResult, Error> {
             let _span = tracing::debug_span!(
                 target: "chain",
                 parent: parent_span,
@@ -4293,7 +4295,7 @@ impl Chain {
                 state_changes,
             )?;
             Ok(ApplyChunkResult::SplitState(SplitStateResult { shard_uid, results }))
-        })))
+        }))
     }
 
     /// Function to create a new snapshot if needed
