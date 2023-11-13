@@ -3893,7 +3893,7 @@ impl Chain {
             })
             .collect()?;
 
-        jobs.into_iter().flatten().collect()
+        Ok(jobs.into_iter().flatten().collect())
     }
 
     fn validate_chunk_transactions(
