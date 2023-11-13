@@ -86,10 +86,10 @@ impl FlatStorageManager {
     pub fn update_flat_storage_for_shard(
         &self,
         shard_uid: ShardUId,
-        block: &Block,
+        // block: &Block,
+        mut new_flat_head: CryptoHash,
     ) -> Result<(), StorageError> {
         if let Some(flat_storage) = self.get_flat_storage_for_shard(shard_uid) {
-            let mut new_flat_head = *block.header().last_final_block();
             if new_flat_head == CryptoHash::default() {
                 let genesis_hash = get_genesis_hash(&self.0.store)
                     .map_err(|e| FlatStorageError::StorageInternalError(e.to_string()))?

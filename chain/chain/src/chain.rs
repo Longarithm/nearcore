@@ -2412,7 +2412,8 @@ impl Chain {
             if need_flat_storage_update {
                 let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
                 let flat_storage_manager = self.runtime_adapter.get_flat_storage_manager();
-                flat_storage_manager.update_flat_storage_for_shard(shard_uid, &block)?;
+                let mut new_flat_head = *block.header().last_final_block();
+                flat_storage_manager.update_flat_storage_for_shard(shard_uid, new_flat_head)?;
             }
         }
 
@@ -3575,7 +3576,8 @@ impl Chain {
             ) {
                 let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
                 let flat_storage_manager = self.runtime_adapter.get_flat_storage_manager();
-                flat_storage_manager.update_flat_storage_for_shard(shard_uid, &block)?;
+                let mut new_flat_head = *block.header().last_final_block();
+                flat_storage_manager.update_flat_storage_for_shard(shard_uid, new_flat_head)?;
             }
         }
 
@@ -5502,7 +5504,9 @@ impl<'a> ChainUpdate<'a> {
                         result.shard_uid,
                         result.trie_changes.state_changes(),
                     )?;
-                    flat_storage_manager.update_flat_storage_for_shard(*shard_uid, block)?;
+                    let mut new_flat_head = *block.header().last_final_block();
+                    flat_storage_manager
+                        .update_flat_storage_for_shard(*shard_uid, new_flat_head)?;
                     self.chain_store_update.merge(store_update);
 
                     self.chain_store_update.save_chunk_extra(
