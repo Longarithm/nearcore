@@ -6303,7 +6303,7 @@ impl Debug for BlockCatchUpRequest {
 pub struct BlockCatchUpResponse {
     pub sync_hash: CryptoHash,
     pub block_hash: CryptoHash,
-    pub results: Vec<Result<ApplyChunkResult, Error>>,
+    pub results: Vec<Result<NewApplyChunkResult, Error>>,
 }
 
 /// Helper to track blocks catch up
