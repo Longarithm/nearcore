@@ -4030,7 +4030,7 @@ impl Chain {
                     receipts_response.iter().map(|r| r.0.clone()).rev().collect();
                 let mut block_contexts: Vec<BlockContext> = block_hashes
                     .into_iter()
-                    .map(|b| {
+                    .map(|b| -> Result<BlockContext, Error> {
                         let header = self.get_block_header(&b)?;
                         let prev_header = self.get_previous_header(&header)?;
                         Ok(self.get_block_context(
