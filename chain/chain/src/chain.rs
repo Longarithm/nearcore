@@ -4030,6 +4030,7 @@ impl Chain {
                 )?;
                 let block_hashes: Vec<_> =
                     receipts_response.iter().map(|r| r.0.clone()).rev().collect();
+                println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
                 let block_context_res: Result<Vec<BlockContext>, Error> = block_hashes
                     .into_iter()
                     .map(|b| -> Result<BlockContext, Error> {
