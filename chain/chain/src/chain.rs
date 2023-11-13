@@ -3988,7 +3988,7 @@ impl Chain {
         if should_apply_transactions {
             // here we generate shadow job. decide on exact condition later
             // if chunk is new, we process prev chunk against state witness
-            if false && is_new_chunk {
+            if is_new_chunk {
                 // let prev_prev_block = self.get_block(prev_prev_hash)?;
                 // let prev_prev_chunk_headers = Chain::get_prev_chunk_headers(
                 //     self.epoch_manager.as_ref(),
@@ -3997,7 +3997,7 @@ impl Chain {
                 // let prev_prev_chunk_header = prev_prev_chunk_headers[shard_id];
                 let prev_chunk_height_included = prev_chunk_header.height_included();
                 let prev_chunk_prev_hash = prev_chunk_header.prev_block_hash().clone();
-                let mut prev_chunk_block_hash = block.hash().clone();
+                let mut prev_chunk_block_hash = prev_block.hash().clone();
                 loop {
                     let header = self.get_block_header(&prev_chunk_block_hash)?;
                     if header.height() < prev_chunk_height_included {
@@ -4009,6 +4009,7 @@ impl Chain {
                     }
                     prev_chunk_block_hash = prev_hash;
                 }
+                // println!("{prev_chunk_block_hash}");
                 let prev_chunk_block_header = self.get_block_header(&prev_chunk_block_hash)?;
                 assert_eq!(prev_chunk_block_header.prev_hash(), &prev_chunk_prev_hash);
 
