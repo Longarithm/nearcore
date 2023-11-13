@@ -3891,9 +3891,9 @@ impl Chain {
                     }
                 }
             })
-            .collect()?
+            .collect::<Vec<Vec<_>>>()?
             .flatten()
-            .collect())
+            .collect::<Vec<_>>())
     }
 
     fn validate_chunk_transactions(
