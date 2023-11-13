@@ -3891,7 +3891,7 @@ impl Chain {
                     }
                 }
             })
-            .collect::<Vec<Vec<_>>>()?
+            .collect::<Result<Vec<Vec<_>>, Error>>()?
             .flatten()
             .collect::<Vec<_>>())
     }
