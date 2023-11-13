@@ -3882,12 +3882,12 @@ impl Chain {
                 );
 
                 match apply_chunk_job {
-                    Ok(processor) => Some(processor),
+                    Ok(processor) => Ok(processor),
                     Err(err) => {
                         if err.is_bad_data() {
                             invalid_chunks.push(chunk_header.clone());
                         }
-                        Some(Err(err))
+                        Err(err)
                     }
                 }
             })
