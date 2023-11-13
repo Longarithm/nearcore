@@ -4028,7 +4028,7 @@ impl Chain {
                 )?;
                 let block_hashes: Vec<_> =
                     receipts_response.iter().map(|r| r.0.clone()).rev().collect();
-                let mut block_contexts: Vec<BlockContext> = block_hashes
+                let block_context_res: Result<Vec<BlockContext>, Error> = block_hashes
                     .into_iter()
                     .map(|b| -> Result<BlockContext, Error> {
                         let header = self.get_block_header(&b)?;
@@ -4040,7 +4040,8 @@ impl Chain {
                             b == prev_chunk_block_hash,
                         )?)
                     })
-                    .collect::<Vec<_>>()?;
+                    .collect();
+                let mut block_contexts = block_context_res?;
                 assert!(block_contexts.len() >= 1);
                 let receipts = collect_receipts_from_response(receipts_response);
                 let mut prev_chunk_extra = self
