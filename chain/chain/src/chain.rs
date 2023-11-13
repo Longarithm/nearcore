@@ -2318,7 +2318,7 @@ impl Chain {
         me: &Option<AccountId>,
         block: &Block,
         block_preprocess_info: BlockPreprocessInfo,
-        apply_results: Vec<Result<ApplyChunkResult, Error>>,
+        apply_results: Vec<Result<NewApplyChunkResult, Error>>,
     ) -> Result<Option<Tip>, Error> {
         let mut chain_update = self.chain_update();
         let new_head =
@@ -2334,7 +2334,7 @@ impl Chain {
         &mut self,
         me: &Option<AccountId>,
         block_hash: CryptoHash,
-        apply_results: Vec<Result<ApplyChunkResult, Error>>,
+        apply_results: Vec<Result<NewApplyChunkResult, Error>>,
         block_processing_artifacts: &mut BlockProcessingArtifact,
         apply_chunks_done_callback: DoneApplyChunkCallback,
     ) -> Result<AcceptedBlock, Error> {
@@ -3549,7 +3549,7 @@ impl Chain {
         &mut self,
         me: &Option<AccountId>,
         block_hash: &CryptoHash,
-        results: Vec<Result<ApplyChunkResult, Error>>,
+        results: Vec<Result<NewApplyChunkResult, Error>>,
     ) -> Result<(), Error> {
         let block = self.store.get_block(block_hash)?;
         let mut chain_update = self.chain_update();
@@ -4056,30 +4056,36 @@ impl Chain {
                 jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
                     let mut result = vec![];
                     for block_context in first_blocks {
-                        result.push(Self::apply_old_chunk(
+                        result.push((
+                            block_context.clone(),
+                            Self::apply_old_chunk(
+                                parent_span,
+                                block_context,
+                                &prev_chunk_extra,
+                                shard_uid,
+                                will_shard_layout_change,
+                                SandboxStatePatch::default(),
+                                runtime.clone(),
+                                epoch_manager.clone(),
+                                None, // split_state_roots,
+                            )?,
+                        ));
+                    }
+                    result.push((
+                        last_block.clone(),
+                        Self::apply_new_chunk(
                             parent_span,
-                            block_context,
-                            &prev_chunk_extra,
+                            last_block,
+                            prev_chunk,
                             shard_uid,
                             will_shard_layout_change,
+                            receipts,
                             SandboxStatePatch::default(),
                             runtime.clone(),
                             epoch_manager.clone(),
                             None, // split_state_roots,
-                        )?);
-                    }
-                    result.push(Self::apply_new_chunk(
-                        parent_span,
-                        last_block,
-                        prev_chunk,
-                        shard_uid,
-                        will_shard_layout_change,
-                        receipts,
-                        SandboxStatePatch::default(),
-                        runtime.clone(),
-                        epoch_manager.clone(),
-                        None, // split_state_roots,
-                    )?);
+                        )?,
+                    ));
                     Ok(NewApplyChunkResult::Shadow(result))
                 }));
             }
@@ -5170,7 +5176,7 @@ pub enum ApplyChunkResult {
 
 pub enum NewApplyChunkResult {
     Classic(ApplyChunkResult),
-    Shadow(Vec<ApplyChunkResult>),
+    Shadow(Vec<(BlockContext, ApplyChunkResult)>),
 }
 
 impl<'a> ChainUpdate<'a> {
@@ -5275,11 +5281,26 @@ impl<'a> ChainUpdate<'a> {
     fn apply_chunk_postprocessing(
         &mut self,
         block: &Block,
-        apply_results: Vec<ApplyChunkResult>,
+        apply_results: Vec<NewApplyChunkResult>,
     ) -> Result<(), Error> {
         let _span = tracing::debug_span!(target: "chain", "apply_chunk_postprocessing").entered();
         for result in apply_results {
-            self.process_apply_chunk_result(block, result)?
+            match result {
+                NewApplyChunkResult::Classic(result) => {
+                    self.process_apply_chunk_result(block, result)?
+                }
+                NewApplyChunkResult::Shadow(results) => {
+                    for (block_context, _result) in results {
+                        // let block_hash = result.
+                        eprintln!(
+                            "catch {} -> {} | {}",
+                            block_context.prev_block_hash,
+                            block_context.block_hash,
+                            block_context.height
+                        );
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -5569,7 +5590,7 @@ impl<'a> ChainUpdate<'a> {
         me: &Option<AccountId>,
         block: &Block,
         block_preprocess_info: BlockPreprocessInfo,
-        apply_chunks_results: Vec<Result<ApplyChunkResult, Error>>,
+        apply_chunks_results: Vec<Result<NewApplyChunkResult, Error>>,
     ) -> Result<Option<Tip>, Error> {
         let prev_hash = block.header().prev_hash();
         let results = apply_chunks_results.into_iter().map(|x| {
@@ -6306,7 +6327,7 @@ pub struct BlocksCatchUpState {
     /// preprocessing
     pub scheduled_blocks: HashSet<CryptoHash>,
     /// Map from block hashes that were processed to (saved store update, process results)
-    pub processed_blocks: HashMap<CryptoHash, Vec<Result<ApplyChunkResult, Error>>>,
+    pub processed_blocks: HashMap<CryptoHash, Vec<Result<NewApplyChunkResult, Error>>>,
     /// Collection of block hashes that are fully processed
     pub done_blocks: Vec<CryptoHash>,
 }
