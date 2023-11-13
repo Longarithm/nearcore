@@ -2287,7 +2287,7 @@ impl Chain {
         &self,
         block_hash: CryptoHash,
         block_height: BlockHeight,
-        work: Vec<Box<dyn FnOnce(&Span) -> Result<ApplyChunkResult, Error> + Send>>,
+        work: Vec<Box<dyn FnOnce(&Span) -> Result<NewApplyChunkResult, Error> + Send>>,
         apply_chunks_done_marker: Arc<OnceCell<()>>,
         apply_chunks_done_callback: DoneApplyChunkCallback,
     ) {
@@ -6192,8 +6192,8 @@ impl<'a> ChainUpdate<'a> {
 pub fn do_apply_chunks(
     block_hash: CryptoHash,
     block_height: BlockHeight,
-    work: Vec<Box<dyn FnOnce(&Span) -> Result<ApplyChunkResult, Error> + Send>>,
-) -> Vec<Result<ApplyChunkResult, Error>> {
+    work: Vec<Box<dyn FnOnce(&Span) -> Result<NewApplyChunkResult, Error> + Send>>,
+) -> Vec<Result<NewApplyChunkResult, Error>> {
     let parent_span =
         tracing::debug_span!(target: "chain", "do_apply_chunks", block_height, %block_hash)
             .entered();
