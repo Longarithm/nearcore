@@ -503,7 +503,7 @@ pub enum VerifyBlockHashAndSignatureResult {
 }
 
 #[derive(Clone)]
-struct BlockContext {
+pub struct BlockContext {
     block_hash: CryptoHash,
     prev_block_hash: CryptoHash,
     challenges_result: ChallengesResult,
