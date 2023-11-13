@@ -5175,6 +5175,7 @@ pub enum ApplyChunkResult {
     SplitState(SplitStateResult),
 }
 
+#[derive(Debug)]
 pub enum NewApplyChunkResult {
     Classic(ApplyChunkResult),
     Shadow(Vec<(BlockContext, ApplyChunkResult)>),
