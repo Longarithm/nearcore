@@ -3863,7 +3863,7 @@ impl Chain {
             .iter()
             .zip(prev_chunk_headers.iter())
             .enumerate()
-            .filter_map(|(shard_id, (chunk_header, prev_chunk_header))| {
+            .map(|(shard_id, (chunk_header, prev_chunk_header))| {
                 // XXX: This is a bit questionable -- sandbox state patching works
                 // only for a single shard. This so far has been enough.
                 let state_patch = state_patch.take();
