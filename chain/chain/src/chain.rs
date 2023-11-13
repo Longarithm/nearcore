@@ -3988,7 +3988,7 @@ impl Chain {
         if should_apply_transactions {
             // here we generate shadow job. decide on exact condition later
             // if chunk is new, we process prev chunk against state witness
-            if is_new_chunk {
+            if false && is_new_chunk {
                 // let prev_prev_block = self.get_block(prev_prev_hash)?;
                 // let prev_prev_chunk_headers = Chain::get_prev_chunk_headers(
                 //     self.epoch_manager.as_ref(),
