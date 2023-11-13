@@ -3891,7 +3891,6 @@ impl Chain {
                     }
                 }
             })
-            .flatten()
             .collect()
     }
 
