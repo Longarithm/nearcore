@@ -4040,7 +4040,7 @@ impl Chain {
                             b == prev_chunk_block_hash,
                         )?)
                     })
-                    .collect::<Vec<_>>()?;
+                    .collect::<Vec<Result<BlockContext, Error>>>()?;
                 assert!(block_contexts.len() >= 1);
                 let receipts = collect_receipts_from_response(receipts_response);
                 let mut prev_chunk_extra = self
