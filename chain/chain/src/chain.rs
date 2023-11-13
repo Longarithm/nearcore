@@ -4028,7 +4028,7 @@ impl Chain {
                 )?;
                 let block_hashes: Vec<_> =
                     receipts_response.iter().map(|r| r.0.clone()).rev().collect();
-                let mut block_contexts: Vec<_> = block_hashes
+                let mut block_contexts: Vec<BlockContext> = block_hashes
                     .into_iter()
                     .map(|b| {
                         let header = self.get_block_header(&b)?;
