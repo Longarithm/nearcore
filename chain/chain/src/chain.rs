@@ -3988,15 +3988,16 @@ impl Chain {
         if should_apply_transactions {
             // here we generate shadow job. decide on exact condition later
             // if chunk is new, we process prev chunk against state witness
-            if is_new_chunk {
+            let prev_chunk_height_included = prev_chunk_header.height_included();
+            let prev_chunk_prev_hash = prev_chunk_header.prev_block_hash().clone();
+
+            if is_new_chunk && if &prev_chunk_prev_hash != &CryptoHash::default() {
                 // let prev_prev_block = self.get_block(prev_prev_hash)?;
                 // let prev_prev_chunk_headers = Chain::get_prev_chunk_headers(
                 //     self.epoch_manager.as_ref(),
                 //     &prev_prev_block,
                 // )?;
                 // let prev_prev_chunk_header = prev_prev_chunk_headers[shard_id];
-                let prev_chunk_height_included = prev_chunk_header.height_included();
-                let prev_chunk_prev_hash = prev_chunk_header.prev_block_hash().clone();
                 let mut prev_chunk_block_hash = prev_block.hash().clone();
                 loop {
                     let header = self.get_block_header(&prev_chunk_block_hash)?;
@@ -4013,13 +4014,8 @@ impl Chain {
                 let prev_chunk_block_header = self.get_block_header(&prev_chunk_block_hash)?;
                 assert_eq!(prev_chunk_block_header.prev_hash(), &prev_chunk_prev_hash);
 
-                let prev_prev_chunk_height_included =
-                    if prev_chunk_prev_hash == CryptoHash::default() {
-                        0 // there should be genesis height
-                    } else {
-                        let block = self.get_block(&prev_chunk_prev_hash)?;
-                        block.chunks()[shard_id as usize].height_included()
-                    };
+                let prev_chunk_prev_block = self.get_block(&prev_chunk_prev_hash)?;
+                let prev_prev_chunk_height_included = prev_chunk_prev_block.chunks()[shard_id as usize].height_included();
 
                 let tmp = self.get_block_header(&prev_chunk_block_hash)?;
                 println!("{} {} {}", tmp.prev_hash(), tmp.hash(), tmp.height());
