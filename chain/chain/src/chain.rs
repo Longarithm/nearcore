@@ -4021,6 +4021,8 @@ impl Chain {
                         block.chunks()[shard_id as usize].height_included()
                     };
 
+                let tmp = self.get_block_header(&prev_chunk_block_hash)?;
+                println!("{} {} {}", tmp.prev_hash(), tmp.hash(), tmp.height());
                 // reverse order
                 let receipts_response = &self.store().get_incoming_receipts_for_shard(
                     self.epoch_manager.as_ref(),
