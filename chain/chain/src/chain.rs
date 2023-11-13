@@ -2390,9 +2390,13 @@ impl Chain {
             .iter()
             .map(|c| -> (BlockHeight, CryptoHash) {
                 let p1 = c.prev_block_hash();
-                let b1 = self.get_block(p1).unwrap();
-                let c1 = &b1.chunks()[c.shard_id() as usize];
-                (c1.height_included(), *c1.prev_block_hash())
+                if p1 == &CryptoHash::default() {
+                    (0, *p1)
+                } else {
+                    let b1 = self.get_block(p1).unwrap();
+                    let c1 = &b1.chunks()[c.shard_id() as usize];
+                    (c1.height_included(), *c1.prev_block_hash())
+                }
             })
             .min()
             .unwrap();
