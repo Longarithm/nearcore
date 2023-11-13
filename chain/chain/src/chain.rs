@@ -3891,7 +3891,7 @@ impl Chain {
                     }
                 }
             })
-            .collect();
+            .collect()?;
 
         jobs.into_iter().flatten().collect()
     }
