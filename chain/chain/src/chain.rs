@@ -4007,9 +4007,9 @@ impl Chain {
         split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
     ) -> Result<Vec<ApplyChunkJob>, Error> {
         let (should_apply_transactions, chunk_header, prev_chunk_header) =
-            match &should_apply_transactions {
+            match should_apply_transactions {
                 ShouldApplyTransactions::Yes(chunk, prev_chunk) => {
-                    (true, &chunk.cloned_header(), &prev_chunk.cloned_header())
+                    (true, chunk.cloned_header(), prev_chunk.cloned_header())
                 }
                 ShouldApplyTransactions::No(c, p) => (false, c, p),
             };
@@ -4150,7 +4150,7 @@ impl Chain {
                     prev_hash,
                     &prev_chunk_extra,
                     prev_chunk_height_included,
-                    chunk_header,
+                    &chunk_header,
                 )
                 .map_err(|err| {
                     warn!(
@@ -4165,7 +4165,7 @@ impl Chain {
                         "Failed to validate chunk extra"
                     );
                     byzantine_assert!(false);
-                    match self.create_chunk_state_challenge(prev_block, block, chunk_header) {
+                    match self.create_chunk_state_challenge(prev_block, block, &chunk_header) {
                         Ok(chunk_state) => Error::InvalidChunkState(Box::new(chunk_state)),
                         Err(err) => err,
                     }
