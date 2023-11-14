@@ -1963,6 +1963,7 @@ impl<'a> ChainStoreUpdate<'a> {
         shard_uid: &ShardUId,
         chunk_extra: ChunkExtra,
     ) {
+        println!("SAVE CHUNK EXTRA: {}:{:?}", block_hash, shard_uid);
         self.chain_store_cache_update
             .chunk_extras
             .insert((*block_hash, *shard_uid), Arc::new(chunk_extra));
