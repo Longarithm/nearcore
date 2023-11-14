@@ -3768,7 +3768,6 @@ impl Chain {
         prev_block: &Block,
         block: &Block,
         chunk_header: &ShardChunkHeader,
-        prev_chunk: ShardChunk,
     ) -> Result<ChunkState, Error> {
         let chunk_shard_id = chunk_header.shard_id();
         let prev_merkle_proofs = Block::compute_chunk_headers_root(prev_block.chunks().iter()).1;
