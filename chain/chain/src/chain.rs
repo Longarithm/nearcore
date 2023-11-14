@@ -4116,22 +4116,24 @@ impl Chain {
             } else {
                 vec![]
             };
-            jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
-                Ok(NewApplyChunkResult::Classic(Self::apply_chunk(
-                    parent_span,
-                    block_context,
-                    sat,
-                    shard_uid,
-                    mode,
-                    will_shard_layout_change,
-                    state_patch,
-                    split_state_roots,
-                    runtime.clone(),
-                    epoch_manager.clone(),
-                    receipts,
-                    state_changes,
-                )?))
-            }));
+            if should_apply_transactions || split_state_roots.is_some() {
+                jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
+                    Ok(NewApplyChunkResult::Classic(Self::apply_chunk(
+                        parent_span,
+                        block_context,
+                        sat,
+                        shard_uid,
+                        mode,
+                        will_shard_layout_change,
+                        state_patch,
+                        split_state_roots,
+                        runtime.clone(),
+                        epoch_manager.clone(),
+                        receipts,
+                        state_changes,
+                    )?))
+                }));
+            }
 
             // ???
             // match apply_chunk_job {
@@ -5240,6 +5242,7 @@ pub enum ApplyChunkResult {
 pub enum NewApplyChunkResult {
     Classic(ApplyChunkResult),
     Shadow(Vec<(BlockContext, ApplyChunkResult)>),
+    Nothing,
 }
 
 impl<'a> ChainUpdate<'a> {
