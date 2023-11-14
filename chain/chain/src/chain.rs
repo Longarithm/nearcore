@@ -4228,7 +4228,7 @@ impl Chain {
                     state_patch,
                     runtime.clone(),
                     epoch_manager.clone(),
-                    None, // split_state_roots,
+                    split_state_roots,
                 )
             } else {
                 let pce = prev_chunk_extra.unwrap();
@@ -4241,7 +4241,7 @@ impl Chain {
                     state_patch,
                     runtime.clone(),
                     epoch_manager.clone(),
-                    None, // split_state_roots,
+                    split_state_roots,
                 )
             }
         } else if let Some(split_state_roots) = split_state_roots {
