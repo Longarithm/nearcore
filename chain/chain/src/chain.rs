@@ -4100,7 +4100,7 @@ impl Chain {
                 shard_id as ShardId,
                 is_new_chunk,
             )?;
-            let receipts = if is_new_chunk {
+            let receipts = if should_apply_transactions && is_new_chunk {
                 let prev_chunk_height_included = prev_chunk_header.height_included();
                 // we can't use hash from the current block here yet because the incoming receipts
                 // for this block is not stored yet
