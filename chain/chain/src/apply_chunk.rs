@@ -1,4 +1,7 @@
+use crate::chain::BlockContext;
+use near_primitives::receipt::Receipt;
 use near_primitives::sharding::{ShardChunk, ShardChunkHeader};
+use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::ShardId;
 
 /// apply_chunks may be called in two code paths, through process_block or through catchup_blocks
@@ -16,4 +19,9 @@ pub enum ApplyChunksMode {
 pub enum ShouldApplyTransactions {
     Yes(ShardChunk, ShardChunk),
     No(ShardChunkHeader, ShardChunkHeader),
+}
+
+pub enum NewMode {
+    Classic,
+    Shadow(Vec<BlockContext>, ChunkExtra, Vec<Receipt>),
 }
