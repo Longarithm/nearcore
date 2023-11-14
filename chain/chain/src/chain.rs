@@ -3921,11 +3921,13 @@ impl Chain {
                         None
                     };
 
+                let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
+                let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
                 let apply_chunk_job = self.get_apply_chunk_jobs(
                     block,
                     prev_block,
-                    chunk_header,
-                    prev_chunk_header,
+                    chunk,
+                    prev_chunk,
                     shard_id,
                     mode,
                     will_shard_layout_change,
@@ -3990,8 +3992,8 @@ impl Chain {
         &self,
         block: &Block,
         prev_block: &Block,
-        chunk_header: &ShardChunkHeader,
-        prev_chunk_header: &ShardChunkHeader,
+        chunk: ShardChunk,
+        prev_chunk: ShardChunk,
         shard_id: usize,
         mode: ApplyChunksMode,
         will_shard_layout_change: bool,
@@ -4000,13 +4002,15 @@ impl Chain {
         should_apply_transactions: bool,
         split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
     ) -> Result<Vec<ApplyChunkJob>, Error> {
+        let chunk_header = &chunk.cloned_header();
+        let prev_chunk_header = &prev_chunk.cloned_header();
         let shard_id = shard_id as ShardId;
         let prev_hash = block.header().prev_hash();
 
-        let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id())?;
-        let is_new_chunk = chunk_header.height_included() == block.header().height();
         let epoch_manager = self.epoch_manager.clone();
         let runtime = self.runtime_adapter.clone();
+        let shard_uid = epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id())?;
+        let is_new_chunk = chunk_header.height_included() == block.header().height();
         let mut jobs: Vec<ApplyChunkJob> = vec![];
 
         if should_apply_transactions {
@@ -4158,7 +4162,6 @@ impl Chain {
                     }
                 })?;
 
-                let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
                 self.validate_chunk_transactions(&block, prev_block.header(), &chunk)?;
 
                 // we can't use hash from the current block here yet because the incoming receipts
