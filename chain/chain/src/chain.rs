@@ -3768,13 +3768,14 @@ impl Chain {
         prev_block: &Block,
         block: &Block,
         chunk_header: &ShardChunkHeader,
+        prev_chunk: ShardChunk,
     ) -> Result<ChunkState, Error> {
         let chunk_shard_id = chunk_header.shard_id();
         let prev_merkle_proofs = Block::compute_chunk_headers_root(prev_block.chunks().iter()).1;
         let merkle_proofs = Block::compute_chunk_headers_root(block.chunks().iter()).1;
-        let prev_chunk = self
-            .get_chunk_clone_from_header(&prev_block.chunks()[chunk_shard_id as usize].clone())
-            .unwrap();
+        // let prev_chunk = self
+        //     .get_chunk_clone_from_header(&prev_block.chunks()[chunk_shard_id as usize].clone())
+        //     .unwrap();
 
         // TODO (#6316): enable storage proof generation
         // let prev_chunk_header = &prev_block.chunks()[chunk_shard_id as usize];
@@ -4006,12 +4007,16 @@ impl Chain {
         state_patch: SandboxStatePatch,
         split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
     ) -> Result<Vec<ApplyChunkJob>, Error> {
-        let (should_apply_transactions, chunk_header, prev_chunk_header) =
+        let (should_apply_transactions, chunk, prev_chunk, chunk_header, prev_chunk_header) =
             match should_apply_transactions {
-                ShouldApplyTransactions::Yes(chunk, prev_chunk) => {
-                    (true, chunk.cloned_header(), prev_chunk.cloned_header())
-                }
-                ShouldApplyTransactions::No(c, p) => (false, c, p),
+                ShouldApplyTransactions::Yes(chunk, prev_chunk) => (
+                    true,
+                    Some(chunk),
+                    Some(prev_chunk),
+                    chunk.cloned_header(),
+                    prev_chunk.cloned_header(),
+                ),
+                ShouldApplyTransactions::No(c, p) => (false, None, None, c, p),
             };
         let shard_id = shard_id as ShardId;
         let prev_hash = block.header().prev_hash();
@@ -4089,7 +4094,7 @@ impl Chain {
                     .clone();
                 let last_block = block_contexts.pop().unwrap();
                 let first_blocks = block_contexts.into_iter();
-                let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header)?;
+                let prev_chunk = prev_chunk.unwrap();
                 let epoch_manager = self.epoch_manager.clone();
                 let runtime = self.runtime_adapter.clone();
                 jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
@@ -4151,27 +4156,32 @@ impl Chain {
                     &prev_chunk_extra,
                     prev_chunk_height_included,
                     &chunk_header,
-                )
-                .map_err(|err| {
-                    warn!(
-                        target: "chain",
-                        ?err,
-                        prev_block_hash=?prev_hash,
-                        block_hash=?block.header().hash(),
-                        shard_id,
-                        prev_chunk_height_included,
-                        ?prev_chunk_extra,
-                        ?chunk_header,
-                        "Failed to validate chunk extra"
-                    );
-                    byzantine_assert!(false);
-                    match self.create_chunk_state_challenge(prev_block, block, &chunk_header) {
-                        Ok(chunk_state) => Error::InvalidChunkState(Box::new(chunk_state)),
-                        Err(err) => err,
-                    }
-                })?;
+                )?;
+                // .map_err(|err| {
+                //     warn!(
+                //         target: "chain",
+                //         ?err,
+                //         prev_block_hash=?prev_hash,
+                //         block_hash=?block.header().hash(),
+                //         shard_id,
+                //         prev_chunk_height_included,
+                //         ?prev_chunk_extra,
+                //         ?chunk_header,
+                //         "Failed to validate chunk extra"
+                //     );
+                //     byzantine_assert!(false);
+                //     match self.create_chunk_state_challenge(
+                //         prev_block,
+                //         block,
+                //         &chunk_header,
+                //         prev_chunk.unwrap(),
+                //     ) {
+                //         Ok(chunk_state) => Error::InvalidChunkState(Box::new(chunk_state)),
+                //         Err(err) => err,
+                //     }
+                // })?;
 
-                let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
+                let chunk = chunk.unwrap();
                 self.validate_chunk_transactions(&block, prev_block.header(), &chunk)?;
 
                 // we can't use hash from the current block here yet because the incoming receipts
