@@ -3916,7 +3916,10 @@ impl Chain {
                 self.epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id())?;
             let is_new_chunk = chunk_header.height_included() == block.header().height();
             let sat = if should_apply_transactions {
-                println!("gce 1 | {should_apply_transactions} {is_new_chunk} {shard_id}");
+                println!(
+                    "gce 1 | {should_apply_transactions} {is_new_chunk} {shard_id} | {}",
+                    block.header().height()
+                );
                 ShouldApplyTransactions::Yes(
                     self.get_chunk_clone_from_header(&chunk_header.clone())?,
                     self.get_chunk_extra(prev_hash, &shard_uid)?,
