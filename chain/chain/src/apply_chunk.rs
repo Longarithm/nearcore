@@ -1,5 +1,6 @@
 use crate::chain::BlockContext;
 use near_primitives::receipt::Receipt;
+use near_primitives::shard_layout::ShardUId;
 use near_primitives::sharding::{ShardChunk, ShardChunkHeader};
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::ShardId;
@@ -17,8 +18,15 @@ pub enum ApplyChunksMode {
     NotCaughtUp,
 }
 
-#[derive(Copy, Clone)]
-pub enum ShouldApplyTransactions {
-    Yes(ShardChunk, Arc<ChunkExtra>),
-    No(ShardChunkHeader),
+pub enum ApplyChunkType {
+    YesNew(ShardChunk),
+    YesOld(Arc<ChunkExtra>),
+    MaybeSplit,
+}
+
+pub struct ShardApplyInfo {
+    pub shard_uid: ShardUId,
+    pub cares_about_shard_this_epoch: bool,
+    pub cares_about_shard_next_epoch: bool,
+    pub will_shard_layout_change: bool,
 }
