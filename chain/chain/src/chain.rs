@@ -3949,9 +3949,7 @@ impl Chain {
             let is_new_chunk = chunk_header.height_included() == block.header().height();
             let apply_chunk_type = if should_apply_transactions {
                 if is_new_chunk {
-                    ApplyChunkType::YesNew(
-                        self.get_chunk_clone_from_header(&chunk_header.clone())?
-                    )
+                    ApplyChunkType::YesNew(self.get_chunk_clone_from_header(&chunk_header.clone())?)
                 } else {
                     ApplyChunkType::YesOld(self.get_chunk_extra(prev_hash, &shard_uid)?)
                 }
@@ -3959,7 +3957,7 @@ impl Chain {
                 ApplyChunkType::MaybeSplit
             } else {
                 continue;
-            }
+            };
 
             let runtime = self.runtime_adapter.clone();
             let epoch_manager = self.epoch_manager.clone();
