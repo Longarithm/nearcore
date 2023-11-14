@@ -17,12 +17,8 @@ pub enum ApplyChunksMode {
     NotCaughtUp,
 }
 
+#[derive(Copy, Clone)]
 pub enum ShouldApplyTransactions {
     Yes(ShardChunk, Arc<ChunkExtra>),
     No(ShardChunkHeader),
-}
-
-pub enum NewMode {
-    Classic,
-    Shadow(Vec<BlockContext>, ChunkExtra, Vec<Receipt>),
 }
