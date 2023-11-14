@@ -2385,8 +2385,12 @@ impl Chain {
                     (0, *p1)
                 } else {
                     let b1 = self.get_block(p1).unwrap();
-                    let c1 = &b1.chunks()[c.shard_id() as usize];
-                    (c1.height_included(), *c1.prev_block_hash())
+                    if c.shard_id() >= b1.chunks().len() {
+                        (0, *p1)
+                    } else {
+                        let c1 = &b1.chunks()[c.shard_id() as usize];
+                        (c1.height_included(), *c1.prev_block_hash())
+                    }
                 }
             })
             .min()
@@ -4007,8 +4011,7 @@ impl Chain {
             //             prev_chunk_block_hash = prev_hash;
             //         }
             //         // println!("{prev_chunk_block_hash}");
-            //         let prev_chunk_block_header =
-            //             self.get_block_header(&prev_chunk_block_hash)?;
+            //         let prev_chunk_block_header = self.get_block_header(&prev_chunk_block_hash)?;
             //         assert_eq!(prev_chunk_block_header.prev_hash(), &prev_chunk_prev_hash);
             //
             //         let prev_chunk_prev_block = self.get_block(&prev_chunk_prev_hash)?;
@@ -4026,12 +4029,7 @@ impl Chain {
             //         )?;
             //         let block_hashes: Vec<_> =
             //             receipts_response.iter().map(|r| r.0.clone()).rev().collect();
-            //         println!(
-            //             "{} {} -> {:?}",
-            //             block.hash(),
-            //             block.header().height(),
-            //             block_hashes
-            //         );
+            //         println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
             //         let block_context_res: Result<Vec<BlockContext>, Error> = block_hashes
             //             .into_iter()
             //             .map(|b| -> Result<BlockContext, Error> {
@@ -4056,45 +4054,42 @@ impl Chain {
             //         let first_blocks = block_contexts.into_iter();
             //         let prev_chunk =
             //             self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
-            //         jobs.push(Box::new(
-            //             move |parent_span| -> Result<NewApplyChunkResult, Error> {
-            //                 let mut result = vec![];
-            //                 for block_context in first_blocks {
-            //                     let r = Self::apply_chunk(
-            //                         parent_span,
-            //                         block_context.clone(),
-            //                         &prev_chunk_extra,
-            //                         shard_uid,
-            //                         will_shard_layout_change,
-            //                         SandboxStatePatch::default(),
-            //                         runtime.clone(),
-            //                         epoch_manager.clone(),
-            //                         None, // split_state_roots,
-            //                     )?;
-            //                     if let ApplyChunkResult::DifferentHeight(r) = &r {
-            //                         *prev_chunk_extra.state_root_mut() =
-            //                             r.apply_result.new_root;
-            //                     }
-            //                     result.push((block_context, r));
+            //         jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
+            //             let mut result = vec![];
+            //             for block_context in first_blocks {
+            //                 let r = Self::apply_chunk(
+            //                     parent_span,
+            //                     block_context.clone(),
+            //                     &prev_chunk_extra,
+            //                     shard_uid,
+            //                     will_shard_layout_change,
+            //                     SandboxStatePatch::default(),
+            //                     runtime.clone(),
+            //                     epoch_manager.clone(),
+            //                     None, // split_state_roots,
+            //                 )?;
+            //                 if let ApplyChunkResult::DifferentHeight(r) = &r {
+            //                     *prev_chunk_extra.state_root_mut() = r.apply_result.new_root;
             //                 }
-            //                 result.push((
-            //                     last_block.clone(),
-            //                     Self::apply_chunk(
-            //                         parent_span,
-            //                         last_block,
-            //                         prev_chunk,
-            //                         shard_uid,
-            //                         will_shard_layout_change,
-            //                         receipts,
-            //                         SandboxStatePatch::default(),
-            //                         runtime.clone(),
-            //                         epoch_manager.clone(),
-            //                         None, // split_state_roots,
-            //                     )?,
-            //                 ));
-            //                 Ok(NewApplyChunkResult::Shadow(result))
-            //             },
-            //         ));
+            //                 result.push((block_context, r));
+            //             }
+            //             result.push((
+            //                 last_block.clone(),
+            //                 Self::apply_chunk(
+            //                     parent_span,
+            //                     last_block,
+            //                     prev_chunk,
+            //                     shard_uid,
+            //                     will_shard_layout_change,
+            //                     receipts,
+            //                     SandboxStatePatch::default(),
+            //                     runtime.clone(),
+            //                     epoch_manager.clone(),
+            //                     None, // split_state_roots,
+            //                 )?,
+            //             ));
+            //             Ok(NewApplyChunkResult::Shadow(result))
+            //         }));
             //     }
             // }
 
