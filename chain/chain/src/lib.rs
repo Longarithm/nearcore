@@ -28,6 +28,7 @@ pub mod test_utils;
 pub mod types;
 pub mod validate;
 
+mod apply_chunk;
 #[cfg(test)]
 mod tests;
 
