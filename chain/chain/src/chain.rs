@@ -4007,16 +4007,16 @@ impl Chain {
         state_patch: SandboxStatePatch,
         split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
     ) -> Result<Vec<ApplyChunkJob>, Error> {
-        let (should_apply_transactions, chunk, prev_chunk, chunk_header, prev_chunk_header) =
+        let (should_apply_transactions, chunk_header, prev_chunk_header, chunk, prev_chunk) =
             match should_apply_transactions {
                 ShouldApplyTransactions::Yes(chunk, prev_chunk) => (
                     true,
-                    Some(chunk),
-                    Some(prev_chunk),
                     chunk.cloned_header(),
                     prev_chunk.cloned_header(),
+                    Some(chunk),
+                    Some(prev_chunk),
                 ),
-                ShouldApplyTransactions::No(c, p) => (false, None, None, c, p),
+                ShouldApplyTransactions::No(c, p) => (false, c, p, None, None),
             };
         let shard_id = shard_id as ShardId;
         let prev_hash = block.header().prev_hash();
