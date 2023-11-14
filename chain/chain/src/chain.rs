@@ -1,4 +1,4 @@
-use crate::apply_chunk::ApplyChunksMode;
+use crate::apply_chunk::{ApplyChunksMode, ShouldApplyTransactions};
 use crate::block_processing_utils::{
     BlockPreprocessInfo, BlockProcessingArtifact, BlocksInProcessing, DoneApplyChunkCallback,
 };
@@ -3921,19 +3921,23 @@ impl Chain {
                         None
                     };
 
-                let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
-                let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
+                let sat = if should_apply_transactions {
+                    ShouldApplyTransactions::Yes(
+                        self.get_chunk_clone_from_header(&chunk_header.clone())?,
+                        self.get_chunk_clone_from_header(&prev_chunk_header.clone())?,
+                    )
+                } else {
+                    ShouldApplyTransactions::No(chunk_header.clone(), prev_chunk_header.clone())
+                };
                 let apply_chunk_job = self.get_apply_chunk_jobs(
                     block,
                     prev_block,
-                    chunk,
-                    prev_chunk,
+                    sat,
                     shard_id,
                     mode,
                     will_shard_layout_change,
                     incoming_receipts,
                     state_patch,
-                    should_apply_transactions,
                     split_state_roots,
                 );
 
@@ -3992,18 +3996,23 @@ impl Chain {
         &self,
         block: &Block,
         prev_block: &Block,
-        chunk: ShardChunk,
-        prev_chunk: ShardChunk,
+        should_apply_transactions: ShouldApplyTransactions,
+        // chunk: ShardChunk,
+        // prev_chunk: ShardChunk,
         shard_id: usize,
         mode: ApplyChunksMode,
         will_shard_layout_change: bool,
         incoming_receipts: &HashMap<u64, Vec<ReceiptProof>>,
         state_patch: SandboxStatePatch,
-        should_apply_transactions: bool,
         split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
     ) -> Result<Vec<ApplyChunkJob>, Error> {
-        let chunk_header = &chunk.cloned_header();
-        let prev_chunk_header = &prev_chunk.cloned_header();
+        let (should_apply_transactions, chunk_header, prev_chunk_header) =
+            match should_apply_transactions {
+                ShouldApplyTransactions::Yes(chunk, prev_chunk) => {
+                    (true, &chunk.cloned_header(), &prev_chunk.cloned_header())
+                }
+                ShouldApplyTransactions::No(c, p) => (false, &c, &p),
+            };
         let shard_id = shard_id as ShardId;
         let prev_hash = block.header().prev_hash();
 

@@ -1,3 +1,6 @@
+use near_primitives::sharding::{ShardChunk, ShardChunkHeader};
+use near_primitives::types::ShardId;
+
 /// apply_chunks may be called in two code paths, through process_block or through catchup_blocks
 /// When it is called through process_block, it is possible that the shard state for the next epoch
 /// has not been caught up yet, thus the two modes IsCaughtUp and NotCaughtUp.
@@ -8,4 +11,9 @@ pub enum ApplyChunksMode {
     IsCaughtUp,
     CatchingUp,
     NotCaughtUp,
+}
+
+pub enum ShouldApplyTransactions {
+    Yes(ShardChunk, ShardChunk),
+    No(ShardChunkHeader, ShardChunkHeader),
 }
