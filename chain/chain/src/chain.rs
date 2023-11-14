@@ -4091,7 +4091,6 @@ impl Chain {
             //     }
             // }
 
-            let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
             let block_context = self.get_block_context(
                 block.header(),
                 prev_block.header(),
