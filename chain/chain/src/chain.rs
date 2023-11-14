@@ -5242,7 +5242,6 @@ pub enum ApplyChunkResult {
 pub enum NewApplyChunkResult {
     Classic(ApplyChunkResult),
     Shadow(Vec<(BlockContext, ApplyChunkResult)>),
-    Nothing,
 }
 
 impl<'a> ChainUpdate<'a> {
