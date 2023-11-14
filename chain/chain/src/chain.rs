@@ -3929,7 +3929,6 @@ impl Chain {
             let epoch_manager = self.epoch_manager.clone();
             let state_changes =
                 self.store().get_state_changes_for_split_states(block.hash(), shard_id);
-            let mut jobs: Vec<ApplyChunkJob> = vec![];
 
             // do it now, idk
             if should_apply_transactions && is_new_chunk {
