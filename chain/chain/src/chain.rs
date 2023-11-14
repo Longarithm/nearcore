@@ -3872,7 +3872,7 @@ impl Chain {
         let will_shard_layout_change = self.epoch_manager.will_shard_layout_change(prev_hash)?;
         let prev_chunk_headers =
             Chain::get_prev_chunk_headers(self.epoch_manager.as_ref(), prev_block)?;
-        let mut jobs = vec![];
+        let mut jobs: Vec<ApplyChunkJob> = vec![];
         for (shard_id, (chunk_header, prev_chunk_header)) in
             block.chunks().iter().zip(prev_chunk_headers.iter()).enumerate()
         {
