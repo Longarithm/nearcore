@@ -3881,12 +3881,16 @@ impl Chain {
                 // only for a single shard. This so far has been enough.
                 let state_patch = state_patch.take();
 
-                let cares_about_shard_this_epoch =
-                    self.shard_tracker.care_about_shard(me.as_ref(), prev_hash, shard_id, true);
+                let cares_about_shard_this_epoch = self.shard_tracker.care_about_shard(
+                    me.as_ref(),
+                    prev_hash,
+                    shard_id as ShardId,
+                    true,
+                );
                 let cares_about_shard_next_epoch = self.shard_tracker.will_care_about_shard(
                     me.as_ref(),
                     prev_hash,
-                    shard_id,
+                    shard_id as ShardId,
                     true,
                 );
                 let should_apply_transactions = get_should_apply_transactions(
