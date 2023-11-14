@@ -3772,9 +3772,9 @@ impl Chain {
         let chunk_shard_id = chunk_header.shard_id();
         let prev_merkle_proofs = Block::compute_chunk_headers_root(prev_block.chunks().iter()).1;
         let merkle_proofs = Block::compute_chunk_headers_root(block.chunks().iter()).1;
-        // let prev_chunk = self
-        //     .get_chunk_clone_from_header(&prev_block.chunks()[chunk_shard_id as usize].clone())
-        //     .unwrap();
+        let prev_chunk = self
+            .get_chunk_clone_from_header(&prev_block.chunks()[chunk_shard_id as usize].clone())
+            .unwrap();
 
         // TODO (#6316): enable storage proof generation
         // let prev_chunk_header = &prev_block.chunks()[chunk_shard_id as usize];
