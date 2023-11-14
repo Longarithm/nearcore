@@ -2385,7 +2385,7 @@ impl Chain {
                     (0, *p1)
                 } else {
                     let b1 = self.get_block(p1).unwrap();
-                    if c.shard_id() >= b1.chunks().len() {
+                    if c.shard_id() >= b1.chunks().len() as u64 {
                         (0, *p1)
                     } else {
                         let c1 = &b1.chunks()[c.shard_id() as usize];
