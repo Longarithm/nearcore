@@ -4171,6 +4171,7 @@ impl Chain {
                     }
                 })?;
 
+                let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
                 self.validate_chunk_transactions(&block, prev_block.header(), &chunk)?;
 
                 // we can't use hash from the current block here yet because the incoming receipts
