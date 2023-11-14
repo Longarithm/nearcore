@@ -3,6 +3,7 @@ use near_primitives::receipt::Receipt;
 use near_primitives::sharding::{ShardChunk, ShardChunkHeader};
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::ShardId;
+use std::sync::Arc;
 
 /// apply_chunks may be called in two code paths, through process_block or through catchup_blocks
 /// When it is called through process_block, it is possible that the shard state for the next epoch
@@ -17,8 +18,8 @@ pub enum ApplyChunksMode {
 }
 
 pub enum ShouldApplyTransactions {
-    Yes(ShardChunk, ShardChunk),
-    No(ShardChunkHeader, ShardChunkHeader),
+    Yes(ShardChunk, Arc<ChunkExtra>),
+    No(ShardChunkHeader),
 }
 
 pub enum NewMode {

@@ -3912,19 +3912,19 @@ impl Chain {
                 None
             };
 
+            let shard_uid =
+                self.epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id())?;
             let sat = if should_apply_transactions {
                 ShouldApplyTransactions::Yes(
                     self.get_chunk_clone_from_header(&chunk_header.clone())?,
-                    self.get_chunk_clone_from_header(&prev_chunk_header.clone())?,
+                    self.get_chunk_extra(prev_hash, &shard_uid)?,
                 )
             } else {
-                ShouldApplyTransactions::No(chunk_header.clone(), prev_chunk_header.clone())
+                ShouldApplyTransactions::No(chunk_header.clone())
             };
             let is_new_chunk = chunk_header.height_included() == block.header().height();
             let runtime = self.runtime_adapter.clone();
             let epoch_manager = self.epoch_manager.clone();
-            let shard_uid =
-                self.epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id())?;
             let state_changes =
                 self.store().get_state_changes_for_split_states(block.hash(), shard_id);
             let mut jobs: Vec<ApplyChunkJob> = vec![];
@@ -4126,7 +4126,6 @@ impl Chain {
                     split_state_roots,
                     runtime.clone(),
                     epoch_manager.clone(),
-                    prev_chunk_extra.as_ref(),
                     receipts,
                     state_changes,
                 )?))
@@ -4197,20 +4196,15 @@ impl Chain {
         split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
         runtime: Arc<dyn RuntimeAdapter>,
         epoch_manager: Arc<dyn EpochManagerAdapter>,
-        prev_chunk_extra: &ChunkExtra,
         receipts: Vec<Receipt>,
         state_changes: Result<StateChangesForSplitStates, Error>,
     ) -> Result<ApplyChunkResult, Error> {
-        let (should_apply_transactions, chunk_header, prev_chunk_header, chunk, prev_chunk) =
+        let (should_apply_transactions, chunk_header, chunk, prev_chunk_extra) =
             match should_apply_transactions {
-                ShouldApplyTransactions::Yes(chunk, prev_chunk) => (
-                    true,
-                    chunk.cloned_header(),
-                    prev_chunk.cloned_header(),
-                    Some(chunk),
-                    Some(prev_chunk),
-                ),
-                ShouldApplyTransactions::No(c, p) => (false, c, p, None, None),
+                ShouldApplyTransactions::Yes(chunk, prev_chunk_extra) => {
+                    (true, chunk.cloned_header(), Some(chunk), Some(prev_chunk_extra))
+                }
+                ShouldApplyTransactions::No(c) => (false, c, None, None),
             };
         let is_new_chunk = chunk_header.height_included() == block_context.height;
 
@@ -4219,7 +4213,7 @@ impl Chain {
                 Self::apply_new_chunk(
                     parent_span,
                     block_context,
-                    prev_chunk.unwrap(),
+                    chunk.unwrap(),
                     shard_uid,
                     will_shard_layout_change,
                     receipts,
@@ -4229,10 +4223,11 @@ impl Chain {
                     None, // split_state_roots,
                 )
             } else {
+                let pce = prev_chunk_extra.unwrap();
                 Self::apply_old_chunk(
                     parent_span,
                     block_context,
-                    &prev_chunk_extra,
+                    pce.as_ref(),
                     shard_uid,
                     will_shard_layout_change,
                     state_patch,
