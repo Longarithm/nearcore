@@ -2375,25 +2375,26 @@ impl Chain {
         let epoch_id = block.header().epoch_id();
 
         // let block
-        let (_, mut new_flat_head) = block
-            .chunks()
-            .iter()
-            .map(|c| -> (BlockHeight, CryptoHash) {
-                let p1 = c.prev_block_hash();
-                if p1 == &CryptoHash::default() {
-                    (0, *p1)
-                } else {
-                    let b1 = self.get_block(p1).unwrap();
-                    let c1 = &b1.chunks()[c.shard_id() as usize];
-                    (c1.height_included(), *c1.prev_block_hash())
-                }
-            })
-            .min()
-            .unwrap();
-        if new_flat_head != CryptoHash::default() {
-            let new_flat_head_header = self.get_block_header(&new_flat_head)?;
-            new_flat_head = *new_flat_head_header.last_final_block();
-        }
+        let new_flat_head = *block.header().last_final_block();
+        // let (_, mut new_flat_head) = block
+        //     .chunks()
+        //     .iter()
+        //     .map(|c| -> (BlockHeight, CryptoHash) {
+        //         let p1 = c.prev_block_hash();
+        //         if p1 == &CryptoHash::default() {
+        //             (0, *p1)
+        //         } else {
+        //             let b1 = self.get_block(p1).unwrap();
+        //             let c1 = &b1.chunks()[c.shard_id() as usize];
+        //             (c1.height_included(), *c1.prev_block_hash())
+        //         }
+        //     })
+        //     .min()
+        //     .unwrap();
+        // if new_flat_head != CryptoHash::default() {
+        //     let new_flat_head_header = self.get_block_header(&new_flat_head)?;
+        //     new_flat_head = *new_flat_head_header.last_final_block();
+        // }
 
         for shard_id in 0..self.epoch_manager.num_shards(epoch_id)? {
             let need_flat_storage_update = if is_caught_up {
