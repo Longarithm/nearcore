@@ -4080,8 +4080,8 @@ impl Chain {
                     assert_eq!(prev_chunk_block_header.prev_hash(), &prev_chunk_prev_hash);
 
                     let prev_chunk_prev_block = self.get_block(&prev_chunk_prev_hash)?;
-                    let shard_layout =
-                        epoch_manager.get_shard_layout_from_prev_block(prev_block.hash())?;
+                    let shard_layout = epoch_manager
+                        .get_shard_layout_from_prev_block(prev_block.header().prev_hash())?;
                     let prev_shard_layout = epoch_manager.get_shard_layout_from_prev_block(
                         prev_chunk_prev_block.header().prev_hash(),
                     )?;
