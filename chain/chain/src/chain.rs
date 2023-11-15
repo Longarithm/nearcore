@@ -4086,13 +4086,12 @@ impl Chain {
                         prev_chunk_prev_block.header().prev_hash(),
                     )?;
                     let check_shard_id = if shard_layout != prev_shard_layout {
+                        continue;
                         shard_layout.get_parent_shard_id(shard_id)?
                     } else {
                         shard_id
                     };
-                    if shard_id != check_shard_id {
-                        continue;
-                    }
+
                     let prev_prev_chunk_height_included =
                         prev_chunk_prev_block.chunks()[check_shard_id as usize].height_included();
                     println!(
