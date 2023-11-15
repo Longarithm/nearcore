@@ -1,6 +1,6 @@
 use crate::apply_chunk::{
-    apply_chunk, ApplyChunkResult, ApplyChunkType, ApplyChunksMode, ApplyShardInfo, BlockContext,
-    DifferentHeightResult, FullShardApplyInfo, SameHeightResult, SplitStateResult,
+    apply_chunk, ApplyChunkResult, ApplyChunksMode, BlockContext, DifferentHeightResult,
+    FullShardApplyInfo, SameHeightResult, ShardInfo, ShardUpdateType, SplitStateResult,
 };
 use crate::block_processing_utils::{
     BlockPreprocessInfo, BlockProcessingArtifact, BlocksInProcessing, DoneApplyChunkCallback,
@@ -3940,15 +3940,17 @@ impl Chain {
             let is_new_chunk = chunk_header.height_included() == block.header().height();
             let apply_chunk_type = if should_apply_transactions {
                 if is_new_chunk {
-                    ApplyChunkType::YesNew(self.get_chunk_clone_from_header(&chunk_header.clone())?)
+                    ShardUpdateType::NewChunk(
+                        self.get_chunk_clone_from_header(&chunk_header.clone())?,
+                    )
                 } else {
-                    ApplyChunkType::YesOld(ChunkExtra::clone(
+                    ShardUpdateType::OldChunk(ChunkExtra::clone(
                         self.get_chunk_extra(prev_hash, &shard_uid)?.as_ref(),
                     ))
                 }
             } else if split_state_roots.is_some() {
                 assert!(mode == ApplyChunksMode::CatchingUp && cares_about_shard_this_epoch);
-                ApplyChunkType::Split(
+                ShardUpdateType::StateSplit(
                     self.store().get_state_changes_for_split_states(block.hash(), shard_id)?,
                 )
             } else {
@@ -4028,13 +4030,13 @@ impl Chain {
                 jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
                     Ok(NewApplyChunkResult::Classic(apply_chunk(
                         parent_span,
+                        epoch_manager.clone(),
+                        runtime.clone(),
                         block_context,
                         apply_chunk_type,
-                        ApplyShardInfo { shard_uid, will_shard_layout_change },
+                        ShardInfo { shard_uid, will_shard_layout_change },
                         state_patch,
                         split_state_roots,
-                        runtime.clone(),
-                        epoch_manager.clone(),
                         receipts,
                     )?))
                 }));
@@ -4108,17 +4110,13 @@ impl Chain {
                     println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
                     let mut skip_due_to_resharding = false;
                     let block_infos_res: Result<
-                        Vec<(BlockContext, ApplyShardInfo, Option<HashMap<ShardUId, StateRoot>>)>,
+                        Vec<(BlockContext, ShardInfo, Option<HashMap<ShardUId, StateRoot>>)>,
                         Error,
                     > = block_hashes
                         .into_iter()
                         .map(
                             |b| -> Result<
-                                (
-                                    BlockContext,
-                                    ApplyShardInfo,
-                                    Option<HashMap<ShardUId, StateRoot>>,
-                                ),
+                                (BlockContext, ShardInfo, Option<HashMap<ShardUId, StateRoot>>),
                                 Error,
                             > {
                                 let header = self.get_block_header(&b)?;
@@ -4150,7 +4148,7 @@ impl Chain {
                                         current_shard_id,
                                         b == prev_chunk_block_hash,
                                     )?,
-                                    ApplyShardInfo {
+                                    ShardInfo {
                                         shard_uid: shard_info.shard_uid,
                                         will_shard_layout_change: shard_info
                                             .will_shard_layout_change,
@@ -4196,7 +4194,7 @@ impl Chain {
                             let r = apply_chunk(
                                 parent_span,
                                 block_context.clone(),
-                                ApplyChunkType::YesOld(prev_chunk_extra.clone()),
+                                ShardUpdateType::OldChunk(prev_chunk_extra.clone()),
                                 shard_apply_info,
                                 SandboxStatePatch::default(),
                                 ssr,
@@ -4214,7 +4212,7 @@ impl Chain {
                             apply_chunk(
                                 parent_span,
                                 last_block,
-                                ApplyChunkType::YesNew(prev_chunk),
+                                ShardUpdateType::NewChunk(prev_chunk),
                                 shard_apply_info,
                                 SandboxStatePatch::default(),
                                 ssr,

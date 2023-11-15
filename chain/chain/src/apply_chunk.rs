@@ -72,10 +72,10 @@ pub enum ApplyChunksMode {
     NotCaughtUp,
 }
 
-pub enum ApplyChunkType {
-    YesNew(ShardChunk),
-    YesOld(ChunkExtra),
-    Split(StateChangesForSplitStates),
+pub enum ShardUpdateType {
+    NewChunk(ShardChunk),
+    OldChunk(ChunkExtra),
+    StateSplit(StateChangesForSplitStates),
 }
 
 pub struct FullShardApplyInfo {
@@ -85,7 +85,7 @@ pub struct FullShardApplyInfo {
     pub will_shard_layout_change: bool,
 }
 
-pub struct ApplyShardInfo {
+pub struct ShardInfo {
     pub shard_uid: ShardUId,
     pub will_shard_layout_change: bool,
 }
@@ -93,17 +93,17 @@ pub struct ApplyShardInfo {
 /// This method returns the closure that is responsible for applying of a single chunk.
 pub fn apply_chunk(
     parent_span: &tracing::Span,
+    epoch_manager: Arc<dyn EpochManagerAdapter>,
+    runtime: Arc<dyn RuntimeAdapter>,
     block_context: BlockContext,
-    apply_chunk_type: ApplyChunkType,
-    shard_info: ApplyShardInfo,
+    apply_chunk_type: ShardUpdateType,
+    shard_info: ShardInfo,
     state_patch: SandboxStatePatch,
     split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
-    runtime: Arc<dyn RuntimeAdapter>,
-    epoch_manager: Arc<dyn EpochManagerAdapter>,
     receipts: Vec<Receipt>,
 ) -> Result<ApplyChunkResult, Error> {
     match apply_chunk_type {
-        ApplyChunkType::YesNew(chunk) => apply_new_chunk(
+        ShardUpdateType::NewChunk(chunk) => apply_new_chunk(
             parent_span,
             block_context,
             chunk,
@@ -114,7 +114,7 @@ pub fn apply_chunk(
             epoch_manager.clone(),
             split_state_roots,
         ),
-        ApplyChunkType::YesOld(prev_chunk_extra) => apply_old_chunk(
+        ShardUpdateType::OldChunk(prev_chunk_extra) => apply_old_chunk(
             parent_span,
             block_context,
             &prev_chunk_extra,
@@ -124,19 +124,15 @@ pub fn apply_chunk(
             epoch_manager.clone(),
             split_state_roots,
         ),
-        ApplyChunkType::Split(state_changes) => {
-            // Case 3), split state are ready. Read the state changes from the
-            // database and apply them to the split states.
-            apply_split_state_chunk(
-                parent_span,
-                block_context,
-                shard_info.shard_uid,
-                runtime,
-                epoch_manager,
-                split_state_roots.unwrap(),
-                state_changes,
-            )
-        }
+        ShardUpdateType::StateSplit(state_changes) => apply_split_state_chunk(
+            parent_span,
+            block_context,
+            shard_info.shard_uid,
+            runtime,
+            epoch_manager,
+            split_state_roots.unwrap(),
+            state_changes,
+        ),
     }
 }
 
@@ -145,7 +141,7 @@ fn apply_new_chunk(
     parent_span: &tracing::Span,
     block_context: BlockContext,
     chunk: ShardChunk,
-    shard_info: ApplyShardInfo,
+    shard_info: ShardInfo,
     receipts: Vec<Receipt>,
     state_patch: SandboxStatePatch,
     runtime: Arc<dyn RuntimeAdapter>,
@@ -216,7 +212,7 @@ fn apply_old_chunk(
     parent_span: &tracing::Span,
     block_context: BlockContext,
     prev_chunk_extra: &ChunkExtra,
-    shard_info: ApplyShardInfo,
+    shard_info: ShardInfo,
     state_patch: SandboxStatePatch,
     runtime: Arc<dyn RuntimeAdapter>,
     epoch_manager: Arc<dyn EpochManagerAdapter>,
