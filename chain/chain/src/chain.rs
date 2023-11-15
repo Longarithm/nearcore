@@ -4049,6 +4049,7 @@ impl Chain {
                     )?;
                     let block_hashes: Vec<_> =
                         receipts_response.iter().map(|r| r.0.clone()).rev().collect();
+                    let mut current_shard_id = shard_id;
                     println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
                     let block_infos_res: Result<
                         Vec<(BlockContext, ShardApplyInfo, Option<HashMap<ShardUId, StateRoot>>)>,
@@ -4066,8 +4067,17 @@ impl Chain {
                             > {
                                 let header = self.get_block_header(&b)?;
                                 let prev_header = self.get_previous_header(&header)?;
+                                let shard_layout = epoch_manager
+                                    .get_shard_layout_from_prev_block(header.hash())?;
+                                let prev_shard_layout = epoch_manager
+                                    .get_shard_layout_from_prev_block(prev_header.hash())?;
+                                if shard_layout != prev_shard_layout {
+                                    current_shard_id =
+                                        shard_layout.get_parent_shard_id(current_shard_id)?;
+                                }
+
                                 let shard_info =
-                                    self.get_shard_info(me, prev_header.hash(), shard_id)?;
+                                    self.get_shard_info(me, prev_header.hash(), current_shard_id)?;
                                 let should_apply_transactions = get_should_apply_transactions(
                                     mode,
                                     shard_info.cares_about_shard_this_epoch,
@@ -4079,13 +4089,13 @@ impl Chain {
                                     self.get_block_context(
                                         &header,
                                         &prev_header,
-                                        shard_id,
+                                        current_shard_id,
                                         b == prev_chunk_block_hash,
                                     )?,
                                     shard_info,
                                     if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp
                                     {
-                                        Some(self.get_split_state_roots(block, shard_id)?)
+                                        Some(self.get_split_state_roots(block, current_shard_id)?)
                                     } else {
                                         None
                                     },
@@ -4111,7 +4121,7 @@ impl Chain {
                                 parent_span,
                                 block_context.clone(),
                                 ApplyChunkType::YesOld(prev_chunk_extra.clone()),
-                                shard_uid,
+                                shard_apply_info.shard_uid,
                                 mode,
                                 shard_apply_info.will_shard_layout_change,
                                 SandboxStatePatch::default(),
@@ -4131,7 +4141,7 @@ impl Chain {
                                 parent_span,
                                 last_block,
                                 ApplyChunkType::YesNew(prev_chunk),
-                                shard_uid,
+                                shard_apply_info.shard_uid,
                                 mode,
                                 shard_apply_info.will_shard_layout_change,
                                 SandboxStatePatch::default(),
