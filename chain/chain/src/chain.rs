@@ -4019,20 +4019,10 @@ impl Chain {
 
                 if is_new_chunk && &prev_chunk_prev_hash != &CryptoHash::default() {
                     let mut prev_chunk_block_hash = prev_block.hash().clone();
-                    let mut current_shard_id = shard_id;
                     loop {
                         let header = self.get_block_header(&prev_chunk_block_hash)?;
                         if header.height() < prev_chunk_height_included {
                             panic!("...");
-                        }
-
-                        let shard_layout =
-                            epoch_manager.get_shard_layout_from_prev_block(header.hash())?;
-                        let prev_shard_layout =
-                            epoch_manager.get_shard_layout_from_prev_block(header.prev_hash())?;
-                        if shard_layout != prev_shard_layout {
-                            current_shard_id =
-                                shard_layout.get_parent_shard_id(current_shard_id)?;
                         }
 
                         let prev_hash = header.prev_hash().clone();
@@ -4046,8 +4036,18 @@ impl Chain {
                     assert_eq!(prev_chunk_block_header.prev_hash(), &prev_chunk_prev_hash);
 
                     let prev_chunk_prev_block = self.get_block(&prev_chunk_prev_hash)?;
+                    let shard_layout =
+                        epoch_manager.get_shard_layout_from_prev_block(prev_block.hash())?;
+                    let prev_shard_layout = epoch_manager.get_shard_layout_from_prev_block(
+                        prev_chunk_prev_block.header().prev_hash(),
+                    )?;
+                    let check_shard_id = if shard_layout != prev_shard_layout {
+                        shard_layout.get_parent_shard_id(shard_id)?
+                    } else {
+                        shard_id
+                    };
                     let prev_prev_chunk_height_included =
-                        prev_chunk_prev_block.chunks()[current_shard_id as usize].height_included();
+                        prev_chunk_prev_block.chunks()[check_shard_id as usize].height_included();
 
                     let tmp = self.get_block_header(&prev_chunk_block_hash)?;
                     println!("{} {} {}", tmp.prev_hash(), tmp.hash(), tmp.height());
