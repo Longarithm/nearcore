@@ -20,7 +20,7 @@ pub enum ApplyChunksMode {
 
 pub enum ApplyChunkType {
     YesNew(ShardChunk),
-    YesOld(Arc<ChunkExtra>),
+    YesOld(ChunkExtra),
     Split(StateChangesForSplitStates),
 }
 
