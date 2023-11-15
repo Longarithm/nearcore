@@ -4193,13 +4193,13 @@ impl Chain {
                         for (block_context, shard_apply_info, ssr) in first_blocks {
                             let r = apply_chunk(
                                 parent_span,
+                                epoch_manager.clone(),
+                                runtime.clone(),
                                 block_context.clone(),
                                 ShardUpdateType::OldChunk(prev_chunk_extra.clone()),
                                 shard_apply_info,
                                 SandboxStatePatch::default(),
                                 ssr,
-                                runtime.clone(),
-                                epoch_manager.clone(),
                                 vec![],
                             )?;
                             if let ApplyChunkResult::DifferentHeight(r) = &r {
@@ -4211,13 +4211,13 @@ impl Chain {
                             last_block.clone(),
                             apply_chunk(
                                 parent_span,
+                                epoch_manager.clone(),
+                                runtime.clone(),
                                 last_block,
                                 ShardUpdateType::NewChunk(prev_chunk),
                                 shard_apply_info,
                                 SandboxStatePatch::default(),
                                 ssr,
-                                runtime.clone(),
-                                epoch_manager.clone(),
                                 receipts,
                             )?,
                         ));
