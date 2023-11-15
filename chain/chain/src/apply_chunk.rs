@@ -3,7 +3,7 @@ use near_primitives::receipt::Receipt;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::sharding::{ShardChunk, ShardChunkHeader};
 use near_primitives::types::chunk_extra::ChunkExtra;
-use near_primitives::types::ShardId;
+use near_primitives::types::{ShardId, StateChangesForSplitStates};
 use std::sync::Arc;
 
 /// apply_chunks may be called in two code paths, through process_block or through catchup_blocks
@@ -21,7 +21,7 @@ pub enum ApplyChunksMode {
 pub enum ApplyChunkType {
     YesNew(ShardChunk),
     YesOld(Arc<ChunkExtra>),
-    MaybeSplit,
+    Split(StateChangesForSplitStates),
 }
 
 pub struct ShardApplyInfo {

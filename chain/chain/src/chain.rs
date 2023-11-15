@@ -3954,15 +3954,15 @@ impl Chain {
                     ApplyChunkType::YesOld(self.get_chunk_extra(prev_hash, &shard_uid)?)
                 }
             } else if split_state_roots.is_some() {
-                ApplyChunkType::MaybeSplit
+                ApplyChunkType::Split(
+                    self.store().get_state_changes_for_split_states(block.hash(), shard_id)?,
+                )
             } else {
                 continue;
             };
 
             let runtime = self.runtime_adapter.clone();
             let epoch_manager = self.epoch_manager.clone();
-            let state_changes =
-                self.store().get_state_changes_for_split_states(block.hash(), shard_id);
 
             // do it now, idk
             if should_apply_transactions && is_new_chunk {
@@ -4009,116 +4009,116 @@ impl Chain {
             }
 
             // FUN STUFF
-            if should_apply_transactions {
-                // here we generate shadow job. decide on exact condition later
-                // if chunk is new, we process prev chunk against state witness
-                let prev_chunk_height_included = prev_chunk_header.height_included();
-                let prev_chunk_prev_hash = prev_chunk_header.prev_block_hash().clone();
-
-                if is_new_chunk && &prev_chunk_prev_hash != &CryptoHash::default() {
-                    let mut prev_chunk_block_hash = prev_block.hash().clone();
-                    loop {
-                        let header = self.get_block_header(&prev_chunk_block_hash)?;
-                        if header.height() < prev_chunk_height_included {
-                            panic!("...");
-                        }
-                        let prev_hash = header.prev_hash().clone();
-                        if prev_hash == prev_chunk_prev_hash {
-                            break;
-                        }
-                        prev_chunk_block_hash = prev_hash;
-                    }
-                    // println!("{prev_chunk_block_hash}");
-                    let prev_chunk_block_header = self.get_block_header(&prev_chunk_block_hash)?;
-                    assert_eq!(prev_chunk_block_header.prev_hash(), &prev_chunk_prev_hash);
-
-                    let prev_chunk_prev_block = self.get_block(&prev_chunk_prev_hash)?;
-                    let prev_prev_chunk_height_included =
-                        prev_chunk_prev_block.chunks()[shard_id as usize].height_included();
-
-                    let tmp = self.get_block_header(&prev_chunk_block_hash)?;
-                    println!("{} {} {}", tmp.prev_hash(), tmp.hash(), tmp.height());
-                    // reverse order
-                    let receipts_response = &self.store().get_incoming_receipts_for_shard(
-                        self.epoch_manager.as_ref(),
-                        shard_id,
-                        prev_chunk_block_hash,
-                        prev_prev_chunk_height_included,
-                    )?;
-                    let block_hashes: Vec<_> =
-                        receipts_response.iter().map(|r| r.0.clone()).rev().collect();
-                    println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
-                    let block_infos_res: Result<Vec<(BlockContext, ShardApplyInfo)>, Error> =
-                        block_hashes
-                            .into_iter()
-                            .map(|b| -> Result<(BlockContext, ShardApplyInfo), Error> {
-                                let header = self.get_block_header(&b)?;
-                                let prev_header = self.get_previous_header(&header)?;
-                                Ok((
-                                    self.get_block_context(
-                                        &header,
-                                        &prev_header,
-                                        shard_id,
-                                        b == prev_chunk_block_hash,
-                                    )?,
-                                    self.get_shard_info(me, prev_header.hash(), shard_id)?,
-                                ))
-                            })
-                            .collect();
-                    let mut block_infos = block_infos_res?;
-                    assert!(block_infos.len() >= 1);
-                    let receipts = collect_receipts_from_response(receipts_response);
-                    let mut prev_chunk_extra = self
-                        .get_chunk_extra(&block_infos[0].0.prev_block_hash, &shard_uid)?
-                        .as_ref()
-                        .clone();
-                    let (last_block, shard_apply_info) = block_infos.pop().unwrap();
-                    let first_blocks = block_infos.into_iter();
-                    let prev_chunk =
-                        self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
-                    jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
-                        let mut result = vec![];
-                        for (block_context, shard_apply_info) in first_blocks {
-                            let r = Self::apply_chunk(
-                                parent_span,
-                                block_context.clone(),
-                                apply_chunk_type,
-                                shard_uid,
-                                mode,
-                                shard_apply_info.will_shard_layout_change,
-                                SandboxStatePatch::default(),
-                                None,
-                                runtime.clone(),
-                                epoch_manager.clone(),
-                                vec![],
-                                Err(Error::Other("test")),
-                            )?;
-                            if let ApplyChunkResult::DifferentHeight(r) = &r {
-                                *prev_chunk_extra.state_root_mut() = r.apply_result.new_root;
-                            }
-                            result.push((block_context, r));
-                        }
-                        result.push((
-                            last_block.clone(),
-                            Self::apply_chunk(
-                                parent_span,
-                                last_block,
-                                apply_chunk_type,
-                                shard_uid,
-                                mode,
-                                shard_apply_info.will_shard_layout_change,
-                                SandboxStatePatch::default(),
-                                None,
-                                runtime.clone(),
-                                epoch_manager.clone(),
-                                receipts,
-                                Err(Error::Other("test")),
-                            )?,
-                        ));
-                        Ok(NewApplyChunkResult::Shadow(result))
-                    }));
-                }
-            }
+            // if should_apply_transactions {
+            //     // here we generate shadow job. decide on exact condition later
+            //     // if chunk is new, we process prev chunk against state witness
+            //     let prev_chunk_height_included = prev_chunk_header.height_included();
+            //     let prev_chunk_prev_hash = prev_chunk_header.prev_block_hash().clone();
+            //
+            //     if is_new_chunk && &prev_chunk_prev_hash != &CryptoHash::default() {
+            //         let mut prev_chunk_block_hash = prev_block.hash().clone();
+            //         loop {
+            //             let header = self.get_block_header(&prev_chunk_block_hash)?;
+            //             if header.height() < prev_chunk_height_included {
+            //                 panic!("...");
+            //             }
+            //             let prev_hash = header.prev_hash().clone();
+            //             if prev_hash == prev_chunk_prev_hash {
+            //                 break;
+            //             }
+            //             prev_chunk_block_hash = prev_hash;
+            //         }
+            //         // println!("{prev_chunk_block_hash}");
+            //         let prev_chunk_block_header = self.get_block_header(&prev_chunk_block_hash)?;
+            //         assert_eq!(prev_chunk_block_header.prev_hash(), &prev_chunk_prev_hash);
+            //
+            //         let prev_chunk_prev_block = self.get_block(&prev_chunk_prev_hash)?;
+            //         let prev_prev_chunk_height_included =
+            //             prev_chunk_prev_block.chunks()[shard_id as usize].height_included();
+            //
+            //         let tmp = self.get_block_header(&prev_chunk_block_hash)?;
+            //         println!("{} {} {}", tmp.prev_hash(), tmp.hash(), tmp.height());
+            //         // reverse order
+            //         let receipts_response = &self.store().get_incoming_receipts_for_shard(
+            //             self.epoch_manager.as_ref(),
+            //             shard_id,
+            //             prev_chunk_block_hash,
+            //             prev_prev_chunk_height_included,
+            //         )?;
+            //         let block_hashes: Vec<_> =
+            //             receipts_response.iter().map(|r| r.0.clone()).rev().collect();
+            //         println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
+            //         let block_infos_res: Result<Vec<(BlockContext, ShardApplyInfo)>, Error> =
+            //             block_hashes
+            //                 .into_iter()
+            //                 .map(|b| -> Result<(BlockContext, ShardApplyInfo), Error> {
+            //                     let header = self.get_block_header(&b)?;
+            //                     let prev_header = self.get_previous_header(&header)?;
+            //                     Ok((
+            //                         self.get_block_context(
+            //                             &header,
+            //                             &prev_header,
+            //                             shard_id,
+            //                             b == prev_chunk_block_hash,
+            //                         )?,
+            //                         self.get_shard_info(me, prev_header.hash(), shard_id)?,
+            //                     ))
+            //                 })
+            //                 .collect();
+            //         let mut block_infos = block_infos_res?;
+            //         assert!(block_infos.len() >= 1);
+            //         let receipts = collect_receipts_from_response(receipts_response);
+            //         let mut prev_chunk_extra = self
+            //             .get_chunk_extra(&block_infos[0].0.prev_block_hash, &shard_uid)?
+            //             .as_ref()
+            //             .clone();
+            //         let (last_block, shard_apply_info) = block_infos.pop().unwrap();
+            //         let first_blocks = block_infos.into_iter();
+            //         let prev_chunk =
+            //             self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
+            //         jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
+            //             let mut result = vec![];
+            //             for (block_context, shard_apply_info) in first_blocks {
+            //                 let r = Self::apply_chunk(
+            //                     parent_span,
+            //                     block_context.clone(),
+            //                     apply_chunk_type,
+            //                     shard_uid,
+            //                     mode,
+            //                     shard_apply_info.will_shard_layout_change,
+            //                     SandboxStatePatch::default(),
+            //                     None,
+            //                     runtime.clone(),
+            //                     epoch_manager.clone(),
+            //                     vec![],
+            //                     Err(Error::Other("test")),
+            //                 )?;
+            //                 if let ApplyChunkResult::DifferentHeight(r) = &r {
+            //                     *prev_chunk_extra.state_root_mut() = r.apply_result.new_root;
+            //                 }
+            //                 result.push((block_context, r));
+            //             }
+            //             result.push((
+            //                 last_block.clone(),
+            //                 Self::apply_chunk(
+            //                     parent_span,
+            //                     last_block,
+            //                     apply_chunk_type,
+            //                     shard_uid,
+            //                     mode,
+            //                     shard_apply_info.will_shard_layout_change,
+            //                     SandboxStatePatch::default(),
+            //                     None,
+            //                     runtime.clone(),
+            //                     epoch_manager.clone(),
+            //                     receipts,
+            //                     Err(Error::Other("test")),
+            //                 )?,
+            //             ));
+            //             Ok(NewApplyChunkResult::Shadow(result))
+            //         }));
+            //     }
+            // }
 
             let block_context = self.get_block_context(
                 block.header(),
@@ -4156,7 +4156,6 @@ impl Chain {
                         runtime.clone(),
                         epoch_manager.clone(),
                         receipts,
-                        state_changes,
                     )?))
                 }));
             }
@@ -4227,7 +4226,6 @@ impl Chain {
         runtime: Arc<dyn RuntimeAdapter>,
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         receipts: Vec<Receipt>,
-        state_changes: Result<StateChangesForSplitStates, Error>,
     ) -> Result<ApplyChunkResult, Error> {
         match apply_chunk_type {
             ApplyChunkType::YesNew(chunk) => Self::apply_new_chunk(
@@ -4253,7 +4251,7 @@ impl Chain {
                 epoch_manager.clone(),
                 split_state_roots,
             ),
-            ApplyChunkType::MaybeSplit => {
+            ApplyChunkType::Split(state_changes) => {
                 // Case 3), split state are ready. Read the state changes from the
                 // database and apply them to the split states.
                 // assert!(mode == ApplyChunksMode::CatchingUp && cares_about_shard_this_epoch);
@@ -4461,7 +4459,7 @@ impl Chain {
         runtime: Arc<dyn RuntimeAdapter>,
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: HashMap<ShardUId, CryptoHash>,
-        state_changes: Result<StateChangesForSplitStates, Error>,
+        state_changes: StateChangesForSplitStates,
     ) -> Result<ApplyChunkResult, Error> {
         let shard_id = shard_uid.shard_id();
         let next_epoch_shard_layout =
@@ -4478,7 +4476,7 @@ impl Chain {
             &block_context.block_hash,
             split_state_roots,
             &next_epoch_shard_layout,
-            state_changes?,
+            state_changes,
         )?;
         Ok(ApplyChunkResult::SplitState(SplitStateResult { shard_uid, results }))
         // }))
