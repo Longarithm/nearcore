@@ -124,7 +124,7 @@ pub fn apply_chunk(
             epoch_manager.clone(),
             split_state_roots,
         ),
-        ShardUpdateType::StateSplit(state_changes) => apply_split_state_chunk(
+        ShardUpdateType::StateSplit(state_changes) => apply_state_split(
             parent_span,
             block_context,
             shard_info.shard_uid,
@@ -274,7 +274,7 @@ fn apply_old_chunk(
 }
 
 /// Returns the apply chunk job when just splitting state but not applying transactions.
-fn apply_split_state_chunk(
+fn apply_state_split(
     parent_span: &tracing::Span,
     block_context: BlockContext,
     shard_uid: ShardUId,
