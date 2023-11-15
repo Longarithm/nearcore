@@ -4011,8 +4011,50 @@ impl Chain {
                 self.validate_chunk_transactions(&block, prev_block.header(), &chunk)?;
             }
 
+            let block_context = self.get_block_context(
+                block.header(),
+                prev_block.header(),
+                shard_id as ShardId,
+                is_new_chunk,
+            )?;
+            let receipts = if should_apply_transactions && is_new_chunk {
+                let prev_chunk_height_included = prev_chunk_header.height_included();
+                // we can't use hash from the current block here yet because the incoming receipts
+                // for this block is not stored yet
+                let new_receipts = collect_receipts(incoming_receipts.get(&shard_id).unwrap());
+                let old_receipts = &self.store().get_incoming_receipts_for_shard(
+                    self.epoch_manager.as_ref(),
+                    shard_id,
+                    *prev_hash,
+                    prev_chunk_height_included,
+                )?;
+                let old_receipts = collect_receipts_from_response(old_receipts);
+                [new_receipts, old_receipts].concat()
+            } else {
+                vec![]
+            };
+            if should_apply_transactions || split_state_roots.is_some() {
+                jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
+                    Ok(NewApplyChunkResult::Classic(Self::apply_chunk(
+                        parent_span,
+                        block_context,
+                        apply_chunk_type,
+                        shard_uid,
+                        mode,
+                        will_shard_layout_change,
+                        state_patch,
+                        split_state_roots,
+                        runtime.clone(),
+                        epoch_manager.clone(),
+                        receipts,
+                    )?))
+                }));
+            }
+
             // FUN STUFF
             if should_apply_transactions {
+                let runtime = self.runtime_adapter.clone();
+                let epoch_manager = self.epoch_manager.clone();
                 let shard_id = prev_chunk_header.shard_id();
                 // here we generate shadow job. decide on exact condition later
                 // if chunk is new, we process prev chunk against state witness
@@ -4048,6 +4090,9 @@ impl Chain {
                     } else {
                         shard_id
                     };
+                    if shard_id != check_shard_id {
+                        continue;
+                    }
                     let prev_prev_chunk_height_included =
                         prev_chunk_prev_block.chunks()[check_shard_id as usize].height_included();
                     println!(
@@ -4172,48 +4217,6 @@ impl Chain {
                         Ok(NewApplyChunkResult::Shadow(result))
                     }));
                 }
-            }
-
-            let runtime = self.runtime_adapter.clone();
-            let epoch_manager = self.epoch_manager.clone();
-            let block_context = self.get_block_context(
-                block.header(),
-                prev_block.header(),
-                shard_id as ShardId,
-                is_new_chunk,
-            )?;
-            let receipts = if should_apply_transactions && is_new_chunk {
-                let prev_chunk_height_included = prev_chunk_header.height_included();
-                // we can't use hash from the current block here yet because the incoming receipts
-                // for this block is not stored yet
-                let new_receipts = collect_receipts(incoming_receipts.get(&shard_id).unwrap());
-                let old_receipts = &self.store().get_incoming_receipts_for_shard(
-                    self.epoch_manager.as_ref(),
-                    shard_id,
-                    *prev_hash,
-                    prev_chunk_height_included,
-                )?;
-                let old_receipts = collect_receipts_from_response(old_receipts);
-                [new_receipts, old_receipts].concat()
-            } else {
-                vec![]
-            };
-            if should_apply_transactions || split_state_roots.is_some() {
-                jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
-                    Ok(NewApplyChunkResult::Classic(Self::apply_chunk(
-                        parent_span,
-                        block_context,
-                        apply_chunk_type,
-                        shard_uid,
-                        mode,
-                        will_shard_layout_change,
-                        state_patch,
-                        split_state_roots,
-                        runtime.clone(),
-                        epoch_manager.clone(),
-                        receipts,
-                    )?))
-                }));
             }
 
             // ???
