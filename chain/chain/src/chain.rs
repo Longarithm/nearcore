@@ -4047,6 +4047,10 @@ impl Chain {
                     } else {
                         shard_id
                     };
+                    println!(
+                        "CMP {shard_id} {check_shard_id} | {prev_prev_chunk_height_included} -> {}",
+                        prev_chunk_prev_block.header().height()
+                    );
                     let prev_prev_chunk_height_included =
                         prev_chunk_prev_block.chunks()[check_shard_id as usize].height_included();
 
