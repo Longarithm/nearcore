@@ -4243,7 +4243,7 @@ impl Chain {
             ApplyChunkType::YesOld(prev_chunk_extra) => Self::apply_old_chunk(
                 parent_span,
                 block_context,
-                prev_chunk_extra.as_ref(),
+                &prev_chunk_extra,
                 shard_uid,
                 will_shard_layout_change,
                 state_patch,
