@@ -3952,7 +3952,7 @@ impl Chain {
                     ApplyChunkType::YesNew(self.get_chunk_clone_from_header(&chunk_header.clone())?)
                 } else {
                     ApplyChunkType::YesOld(ChunkExtra::clone(
-                        self.get_chunk_extra(prev_hash, &shard_uid)?,
+                        self.get_chunk_extra(prev_hash, &shard_uid)?.as_ref(),
                     ))
                 }
             } else if split_state_roots.is_some() {
