@@ -4084,7 +4084,7 @@ impl Chain {
                             let r = Self::apply_chunk(
                                 parent_span,
                                 block_context.clone(),
-                                ApplyChunkType::YesOld(prev_chunk_extra),
+                                ApplyChunkType::YesOld(prev_chunk_extra.clone()),
                                 shard_uid,
                                 mode,
                                 shard_apply_info.will_shard_layout_change,
@@ -4120,6 +4120,8 @@ impl Chain {
                 }
             }
 
+            let runtime = self.runtime_adapter.clone();
+            let epoch_manager = self.epoch_manager.clone();
             let block_context = self.get_block_context(
                 block.header(),
                 prev_block.header(),
