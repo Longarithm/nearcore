@@ -3957,6 +3957,7 @@ impl Chain {
                     ))
                 }
             } else if split_state_roots.is_some() {
+                assert!(mode == ApplyChunksMode::CatchingUp && cares_about_shard_this_epoch);
                 ApplyChunkType::Split(
                     self.store().get_state_changes_for_split_states(block.hash(), shard_id)?,
                 )
@@ -4040,7 +4041,6 @@ impl Chain {
                         block_context,
                         apply_chunk_type,
                         shard_uid,
-                        mode,
                         will_shard_layout_change,
                         state_patch,
                         split_state_roots,
@@ -4151,6 +4151,8 @@ impl Chain {
                                     shard_info.cares_about_shard_this_epoch,
                                     shard_info.cares_about_shard_next_epoch,
                                 );
+                                let cares_about_shard_this_epoch =
+                                    shard_info.cares_about_shard_this_epoch;
                                 skip_due_to_resharding |= need_to_split_states;
                                 let need_to_split_states = shard_info.will_shard_layout_change
                                     && shard_info.cares_about_shard_next_epoch;
@@ -4165,6 +4167,10 @@ impl Chain {
                                     if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp
                                     {
                                         skip_due_to_resharding = true;
+                                        assert!(
+                                            mode == ApplyChunksMode::CatchingUp
+                                                && cares_about_shard_this_epoch
+                                        );
                                         return Err(Error::Other(String::from("resharding")));
                                         None
                                         // Some(self.get_split_state_roots(block, current_shard_id)?)
@@ -4201,7 +4207,6 @@ impl Chain {
                                 block_context.clone(),
                                 ApplyChunkType::YesOld(prev_chunk_extra.clone()),
                                 shard_apply_info.shard_uid,
-                                mode,
                                 shard_apply_info.will_shard_layout_change,
                                 SandboxStatePatch::default(),
                                 ssr,
@@ -4221,7 +4226,6 @@ impl Chain {
                                 last_block,
                                 ApplyChunkType::YesNew(prev_chunk),
                                 shard_apply_info.shard_uid,
-                                mode,
                                 shard_apply_info.will_shard_layout_change,
                                 SandboxStatePatch::default(),
                                 ssr,
@@ -4294,7 +4298,6 @@ impl Chain {
         block_context: BlockContext,
         apply_chunk_type: ApplyChunkType,
         shard_uid: ShardUId,
-        mode: ApplyChunksMode,
         will_shard_layout_change: bool,
         state_patch: SandboxStatePatch,
         split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
@@ -4329,8 +4332,6 @@ impl Chain {
             ApplyChunkType::Split(state_changes) => {
                 // Case 3), split state are ready. Read the state changes from the
                 // database and apply them to the split states.
-                // assert!(mode == ApplyChunksMode::CatchingUp && cares_about_shard_this_epoch);
-                assert!(mode == ApplyChunksMode::CatchingUp);
                 Self::apply_split_state_chunk(
                     parent_span,
                     block_context,
