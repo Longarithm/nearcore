@@ -56,7 +56,7 @@ use near_primitives::shard_layout::{
 };
 use near_primitives::sharding::{
     ChunkHash, ChunkHashHeight, EncodedShardChunk, ReceiptList, ReceiptProof, ShardChunk,
-    ShardChunkHeader, ShardInfo, ShardProof, StateSyncInfo,
+    ShardChunkHeader, ShardProof, StateSyncInfo,
 };
 use near_primitives::state_part::PartId;
 use near_primitives::state_sync::{
@@ -1200,7 +1200,7 @@ impl Chain {
                     .iter()
                     .map(|shard_id| {
                         let chunk = &prev_block.chunks()[*shard_id as usize];
-                        ShardInfo(*shard_id, chunk.chunk_hash())
+                        near_primitives::sharding::ShardInfo(*shard_id, chunk.chunk_hash())
                     })
                     .collect(),
             };
