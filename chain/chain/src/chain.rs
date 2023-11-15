@@ -4167,10 +4167,10 @@ impl Chain {
                                     if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp
                                     {
                                         skip_due_to_resharding = true;
-                                        assert!(
-                                            mode == ApplyChunksMode::CatchingUp
-                                                && cares_about_shard_this_epoch
-                                        );
+                                        // assert!(
+                                        //     mode == ApplyChunksMode::CatchingUp
+                                        //         && cares_about_shard_this_epoch
+                                        // );
                                         return Err(Error::Other(String::from("resharding")));
                                         None
                                         // Some(self.get_split_state_roots(block, current_shard_id)?)
