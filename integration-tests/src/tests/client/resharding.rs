@@ -1466,7 +1466,7 @@ fn test_shard_layout_upgrade_missing_chunks(
     p_missing: f64,
     rng_seed: u64,
 ) {
-    init_test_logger();
+    // init_test_logger();
 
     let genesis_protocol_version = get_genesis_protocol_version(&resharding_type);
     let target_protocol_version = get_target_protocol_version(&resharding_type);
