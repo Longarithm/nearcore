@@ -4132,7 +4132,7 @@ impl Chain {
                                 let shard_layout = epoch_manager
                                     .get_shard_layout_from_prev_block(header.hash())?;
                                 let prev_shard_layout = epoch_manager
-                                    .get_shard_layout_from_prev_block(prev_header.prev_hash())?;
+                                    .get_shard_layout_from_prev_block(prev_header.hash())?;
                                 if shard_layout != prev_shard_layout {
                                     current_shard_id =
                                         shard_layout.get_parent_shard_id(current_shard_id)?;
@@ -4160,7 +4160,8 @@ impl Chain {
                                     if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp
                                     {
                                         skip_due_to_resharding = true;
-                                        Some(self.get_split_state_roots(block, current_shard_id)?)
+                                        None
+                                        // Some(self.get_split_state_roots(block, current_shard_id)?)
                                     } else {
                                         None
                                     },
