@@ -4112,6 +4112,7 @@ impl Chain {
                         receipts_response.iter().map(|r| r.0.clone()).collect();
                     let mut current_shard_id = shard_id;
                     println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
+                    let mut skip_due_to_resharding = false;
                     let block_infos_res: Result<
                         Vec<(BlockContext, ShardApplyInfo, Option<HashMap<ShardUId, StateRoot>>)>,
                         Error,
@@ -4145,6 +4146,7 @@ impl Chain {
                                     shard_info.cares_about_shard_this_epoch,
                                     shard_info.cares_about_shard_next_epoch,
                                 );
+                                skip_due_to_resharding |= need_to_split_states;
                                 let need_to_split_states = shard_info.will_shard_layout_change
                                     && shard_info.cares_about_shard_next_epoch;
                                 Ok((
@@ -4157,6 +4159,7 @@ impl Chain {
                                     shard_info,
                                     if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp
                                     {
+                                        skip_due_to_resharding = true;
                                         Some(self.get_split_state_roots(block, current_shard_id)?)
                                     } else {
                                         None
@@ -4166,6 +4169,9 @@ impl Chain {
                         )
                         .rev()
                         .collect();
+                    if skip_due_to_resharding {
+                        continue;
+                    }
                     let mut block_infos = block_infos_res?;
                     assert!(block_infos.len() >= 1);
                     let receipts = collect_receipts_from_response(receipts_response);
