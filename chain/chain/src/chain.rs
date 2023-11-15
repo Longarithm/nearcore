@@ -4092,7 +4092,7 @@ impl Chain {
                         shard_id
                     };
 
-                    let prev_prev_chunk = prev_chunk_prev_block.chunks()[check_shard_id as usize];
+                    let prev_prev_chunk = &prev_chunk_prev_block.chunks()[check_shard_id as usize];
                     let prev_prev_chunk_prev_hash = prev_prev_chunk.prev_block_hash();
                     let prev_prev_shard_layout = epoch_manager
                         .get_shard_layout_from_prev_block(prev_prev_chunk_prev_hash)?;
