@@ -4060,7 +4060,7 @@ impl Chain {
                         prev_prev_chunk_height_included,
                     )?;
                     let block_hashes: Vec<_> =
-                        receipts_response.iter().map(|r| r.0.clone()).rev().collect();
+                        receipts_response.iter().map(|r| r.0.clone()).collect();
                     let mut current_shard_id = shard_id;
                     println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
                     let block_infos_res: Result<
@@ -4080,9 +4080,9 @@ impl Chain {
                                 let header = self.get_block_header(&b)?;
                                 let prev_header = self.get_previous_header(&header)?;
                                 let shard_layout = epoch_manager
-                                    .get_shard_layout_from_prev_block(header.prev_hash())?;
+                                    .get_shard_layout_from_prev_block(header.hash())?;
                                 let prev_shard_layout = epoch_manager
-                                    .get_shard_layout_from_prev_block(prev_header.prev_hash())?;
+                                    .get_shard_layout_from_prev_block(prev_header.hash())?;
                                 if shard_layout != prev_shard_layout {
                                     current_shard_id =
                                         shard_layout.get_parent_shard_id(current_shard_id)?;
@@ -4115,6 +4115,7 @@ impl Chain {
                                 ))
                             },
                         )
+                        .rev()
                         .collect();
                     let mut block_infos = block_infos_res?;
                     assert!(block_infos.len() >= 1);
