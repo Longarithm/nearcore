@@ -33,24 +33,24 @@ pub struct BlockContext {
 
 #[derive(Debug)]
 pub struct SameHeightResult {
-    shard_uid: ShardUId,
-    gas_limit: Gas,
-    apply_result: ApplyTransactionResult,
-    apply_split_result_or_state_changes: Option<ApplySplitStateResultOrStateChanges>,
+    pub(crate) shard_uid: ShardUId,
+    pub(crate) gas_limit: Gas,
+    pub(crate) apply_result: ApplyTransactionResult,
+    pub(crate) apply_split_result_or_state_changes: Option<ApplySplitStateResultOrStateChanges>,
 }
 
 #[derive(Debug)]
 pub struct DifferentHeightResult {
-    shard_uid: ShardUId,
+    pub(crate) shard_uid: ShardUId,
     pub(crate) apply_result: ApplyTransactionResult,
-    apply_split_result_or_state_changes: Option<ApplySplitStateResultOrStateChanges>,
+    pub(crate) apply_split_result_or_state_changes: Option<ApplySplitStateResultOrStateChanges>,
 }
 
 #[derive(Debug)]
 pub struct SplitStateResult {
     // parent shard of the split states
-    shard_uid: ShardUId,
-    results: Vec<ApplySplitStateResult>,
+    pub(crate) shard_uid: ShardUId,
+    pub(crate) results: Vec<ApplySplitStateResult>,
 }
 
 #[derive(Debug)]
