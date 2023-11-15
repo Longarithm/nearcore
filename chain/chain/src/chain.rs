@@ -3910,6 +3910,7 @@ impl Chain {
             // only for a single shard. This so far has been enough.
             let state_patch = state_patch.take();
             let shard_id = shard_id as ShardId;
+            println!("check1 {prev_hash} {shard_id}");
             let ShardApplyInfo {
                 shard_uid,
                 cares_about_shard_this_epoch,
@@ -4087,6 +4088,7 @@ impl Chain {
                                         shard_layout.get_parent_shard_id(current_shard_id)?;
                                 }
 
+                                println!("check2 {} {current_shard_id}", prev_header.hash());
                                 let shard_info =
                                     self.get_shard_info(me, prev_header.hash(), current_shard_id)?;
                                 let should_apply_transactions = get_should_apply_transactions(
