@@ -4013,6 +4013,7 @@ impl Chain {
 
             // FUN STUFF
             if should_apply_transactions {
+                let shard_id = prev_chunk_header.shard_id();
                 // here we generate shadow job. decide on exact condition later
                 // if chunk is new, we process prev chunk against state witness
                 let prev_chunk_height_included = prev_chunk_header.height_included();
@@ -4083,7 +4084,7 @@ impl Chain {
                                 let header = self.get_block_header(&b)?;
                                 let prev_header = self.get_previous_header(&header)?;
                                 let shard_layout = epoch_manager
-                                    .get_shard_layout_from_prev_block(header.prev_hash())?;
+                                    .get_shard_layout_from_prev_block(header.hash())?;
                                 let prev_shard_layout = epoch_manager
                                     .get_shard_layout_from_prev_block(prev_header.prev_hash())?;
                                 if shard_layout != prev_shard_layout {
