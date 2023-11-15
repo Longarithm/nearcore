@@ -24,9 +24,14 @@ pub enum ApplyChunkType {
     Split(StateChangesForSplitStates),
 }
 
-pub struct ShardApplyInfo {
+pub struct FullShardApplyInfo {
     pub shard_uid: ShardUId,
     pub cares_about_shard_this_epoch: bool,
     pub cares_about_shard_next_epoch: bool,
+    pub will_shard_layout_change: bool,
+}
+
+pub struct ApplyShardInfo {
+    pub shard_uid: ShardUId,
     pub will_shard_layout_change: bool,
 }

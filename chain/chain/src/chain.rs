@@ -1,4 +1,4 @@
-use crate::apply_chunk::{ApplyChunkType, ApplyChunksMode, ShardApplyInfo};
+use crate::apply_chunk::{ApplyChunkType, ApplyChunksMode, ApplyShardInfo, FullShardApplyInfo};
 use crate::block_processing_utils::{
     BlockPreprocessInfo, BlockProcessingArtifact, BlocksInProcessing, DoneApplyChunkCallback,
 };
@@ -3866,9 +3866,9 @@ impl Chain {
         me: &Option<AccountId>,
         prev_hash: &CryptoHash,
         shard_id: ShardId,
-    ) -> Result<ShardApplyInfo, Error> {
+    ) -> Result<FullShardApplyInfo, Error> {
         let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(prev_hash)?;
-        Ok(ShardApplyInfo {
+        Ok(FullShardApplyInfo {
             shard_uid: self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?,
             cares_about_shard_this_epoch: self.shard_tracker.care_about_shard(
                 me.as_ref(),
@@ -3911,7 +3911,7 @@ impl Chain {
             let state_patch = state_patch.take();
             let shard_id = shard_id as ShardId;
             println!("check1 {prev_hash} {shard_id}");
-            let ShardApplyInfo {
+            let FullShardApplyInfo {
                 shard_uid,
                 cares_about_shard_this_epoch,
                 cares_about_shard_next_epoch,
@@ -4119,7 +4119,11 @@ impl Chain {
                     println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
                     let mut skip_due_to_resharding = false;
                     let block_infos_res: Result<
-                        Vec<(BlockContext, ShardApplyInfo, Option<HashMap<ShardUId, StateRoot>>)>,
+                        Vec<(
+                            BlockContext,
+                            FullShardApplyInfo,
+                            Option<HashMap<ShardUId, StateRoot>>,
+                        )>,
                         Error,
                     > = block_hashes
                         .into_iter()
@@ -4127,7 +4131,7 @@ impl Chain {
                             |b| -> Result<
                                 (
                                     BlockContext,
-                                    ShardApplyInfo,
+                                    FullShardApplyInfo,
                                     Option<HashMap<ShardUId, StateRoot>>,
                                 ),
                                 Error,
@@ -4297,8 +4301,7 @@ impl Chain {
         parent_span: &Span,
         block_context: BlockContext,
         apply_chunk_type: ApplyChunkType,
-        shard_uid: ShardUId,
-        will_shard_layout_change: bool,
+        shard_info: ApplyShardInfo,
         state_patch: SandboxStatePatch,
         split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
         runtime: Arc<dyn RuntimeAdapter>,
@@ -4310,8 +4313,7 @@ impl Chain {
                 parent_span,
                 block_context,
                 chunk,
-                shard_uid,
-                will_shard_layout_change,
+                shard_info,
                 receipts,
                 state_patch,
                 runtime.clone(),
@@ -4322,8 +4324,7 @@ impl Chain {
                 parent_span,
                 block_context,
                 &prev_chunk_extra,
-                shard_uid,
-                will_shard_layout_change,
+                shard_info,
                 state_patch,
                 runtime.clone(),
                 epoch_manager.clone(),
@@ -4335,7 +4336,7 @@ impl Chain {
                 Self::apply_split_state_chunk(
                     parent_span,
                     block_context,
-                    shard_uid,
+                    shard_info.shard_uid,
                     runtime,
                     epoch_manager,
                     split_state_roots.unwrap(),
@@ -4393,15 +4394,14 @@ impl Chain {
         parent_span: &Span,
         block_context: BlockContext,
         chunk: ShardChunk,
-        shard_uid: ShardUId,
-        will_shard_layout_change: bool,
+        shard_info: ApplyShardInfo,
         receipts: Vec<Receipt>,
         state_patch: SandboxStatePatch,
         runtime: Arc<dyn RuntimeAdapter>,
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
     ) -> Result<ApplyChunkResult, Error> {
-        let shard_id = shard_uid.shard_id();
+        let shard_id = shard_info.shard_uid.shard_id();
         let _span = tracing::debug_span!(
             target: "chain",
             parent: parent_span,
@@ -4437,7 +4437,7 @@ impl Chain {
             block_context.is_first_block_with_chunk_of_version,
         ) {
             Ok(apply_result) => {
-                let apply_split_result_or_state_changes = if will_shard_layout_change {
+                let apply_split_result_or_state_changes = if shard_info.will_shard_layout_change {
                     Some(ChainUpdate::apply_split_state_changes(
                         epoch_manager.as_ref(),
                         runtime.as_ref(),
@@ -4451,7 +4451,7 @@ impl Chain {
                 };
                 Ok(ApplyChunkResult::SameHeight(SameHeightResult {
                     gas_limit,
-                    shard_uid,
+                    shard_uid: shard_info.shard_uid,
                     apply_result,
                     apply_split_result_or_state_changes,
                 }))
@@ -4465,14 +4465,13 @@ impl Chain {
         parent_span: &Span,
         block_context: BlockContext,
         prev_chunk_extra: &ChunkExtra,
-        shard_uid: ShardUId,
-        will_shard_layout_change: bool,
+        shard_info: ApplyShardInfo,
         state_patch: SandboxStatePatch,
         runtime: Arc<dyn RuntimeAdapter>,
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
     ) -> Result<ApplyChunkResult, Error> {
-        let shard_id = shard_uid.shard_id();
+        let shard_id = shard_info.shard_uid.shard_id();
         let _span = tracing::debug_span!(
             target: "chain",
             parent: parent_span,
@@ -4505,7 +4504,7 @@ impl Chain {
             false,
         ) {
             Ok(apply_result) => {
-                let apply_split_result_or_state_changes = if will_shard_layout_change {
+                let apply_split_result_or_state_changes = if shard_info.will_shard_layout_change {
                     Some(ChainUpdate::apply_split_state_changes(
                         epoch_manager.as_ref(),
                         runtime.as_ref(),
@@ -4518,7 +4517,7 @@ impl Chain {
                     None
                 };
                 Ok(ApplyChunkResult::DifferentHeight(DifferentHeightResult {
-                    shard_uid,
+                    shard_uid: shard_info.shard_uid,
                     apply_result,
                     apply_split_result_or_state_changes,
                 }))
