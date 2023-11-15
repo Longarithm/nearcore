@@ -4118,11 +4118,7 @@ impl Chain {
                     println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
                     let mut skip_due_to_resharding = false;
                     let block_infos_res: Result<
-                        Vec<(
-                            BlockContext,
-                            FullShardApplyInfo,
-                            Option<HashMap<ShardUId, StateRoot>>,
-                        )>,
+                        Vec<(BlockContext, ApplyShardInfo, Option<HashMap<ShardUId, StateRoot>>)>,
                         Error,
                     > = block_hashes
                         .into_iter()
@@ -4130,7 +4126,7 @@ impl Chain {
                             |b| -> Result<
                                 (
                                     BlockContext,
-                                    FullShardApplyInfo,
+                                    ApplyShardInfo,
                                     Option<HashMap<ShardUId, StateRoot>>,
                                 ),
                                 Error,
@@ -4154,8 +4150,6 @@ impl Chain {
                                     shard_info.cares_about_shard_this_epoch,
                                     shard_info.cares_about_shard_next_epoch,
                                 );
-                                let cares_about_shard_this_epoch =
-                                    shard_info.cares_about_shard_this_epoch;
                                 skip_due_to_resharding |= need_to_split_states;
                                 let need_to_split_states = shard_info.will_shard_layout_change
                                     && shard_info.cares_about_shard_next_epoch;
@@ -4166,13 +4160,17 @@ impl Chain {
                                         current_shard_id,
                                         b == prev_chunk_block_hash,
                                     )?,
-                                    shard_info,
+                                    ApplyShardInfo {
+                                        shard_uid: shard_info.shard_uid,
+                                        will_shard_layout_change: shard_info
+                                            .will_shard_layout_change,
+                                    },
                                     if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp
                                     {
                                         skip_due_to_resharding = true;
                                         // assert!(
                                         //     mode == ApplyChunksMode::CatchingUp
-                                        //         && cares_about_shard_this_epoch
+                                        //         && shard_info.cares_about_shard_this_epoch
                                         // );
                                         return Err(Error::Other(String::from("resharding")));
                                         None
