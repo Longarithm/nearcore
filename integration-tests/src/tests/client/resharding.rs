@@ -1343,7 +1343,7 @@ fn test_shard_layout_upgrade_incoming_receipts_impl(
     resharding_type: ReshardingType,
     rng_seed: u64,
 ) {
-    // init_test_logger();
+    init_test_logger();
 
     // setup
     let epoch_length = 5;
