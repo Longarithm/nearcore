@@ -4047,13 +4047,12 @@ impl Chain {
                     } else {
                         shard_id
                     };
+                    let prev_prev_chunk_height_included =
+                        prev_chunk_prev_block.chunks()[check_shard_id as usize].height_included();
                     println!(
                         "CMP {shard_id} {check_shard_id} | {prev_prev_chunk_height_included} -> {}",
                         prev_chunk_prev_block.header().height()
                     );
-                    let prev_prev_chunk_height_included =
-                        prev_chunk_prev_block.chunks()[check_shard_id as usize].height_included();
-
                     let tmp = self.get_block_header(&prev_chunk_block_hash)?;
                     println!("{} {} {}", tmp.prev_hash(), tmp.hash(), tmp.height());
                     // reverse order
