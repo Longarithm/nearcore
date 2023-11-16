@@ -3909,19 +3909,12 @@ impl Chain {
             // } = self.get_shard_info(me, prev_hash, shard_id)?;
             let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(prev_hash)?;
             let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
-            let cares_about_shard_this_epoch = self.shard_tracker.care_about_shard(
-                me.as_ref(),
-                prev_hash,
-                shard_id,
-                true,
-            );
-            let cares_about_shard_next_epoch = self.shard_tracker.will_care_about_shard(
-                me.as_ref(),
-                prev_hash,
-                shard_id,
-                true,
-            );
-            let will_shard_layout_change = self.epoch_manager.will_shard_layout_change(prev_hash)?;
+            let cares_about_shard_this_epoch =
+                self.shard_tracker.care_about_shard(me.as_ref(), prev_hash, shard_id, true);
+            let cares_about_shard_next_epoch =
+                self.shard_tracker.will_care_about_shard(me.as_ref(), prev_hash, shard_id, true);
+            let will_shard_layout_change =
+                self.epoch_manager.will_shard_layout_change(prev_hash)?;
             let should_apply_transactions = get_should_apply_transactions(
                 mode,
                 cares_about_shard_this_epoch,
@@ -4004,7 +3997,7 @@ impl Chain {
                         prev_chunk_height_included,
                     )?;
                     let old_receipts = collect_receipts_from_response(old_receipts);
-                    let receipts = [new_receipts, old_receipts].concat()
+                    let receipts = [new_receipts, old_receipts].concat();
 
                     ShardUpdateReason::NewChunk(chunk, receipts)
                 } else {
@@ -4201,7 +4194,6 @@ impl Chain {
                                 ShardUpdateReason::OldChunk(prev_chunk_extra.clone()),
                                 block_context.clone(),
                                 shard_apply_info,
-                                vec![],
                                 ssr,
                                 SandboxStatePatch::default(),
                             )?;
