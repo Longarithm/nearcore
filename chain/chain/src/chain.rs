@@ -3938,8 +3938,49 @@ impl Chain {
             // let shard_uid =
             //     self.epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id())?;
             let is_new_chunk = chunk_header.height_included() == block.header().height();
-            let apply_chunk_type = if should_apply_transactions {
+            let shard_update_reason = if should_apply_transactions {
                 if is_new_chunk {
+                    let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
+                    let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
+                    let prev_chunk_height_included = prev_chunk_header.height_included();
+
+                    // Validate that all next chunk information matches previous chunk extra.
+                    validate_chunk_with_chunk_extra(
+                        // It's safe here to use ChainStore instead of ChainStoreUpdate
+                        // because we're asking prev_chunk_header for already committed block
+                        self.store(),
+                        self.epoch_manager.as_ref(),
+                        prev_hash,
+                        prev_chunk_extra.as_ref(),
+                        prev_chunk_height_included,
+                        &chunk_header,
+                    )?;
+                    // .map_err(|err| {
+                    //     warn!(
+                    //         target: "chain",
+                    //         ?err,
+                    //         prev_block_hash=?prev_hash,
+                    //         block_hash=?block.header().hash(),
+                    //         shard_id,
+                    //         prev_chunk_height_included,
+                    //         ?prev_chunk_extra,
+                    //         ?chunk_header,
+                    //         "Failed to validate chunk extra"
+                    //     );
+                    //     byzantine_assert!(false);
+                    //     match self.create_chunk_state_challenge(
+                    //         prev_block,
+                    //         block,
+                    //         &chunk_header,
+                    //         prev_chunk.unwrap(),
+                    //     ) {
+                    //         Ok(chunk_state) => Error::InvalidChunkState(Box::new(chunk_state)),
+                    //         Err(err) => err,
+                    //     }
+                    // })?;
+
+                    self.validate_chunk_transactions(&block, prev_block.header(), &chunk)?;
+
                     ShardUpdateReason::NewChunk(
                         self.get_chunk_clone_from_header(&chunk_header.clone())?,
                     )
@@ -3959,50 +4000,6 @@ impl Chain {
 
             let runtime = self.runtime_adapter.clone();
             let epoch_manager = self.epoch_manager.clone();
-
-            // do it now, idk
-            if should_apply_transactions && is_new_chunk {
-                let prev_chunk_extra = self.get_chunk_extra(prev_hash, &shard_uid)?;
-                let chunk = self.get_chunk_clone_from_header(&chunk_header.clone())?;
-                let prev_chunk_height_included = prev_chunk_header.height_included();
-
-                // Validate that all next chunk information matches previous chunk extra.
-                validate_chunk_with_chunk_extra(
-                    // It's safe here to use ChainStore instead of ChainStoreUpdate
-                    // because we're asking prev_chunk_header for already committed block
-                    self.store(),
-                    self.epoch_manager.as_ref(),
-                    prev_hash,
-                    prev_chunk_extra.as_ref(),
-                    prev_chunk_height_included,
-                    &chunk_header,
-                )?;
-                // .map_err(|err| {
-                //     warn!(
-                //         target: "chain",
-                //         ?err,
-                //         prev_block_hash=?prev_hash,
-                //         block_hash=?block.header().hash(),
-                //         shard_id,
-                //         prev_chunk_height_included,
-                //         ?prev_chunk_extra,
-                //         ?chunk_header,
-                //         "Failed to validate chunk extra"
-                //     );
-                //     byzantine_assert!(false);
-                //     match self.create_chunk_state_challenge(
-                //         prev_block,
-                //         block,
-                //         &chunk_header,
-                //         prev_chunk.unwrap(),
-                //     ) {
-                //         Ok(chunk_state) => Error::InvalidChunkState(Box::new(chunk_state)),
-                //         Err(err) => err,
-                //     }
-                // })?;
-
-                self.validate_chunk_transactions(&block, prev_block.header(), &chunk)?;
-            }
 
             let block_context = self.get_block_context(
                 block.header(),
@@ -4032,7 +4029,7 @@ impl Chain {
                         parent_span,
                         epoch_manager.clone(),
                         runtime.clone(),
-                        apply_chunk_type,
+                        shard_update_reason,
                         block_context,
                         ShardInfo { shard_uid, will_shard_layout_change },
                         receipts,
