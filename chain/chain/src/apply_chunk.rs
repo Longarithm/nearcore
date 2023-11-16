@@ -73,7 +73,7 @@ pub enum ApplyChunksMode {
 }
 
 pub enum ShardUpdateReason {
-    NewChunk(ShardChunk),
+    NewChunk(ShardChunk, Vec<Receipt>),
     OldChunk(ChunkExtra),
     StateSplit(StateChangesForSplitStates),
 }
@@ -98,12 +98,11 @@ pub fn process_shard_update(
     shard_update_reason: ShardUpdateReason,
     block_context: BlockContext,
     shard_info: ShardInfo,
-    receipts: Vec<Receipt>,
     split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
     state_patch: SandboxStatePatch,
 ) -> Result<ApplyChunkResult, Error> {
     match shard_update_reason {
-        ShardUpdateReason::NewChunk(chunk) => apply_new_chunk(
+        ShardUpdateReason::NewChunk(chunk, receipts) => apply_new_chunk(
             parent_span,
             block_context,
             chunk,

@@ -3901,12 +3901,27 @@ impl Chain {
             let state_patch = state_patch.take();
             let shard_id = shard_id as ShardId;
             println!("check1 {prev_hash} {shard_id}");
-            let FullShardApplyInfo {
-                shard_uid,
-                cares_about_shard_this_epoch,
-                cares_about_shard_next_epoch,
-                will_shard_layout_change,
-            } = self.get_shard_info(me, prev_hash, shard_id)?;
+            // let FullShardApplyInfo {
+            //     shard_uid,
+            //     cares_about_shard_this_epoch,
+            //     cares_about_shard_next_epoch,
+            //     will_shard_layout_change,
+            // } = self.get_shard_info(me, prev_hash, shard_id)?;
+            let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(prev_hash)?;
+            let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
+            let cares_about_shard_this_epoch = self.shard_tracker.care_about_shard(
+                me.as_ref(),
+                prev_hash,
+                shard_id,
+                true,
+            );
+            let cares_about_shard_next_epoch = self.shard_tracker.will_care_about_shard(
+                me.as_ref(),
+                prev_hash,
+                shard_id,
+                true,
+            );
+            let will_shard_layout_change = self.epoch_manager.will_shard_layout_change(prev_hash)?;
             let should_apply_transactions = get_should_apply_transactions(
                 mode,
                 cares_about_shard_this_epoch,
@@ -3935,8 +3950,6 @@ impl Chain {
                 None
             };
 
-            // let shard_uid =
-            //     self.epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id())?;
             let is_new_chunk = chunk_header.height_included() == block.header().height();
             let shard_update_reason = if should_apply_transactions {
                 if is_new_chunk {
@@ -3981,9 +3994,19 @@ impl Chain {
 
                     self.validate_chunk_transactions(&block, prev_block.header(), &chunk)?;
 
-                    ShardUpdateReason::NewChunk(
-                        self.get_chunk_clone_from_header(&chunk_header.clone())?,
-                    )
+                    // we can't use hash from the current block here yet because the incoming receipts
+                    // for this block is not stored yet
+                    let new_receipts = collect_receipts(incoming_receipts.get(&shard_id).unwrap());
+                    let old_receipts = &self.store().get_incoming_receipts_for_shard(
+                        self.epoch_manager.as_ref(),
+                        shard_id,
+                        *prev_hash,
+                        prev_chunk_height_included,
+                    )?;
+                    let old_receipts = collect_receipts_from_response(old_receipts);
+                    let receipts = [new_receipts, old_receipts].concat()
+
+                    ShardUpdateReason::NewChunk(chunk, receipts)
                 } else {
                     ShardUpdateReason::OldChunk(ChunkExtra::clone(
                         self.get_chunk_extra(prev_hash, &shard_uid)?.as_ref(),
@@ -3998,32 +4021,16 @@ impl Chain {
                 continue;
             };
 
-            let runtime = self.runtime_adapter.clone();
-            let epoch_manager = self.epoch_manager.clone();
-
-            let block_context = self.get_block_context(
-                block.header(),
-                prev_block.header(),
-                shard_id as ShardId,
-                is_new_chunk,
-            )?;
-            let receipts = if should_apply_transactions && is_new_chunk {
-                let prev_chunk_height_included = prev_chunk_header.height_included();
-                // we can't use hash from the current block here yet because the incoming receipts
-                // for this block is not stored yet
-                let new_receipts = collect_receipts(incoming_receipts.get(&shard_id).unwrap());
-                let old_receipts = &self.store().get_incoming_receipts_for_shard(
-                    self.epoch_manager.as_ref(),
-                    shard_id,
-                    *prev_hash,
-                    prev_chunk_height_included,
-                )?;
-                let old_receipts = collect_receipts_from_response(old_receipts);
-                [new_receipts, old_receipts].concat()
-            } else {
-                vec![]
-            };
             if should_apply_transactions || split_state_roots.is_some() {
+                let runtime = self.runtime_adapter.clone();
+                let epoch_manager = self.epoch_manager.clone();
+
+                let block_context = self.get_block_context(
+                    block.header(),
+                    prev_block.header(),
+                    shard_id as ShardId,
+                    is_new_chunk,
+                )?;
                 jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
                     Ok(NewApplyChunkResult::Classic(process_shard_update(
                         parent_span,
@@ -4032,7 +4039,6 @@ impl Chain {
                         shard_update_reason,
                         block_context,
                         ShardInfo { shard_uid, will_shard_layout_change },
-                        receipts,
                         split_state_roots,
                         state_patch,
                     )?))
@@ -4210,10 +4216,9 @@ impl Chain {
                                 parent_span,
                                 epoch_manager.clone(),
                                 runtime.clone(),
-                                ShardUpdateReason::NewChunk(prev_chunk),
+                                ShardUpdateReason::NewChunk(prev_chunk, receipts),
                                 last_block,
                                 shard_apply_info,
-                                receipts,
                                 ssr,
                                 SandboxStatePatch::default(),
                             )?,
