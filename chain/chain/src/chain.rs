@@ -1,6 +1,6 @@
 use crate::apply_chunk::{
-    apply_chunk, ApplyChunkResult, ApplyChunksMode, BlockContext, DifferentHeightResult,
-    FullShardApplyInfo, SameHeightResult, ShardInfo, ShardUpdateType, SplitStateResult,
+    process_shard_update, ApplyChunkResult, ApplyChunksMode, BlockContext, DifferentHeightResult,
+    FullShardApplyInfo, SameHeightResult, ShardInfo, ShardUpdateReason, SplitStateResult,
 };
 use crate::block_processing_utils::{
     BlockPreprocessInfo, BlockProcessingArtifact, BlocksInProcessing, DoneApplyChunkCallback,
@@ -3940,17 +3940,17 @@ impl Chain {
             let is_new_chunk = chunk_header.height_included() == block.header().height();
             let apply_chunk_type = if should_apply_transactions {
                 if is_new_chunk {
-                    ShardUpdateType::NewChunk(
+                    ShardUpdateReason::NewChunk(
                         self.get_chunk_clone_from_header(&chunk_header.clone())?,
                     )
                 } else {
-                    ShardUpdateType::OldChunk(ChunkExtra::clone(
+                    ShardUpdateReason::OldChunk(ChunkExtra::clone(
                         self.get_chunk_extra(prev_hash, &shard_uid)?.as_ref(),
                     ))
                 }
             } else if split_state_roots.is_some() {
                 assert!(mode == ApplyChunksMode::CatchingUp && cares_about_shard_this_epoch);
-                ShardUpdateType::StateSplit(
+                ShardUpdateReason::StateSplit(
                     self.store().get_state_changes_for_split_states(block.hash(), shard_id)?,
                 )
             } else {
@@ -4028,16 +4028,16 @@ impl Chain {
             };
             if should_apply_transactions || split_state_roots.is_some() {
                 jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
-                    Ok(NewApplyChunkResult::Classic(apply_chunk(
+                    Ok(NewApplyChunkResult::Classic(process_shard_update(
                         parent_span,
                         epoch_manager.clone(),
                         runtime.clone(),
-                        block_context,
                         apply_chunk_type,
+                        block_context,
                         ShardInfo { shard_uid, will_shard_layout_change },
-                        state_patch,
-                        split_state_roots,
                         receipts,
+                        split_state_roots,
+                        state_patch,
                     )?))
                 }));
             }
@@ -4191,16 +4191,16 @@ impl Chain {
                     jobs.push(Box::new(move |parent_span| -> Result<NewApplyChunkResult, Error> {
                         let mut result = vec![];
                         for (block_context, shard_apply_info, ssr) in first_blocks {
-                            let r = apply_chunk(
+                            let r = process_shard_update(
                                 parent_span,
                                 epoch_manager.clone(),
                                 runtime.clone(),
+                                ShardUpdateReason::OldChunk(prev_chunk_extra.clone()),
                                 block_context.clone(),
-                                ShardUpdateType::OldChunk(prev_chunk_extra.clone()),
                                 shard_apply_info,
-                                SandboxStatePatch::default(),
-                                ssr,
                                 vec![],
+                                ssr,
+                                SandboxStatePatch::default(),
                             )?;
                             if let ApplyChunkResult::DifferentHeight(r) = &r {
                                 *prev_chunk_extra.state_root_mut() = r.apply_result.new_root;
@@ -4209,16 +4209,16 @@ impl Chain {
                         }
                         result.push((
                             last_block.clone(),
-                            apply_chunk(
+                            process_shard_update(
                                 parent_span,
                                 epoch_manager.clone(),
                                 runtime.clone(),
+                                ShardUpdateReason::NewChunk(prev_chunk),
                                 last_block,
-                                ShardUpdateType::NewChunk(prev_chunk),
                                 shard_apply_info,
-                                SandboxStatePatch::default(),
-                                ssr,
                                 receipts,
+                                ssr,
+                                SandboxStatePatch::default(),
                             )?,
                         ));
                         Ok(NewApplyChunkResult::Shadow(result))

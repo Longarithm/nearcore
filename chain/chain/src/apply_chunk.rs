@@ -72,7 +72,7 @@ pub enum ApplyChunksMode {
     NotCaughtUp,
 }
 
-pub enum ShardUpdateType {
+pub enum ShardUpdateReason {
     NewChunk(ShardChunk),
     OldChunk(ChunkExtra),
     StateSplit(StateChangesForSplitStates),
@@ -91,19 +91,19 @@ pub struct ShardInfo {
 }
 
 /// This method returns the closure that is responsible for applying of a single chunk.
-pub fn apply_chunk(
+pub fn process_shard_update(
     parent_span: &tracing::Span,
     epoch_manager: Arc<dyn EpochManagerAdapter>,
     runtime: Arc<dyn RuntimeAdapter>,
+    shard_update_reason: ShardUpdateReason,
     block_context: BlockContext,
-    apply_chunk_type: ShardUpdateType,
     shard_info: ShardInfo,
-    state_patch: SandboxStatePatch,
-    split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
     receipts: Vec<Receipt>,
+    split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
+    state_patch: SandboxStatePatch,
 ) -> Result<ApplyChunkResult, Error> {
-    match apply_chunk_type {
-        ShardUpdateType::NewChunk(chunk) => apply_new_chunk(
+    match shard_update_reason {
+        ShardUpdateReason::NewChunk(chunk) => apply_new_chunk(
             parent_span,
             block_context,
             chunk,
@@ -114,7 +114,7 @@ pub fn apply_chunk(
             epoch_manager.clone(),
             split_state_roots,
         ),
-        ShardUpdateType::OldChunk(prev_chunk_extra) => apply_old_chunk(
+        ShardUpdateReason::OldChunk(prev_chunk_extra) => apply_old_chunk(
             parent_span,
             block_context,
             &prev_chunk_extra,
@@ -124,7 +124,7 @@ pub fn apply_chunk(
             epoch_manager.clone(),
             split_state_roots,
         ),
-        ShardUpdateType::StateSplit(state_changes) => apply_state_split(
+        ShardUpdateReason::StateSplit(state_changes) => apply_state_split(
             parent_span,
             block_context,
             shard_info.shard_uid,
