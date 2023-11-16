@@ -4018,7 +4018,7 @@ impl Chain {
                         is_new_chunk,
                     )?;
                     Some(Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
-                        ShardUpdateResult::Stateful(Ok(process_shard_update(
+                        Ok(ShardUpdateResult::Stateful(process_shard_update(
                             parent_span,
                             epoch_manager.clone(),
                             runtime.clone(),
