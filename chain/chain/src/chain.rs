@@ -1,7 +1,3 @@
-use crate::apply_chunk::{
-    process_shard_update, ApplyChunkResult, ApplyChunksMode, BlockContext, DifferentHeightResult,
-    FullShardApplyInfo, SameHeightResult, ShardInfo, ShardUpdateReason, SplitStateResult,
-};
 use crate::block_processing_utils::{
     BlockPreprocessInfo, BlockProcessingArtifact, BlocksInProcessing, DoneApplyChunkCallback,
 };
@@ -18,6 +14,10 @@ use crate::types::{
     AcceptedBlock, ApplySplitStateResultOrStateChanges, ApplyTransactionResult, Block,
     BlockEconomicsConfig, BlockHeader, BlockStatus, ChainConfig, ChainGenesis, Provenance,
     RuntimeAdapter, RuntimeStorageConfig,
+};
+use crate::update_shard::{
+    process_shard_update, ApplyChunkResult, ApplyChunksMode, BlockContext, DifferentHeightResult,
+    FullShardApplyInfo, SameHeightResult, ShardInfo, ShardUpdateReason, SplitStateResult,
 };
 use crate::validate::{
     validate_challenge, validate_chunk_proofs, validate_chunk_with_chunk_extra,
