@@ -4312,7 +4312,6 @@ impl Chain {
             height: block_header.height(),
             random_seed: *block_header.random_value(),
             is_first_block_with_chunk_of_version,
-            next_epoch_id: *block_header.next_epoch_id(),
         })
     }
 

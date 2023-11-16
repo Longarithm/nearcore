@@ -28,7 +28,6 @@ pub struct BlockContext {
     pub height: BlockHeight,
     pub random_seed: CryptoHash,
     pub is_first_block_with_chunk_of_version: bool,
-    pub next_epoch_id: EpochId,
 }
 
 #[derive(Debug)]
@@ -290,7 +289,8 @@ fn apply_state_split(
         shard_id,
         ?shard_uid)
     .entered();
-    let next_epoch_shard_layout = epoch_manager.get_shard_layout(&block_context.next_epoch_id)?;
+    let next_epoch_id = epoch_manager.get_next_epoch_id(&block_context.block_hash)?;
+    let next_epoch_shard_layout = epoch_manager.get_shard_layout(&next_epoch_id)?;
     let results = runtime.apply_update_to_split_states(
         &block_context.block_hash,
         split_state_roots,
