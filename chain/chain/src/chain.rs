@@ -4018,7 +4018,7 @@ impl Chain {
                         is_new_chunk,
                     )?;
                     Some(Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
-                        Ok(process_shard_update(
+                        ShardUpdateResult::Stateful(Ok(process_shard_update(
                             parent_span,
                             epoch_manager.clone(),
                             runtime.clone(),
@@ -4027,7 +4027,7 @@ impl Chain {
                             ShardInfo { shard_uid, will_shard_layout_change },
                             split_state_roots,
                             state_patch,
-                        )?)
+                        )?))
                     }))
                 } else {
                     None
@@ -5135,6 +5135,7 @@ impl<'a> ChainUpdate<'a> {
                 )?;
             }
         }
+        Ok(())
     }
 
     /// Processed results of applying chunk
