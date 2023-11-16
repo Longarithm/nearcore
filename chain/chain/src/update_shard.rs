@@ -1,4 +1,3 @@
-use crate::chain::ChainUpdate;
 use crate::crypto_hash_timer::CryptoHashTimer;
 use crate::types::{
     ApplySplitStateResult, ApplySplitStateResultOrStateChanges, ApplyTransactionResult,
