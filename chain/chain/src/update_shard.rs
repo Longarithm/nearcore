@@ -1,3 +1,4 @@
+use crate::chain::ChainUpdate;
 use crate::crypto_hash_timer::CryptoHashTimer;
 use crate::types::{
     ApplySplitStateResult, ApplySplitStateResultOrStateChanges, ApplyTransactionResult,
@@ -55,7 +56,13 @@ pub struct SplitStateResult {
 }
 
 #[derive(Debug)]
-pub enum ApplyChunkResult {
+pub enum ShardUpdateResult {
+    Stateful(ShardChunkUpdateResult),
+    Stateless(Vec<(BlockContext, ShardChunkUpdateResult)>),
+}
+
+#[derive(Debug)]
+pub enum ShardChunkUpdateResult {
     SameHeight(SameHeightResult),
     DifferentHeight(DifferentHeightResult),
     SplitState(SplitStateResult),
@@ -93,7 +100,7 @@ pub fn process_shard_update(
     shard_info: ShardInfo,
     split_state_roots: Option<HashMap<ShardUId, StateRoot>>,
     state_patch: SandboxStatePatch,
-) -> Result<ApplyChunkResult, Error> {
+) -> Result<ShardChunkUpdateResult, Error> {
     match shard_update_reason {
         ShardUpdateReason::NewChunk(chunk, receipts) => apply_new_chunk(
             parent_span,
@@ -140,7 +147,7 @@ fn apply_new_chunk(
     runtime: Arc<dyn RuntimeAdapter>,
     epoch_manager: Arc<dyn EpochManagerAdapter>,
     split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
-) -> Result<ApplyChunkResult, Error> {
+) -> Result<ShardChunkUpdateResult, Error> {
     let shard_id = shard_info.shard_uid.shard_id();
     let _span = tracing::debug_span!(
         target: "chain",
@@ -188,7 +195,7 @@ fn apply_new_chunk(
             } else {
                 None
             };
-            Ok(ApplyChunkResult::SameHeight(SameHeightResult {
+            Ok(ShardChunkUpdateResult::SameHeight(SameHeightResult {
                 gas_limit,
                 shard_uid: shard_info.shard_uid,
                 apply_result,
@@ -211,7 +218,7 @@ fn apply_old_chunk(
     runtime: Arc<dyn RuntimeAdapter>,
     epoch_manager: Arc<dyn EpochManagerAdapter>,
     split_state_roots: Option<HashMap<ShardUId, CryptoHash>>,
-) -> Result<ApplyChunkResult, Error> {
+) -> Result<ShardChunkUpdateResult, Error> {
     let shard_id = shard_info.shard_uid.shard_id();
     let _span = tracing::debug_span!(
         target: "chain",
@@ -256,7 +263,7 @@ fn apply_old_chunk(
             } else {
                 None
             };
-            Ok(ApplyChunkResult::DifferentHeight(DifferentHeightResult {
+            Ok(ShardChunkUpdateResult::DifferentHeight(DifferentHeightResult {
                 shard_uid: shard_info.shard_uid,
                 apply_result,
                 apply_split_result_or_state_changes,
@@ -275,7 +282,7 @@ fn apply_state_split(
     epoch_manager: Arc<dyn EpochManagerAdapter>,
     split_state_roots: HashMap<ShardUId, CryptoHash>,
     state_changes: StateChangesForSplitStates,
-) -> Result<ApplyChunkResult, Error> {
+) -> Result<ShardChunkUpdateResult, Error> {
     let shard_id = shard_uid.shard_id();
     let _span = tracing::debug_span!(
         target: "chain",
@@ -293,7 +300,7 @@ fn apply_state_split(
         &next_epoch_shard_layout,
         state_changes,
     )?;
-    Ok(ApplyChunkResult::SplitState(SplitStateResult { shard_uid, results }))
+    Ok(ShardChunkUpdateResult::SplitState(SplitStateResult { shard_uid, results }))
 }
 
 /// Process ApplyTransactionResult to apply changes to split states
