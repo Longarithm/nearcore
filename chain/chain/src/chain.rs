@@ -4115,11 +4115,13 @@ impl Chain {
                             .as_ref()
                             .clone();
                         println!("ce found");
+                        let (fh, lh) = (block_infos[0].0.height, block_infos.last().unwrap().0.height);
                         let (last_block, shard_apply_info) = block_infos.pop().unwrap();
                         let first_blocks = block_infos.into_iter();
                         let prev_chunk =
                             self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
                         let job: UpdateShardJob = Box::new(move |parent_span| -> Result<NewUpdateShardResult, Error> {
+                            println!("SPAWN {fh} {lh} {}", shard_apply_info.shard_uid);
                             let mut result = vec![];
                             for (block_context, shard_apply_info) in first_blocks {
                                 let r = process_shard_update(
