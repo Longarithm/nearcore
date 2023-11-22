@@ -3897,7 +3897,7 @@ impl Chain {
             .iter()
             .zip(prev_chunk_headers.iter())
             .enumerate()
-            .filter_map(|(shard_id, (chunk_header, prev_chunk_header)): (usize, (&ShardChunkHeader, &ShardChunkHeader))| -> Result<Vec<_>, Error> {
+            .map(|(shard_id, (chunk_header, prev_chunk_header)): (usize, (&ShardChunkHeader, &ShardChunkHeader))| -> Result<Vec<_>, Error> {
                 // XXX: This is a bit questionable -- sandbox state patching works
                 // only for a single shard. This so far has been enough.
                 let state_patch = state_patch.take();
@@ -3981,7 +3981,7 @@ impl Chain {
                         )?;
                         let check_shard_id = if shard_layout != prev_shard_layout {
                             return Ok(jobs);
-                            shard_layout.get_parent_shard_id(shard_id)?
+                            // shard_layout.get_parent_shard_id(shard_id)?
                         } else {
                             shard_id
                         };
@@ -4034,16 +4034,29 @@ impl Chain {
                                     }
 
                                     println!("check2 {} {current_shard_id}", prev_header.hash());
-                                    let shard_info =
-                                        self.get_shard_info(me, prev_header.hash(), current_shard_id)?;
+                                    // let shard_info =
+                                    //     self.get_shard_context(me, prev_header.hash(), current_shard_id)?;
+                                    let prev_hash = block.header().prev_hash();
+                                    let cares_about_shard_this_epoch =
+                                        self.shard_tracker.care_about_shard(me.as_ref(), prev_hash, shard_id as ShardId, true);
+                                    let cares_about_shard_next_epoch =
+                                        self.shard_tracker.will_care_about_shard(me.as_ref(), prev_hash, shard_id as ShardId, true);
+                                    let is_new_chunk = chunk_header.height_included() == block.header().height();
+                                    let will_shard_layout_change = self.epoch_manager.will_shard_layout_change(prev_hash)?;
                                     let should_apply_transactions = get_should_apply_transactions(
                                         mode,
-                                        shard_info.cares_about_shard_this_epoch,
-                                        shard_info.cares_about_shard_next_epoch,
+                                        cares_about_shard_this_epoch,
+                                        cares_about_shard_next_epoch,
+                                    );
+                                    let need_to_split_states = will_shard_layout_change && cares_about_shard_next_epoch;
+                                    let should_apply_transactions = get_should_apply_transactions(
+                                        mode,
+                                        cares_about_shard_this_epoch,
+                                        cares_about_shard_next_epoch,
                                     );
                                     skip_due_to_resharding |= need_to_split_states;
-                                    let need_to_split_states = shard_info.will_shard_layout_change
-                                        && shard_info.cares_about_shard_next_epoch;
+                                    let need_to_split_states = will_shard_layout_change
+                                        && cares_about_shard_next_epoch;
                                     let ssr = if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp
                                     {
                                         skip_due_to_resharding = true;
@@ -4057,6 +4070,7 @@ impl Chain {
                                     } else {
                                         None
                                     };
+                                    let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id())?;
                                     Ok((
                                         self.get_block_context(
                                             &header,
@@ -4065,9 +4079,8 @@ impl Chain {
                                             b == prev_chunk_block_hash,
                                         )?,
                                         ShardContext {
-                                            shard_uid: shard_info.shard_uid,
-                                            will_shard_layout_change: shard_info
-                                                .will_shard_layout_change,
+                                            shard_uid: shard_uid,
+                                            will_shard_layout_change: will_shard_layout_change,
                                         },
                                     ))
                                 },
