@@ -3980,7 +3980,7 @@ impl Chain {
                             prev_chunk_prev_block.header().prev_hash(),
                         )?;
                         let check_shard_id = if shard_layout != prev_shard_layout {
-                            return jobs;
+                            return Ok(jobs);
                             shard_layout.get_parent_shard_id(shard_id)?
                         } else {
                             shard_id
@@ -3991,7 +3991,7 @@ impl Chain {
                         let prev_prev_shard_layout = epoch_manager
                             .get_shard_layout_from_prev_block(prev_prev_chunk_prev_hash)?;
                         if prev_shard_layout != prev_prev_shard_layout {
-                            return jobs;
+                            return Ok(jobs);
                         }
                         let prev_prev_chunk_height_included = prev_prev_chunk.height_included();
                         println!(
@@ -4076,7 +4076,7 @@ impl Chain {
                             .collect();
                         println!("!!!!!");
                         if skip_due_to_resharding {
-                            return jobs;
+                            return Ok(jobs);
                         }
                         let mut block_infos = block_infos_res?;
                         assert!(block_infos.len() >= 1);
@@ -4127,7 +4127,7 @@ impl Chain {
                     }
                 }
 
-                return jobs;
+                return Ok(jobs);
             })
             .collect()
         .into_iter()
