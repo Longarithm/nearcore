@@ -4058,6 +4058,7 @@ impl Chain {
                                     if shard_layout != prev_shard_layout {
                                         current_shard_id =
                                             shard_layout.get_parent_shard_id(current_shard_id)?;
+                                        skip_due_to_resharding = true;
                                     }
 
                                     println!("check2 {} {current_shard_id}", prev_header.hash());
@@ -5247,7 +5248,6 @@ impl<'a> ChainUpdate<'a> {
                 }
                 NewUpdateShardResult::Stateless(results) => {
                     for (block_context, result) in results {
-                        // let block_hash = result.
                         eprintln!(
                             "catch {} -> {} | {}",
                             block_context.prev_block_hash,
