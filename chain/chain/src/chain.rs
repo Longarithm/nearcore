@@ -3904,7 +3904,7 @@ impl Chain {
 
                 let mut jobs = vec![];
 
-                let process_job = |job: Result<Option<UpdateShardJob>, Error>| {
+                let mut process_job = |job: Result<Option<UpdateShardJob>, Error>| {
                     match job {
                         Ok(Some(processor)) => jobs.push(processor),
                         Ok(None) => {},
@@ -3943,7 +3943,7 @@ impl Chain {
                     cares_about_shard_this_epoch,
                     cares_about_shard_next_epoch,
                 );
-                let need_to_split_states = will_shard_layout_change && cares_about_shard_next_epoch;
+                // let need_to_split_states = will_shard_layout_change && cares_about_shard_next_epoch;
 
                 // FUN STUFF
                 if should_apply_transactions {
@@ -4041,23 +4041,12 @@ impl Chain {
                                         self.shard_tracker.care_about_shard(me.as_ref(), prev_hash, shard_id as ShardId, true);
                                     let cares_about_shard_next_epoch =
                                         self.shard_tracker.will_care_about_shard(me.as_ref(), prev_hash, shard_id as ShardId, true);
-                                    let is_new_chunk = chunk_header.height_included() == block.header().height();
                                     let will_shard_layout_change = self.epoch_manager.will_shard_layout_change(prev_hash)?;
-                                    let should_apply_transactions = get_should_apply_transactions(
-                                        mode,
-                                        cares_about_shard_this_epoch,
-                                        cares_about_shard_next_epoch,
-                                    );
                                     let need_to_split_states = will_shard_layout_change && cares_about_shard_next_epoch;
-                                    let should_apply_transactions = get_should_apply_transactions(
-                                        mode,
-                                        cares_about_shard_this_epoch,
-                                        cares_about_shard_next_epoch,
-                                    );
                                     skip_due_to_resharding |= need_to_split_states;
                                     let need_to_split_states = will_shard_layout_change
                                         && cares_about_shard_next_epoch;
-                                    let ssr = if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp
+                                    let _ssr = if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp
                                     {
                                         skip_due_to_resharding = true;
                                         // assert!(
@@ -4079,8 +4068,8 @@ impl Chain {
                                             b == prev_chunk_block_hash,
                                         )?,
                                         ShardContext {
-                                            shard_uid: shard_uid,
-                                            will_shard_layout_change: will_shard_layout_change,
+                                            shard_uid,
+                                            will_shard_layout_change,
                                         },
                                     ))
                                 },
@@ -5247,7 +5236,7 @@ impl<'a> ChainUpdate<'a> {
                                 gas_limit,
                                 shard_uid,
                                 apply_result,
-                                apply_split_result_or_state_changes,
+                                apply_split_result_or_state_changes: _,
                             }) => {
                                 let (outcome_root, _) =
                                     ApplyTransactionResult::compute_outcomes_proof(
@@ -5269,7 +5258,7 @@ impl<'a> ChainUpdate<'a> {
                             UpdateShardResult::OldChunk(OldChunkResult {
                                 shard_uid,
                                 apply_result,
-                                apply_split_result_or_state_changes,
+                                apply_split_result_or_state_changes: _,
                             }) => {
                                 let correct_ce = self
                                     .chain_store_update
