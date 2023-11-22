@@ -3892,7 +3892,7 @@ impl Chain {
         let _span = tracing::debug_span!(target: "chain", "apply_chunks_preprocessing").entered();
         let prev_chunk_headers =
             Chain::get_prev_chunk_headers(self.epoch_manager.as_ref(), prev_block)?;
-        block
+        Ok(block
             .chunks()
             .iter()
             .zip(prev_chunk_headers.iter())
@@ -4145,7 +4145,7 @@ impl Chain {
             .collect::<Vec<Vec<_>>>()
         .into_iter()
         .flatten()
-        .collect::<Vec<_>>()
+        .collect::<Vec<_>>())
     }
 
     /// This method returns the closure that is responsible for updating a shard.
