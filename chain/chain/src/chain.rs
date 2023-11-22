@@ -4143,8 +4143,8 @@ impl Chain {
                 return Ok(jobs);
             })
             .collect::<Vec<Result<_, Error>>>()
-            .flatten()
             .into_iter()
+            .flatten()
         .collect::<Vec<_>>())
     }
 
