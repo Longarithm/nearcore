@@ -4082,13 +4082,12 @@ impl Chain {
                         assert!(block_infos.len() >= 1);
                         let receipts = collect_receipts_from_response(receipts_response);
                         println!("chunk extra?");
-                        let (last_block, shard_apply_info) = block_infos.pop().unwrap();
-                        let shard_uid = shard_apply_info.shard_uid;
                         let mut prev_chunk_extra: ChunkExtra = self
-                            .get_chunk_extra(&block_infos[0].0.prev_block_hash, &shard_uid)?
+                            .get_chunk_extra(&block_infos[0].0.prev_block_hash, &block_infos[0].1.shard_uid)?
                             .as_ref()
                             .clone();
                         println!("ce found");
+                        let (last_block, shard_apply_info) = block_infos.pop().unwrap();
                         let first_blocks = block_infos.into_iter();
                         let prev_chunk =
                             self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
