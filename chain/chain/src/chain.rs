@@ -4142,7 +4142,7 @@ impl Chain {
 
                 return Ok(jobs);
             })
-            .collect::<Vec<Result<_, Error>>>()
+            .collect::<Vec<Result<Vec<UpdateShardJob>, Error>>>()
             .into_iter()
             .flatten()
         .collect::<Vec<_>>())
