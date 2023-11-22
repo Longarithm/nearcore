@@ -16,8 +16,8 @@ use crate::types::{
     RuntimeAdapter, RuntimeStorageConfig,
 };
 use crate::update_shard::{
-    process_shard_update, BlockContext, NewChunkResult, NewUpdateShardResult, OldChunkResult,
-    ShardContext, ShardUpdateReason, StateSplitResult, UpdateShardResult,
+    process_shard_update, BlockContext, NewChunkResult, OldChunkResult, ShardBlockUpdateResult,
+    ShardContext, ShardUpdateReason, ShardUpdateResult, StateSplitResult,
 };
 use crate::validate::{
     validate_challenge, validate_chunk_proofs, validate_chunk_with_chunk_extra,
@@ -432,7 +432,7 @@ pub fn check_known(
     check_known_store(chain, block_hash)
 }
 
-type BlockApplyChunksResult = (CryptoHash, Vec<Result<NewUpdateShardResult, Error>>);
+type BlockApplyChunksResult = (CryptoHash, Vec<Result<ShardUpdateResult, Error>>);
 
 /// Facade to the blockchain block processing and storage.
 /// Provides current view on the state according to the chain state.
@@ -497,8 +497,7 @@ impl Drop for Chain {
 
 /// UpdateShardJob is a closure that is responsible for updating a shard for a single block.
 /// Execution context (latest blocks/chunks details) are already captured within.
-type UpdateShardJob =
-    Box<dyn FnOnce(&Span) -> Result<NewUpdateShardResult, Error> + Send + 'static>;
+type UpdateShardJob = Box<dyn FnOnce(&Span) -> Result<ShardUpdateResult, Error> + Send + 'static>;
 
 /// PreprocessBlockResult is a tuple where the first element is a vector of jobs
 /// to update shards, the second element is BlockPreprocessInfo
@@ -2229,7 +2228,7 @@ impl Chain {
         &self,
         block_hash: CryptoHash,
         block_height: BlockHeight,
-        work: Vec<Box<dyn FnOnce(&Span) -> Result<NewUpdateShardResult, Error> + Send>>,
+        work: Vec<Box<dyn FnOnce(&Span) -> Result<ShardUpdateResult, Error> + Send>>,
         apply_chunks_done_marker: Arc<OnceCell<()>>,
         apply_chunks_done_callback: DoneApplyChunkCallback,
     ) {
@@ -2260,7 +2259,7 @@ impl Chain {
         me: &Option<AccountId>,
         block: &Block,
         block_preprocess_info: BlockPreprocessInfo,
-        apply_results: Vec<Result<NewUpdateShardResult, Error>>,
+        apply_results: Vec<Result<ShardUpdateResult, Error>>,
     ) -> Result<Option<Tip>, Error> {
         let mut chain_update = self.chain_update();
         let new_head =
@@ -2276,7 +2275,7 @@ impl Chain {
         &mut self,
         me: &Option<AccountId>,
         block_hash: CryptoHash,
-        apply_results: Vec<Result<NewUpdateShardResult, Error>>,
+        apply_results: Vec<Result<ShardUpdateResult, Error>>,
         block_processing_artifacts: &mut BlockProcessingArtifact,
         apply_chunks_done_callback: DoneApplyChunkCallback,
     ) -> Result<AcceptedBlock, Error> {
@@ -3609,7 +3608,7 @@ impl Chain {
         &mut self,
         me: &Option<AccountId>,
         block_hash: &CryptoHash,
-        results: Vec<Result<NewUpdateShardResult, Error>>,
+        results: Vec<Result<ShardUpdateResult, Error>>,
     ) -> Result<(), Error> {
         let block = self.store.get_block(block_hash)?;
         let mut chain_update = self.chain_update();
@@ -4144,7 +4143,7 @@ impl Chain {
                     let prev_chunk =
                         self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
                     let job: UpdateShardJob =
-                        Box::new(move |parent_span| -> Result<NewUpdateShardResult, Error> {
+                        Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
                             eprintln!(
                                 "SPAWN {fh} {lh} {} cause {causeh}",
                                 shard_apply_info.shard_uid
@@ -4160,7 +4159,7 @@ impl Chain {
                                     shard_apply_info,
                                     SandboxStatePatch::default(),
                                 )?;
-                                if let UpdateShardResult::OldChunk(r) = &r {
+                                if let ShardBlockUpdateResult::OldChunk(r) = &r {
                                     *prev_chunk_extra.state_root_mut() = r.apply_result.new_root;
                                 }
                                 result.push((block_context, r));
@@ -4177,7 +4176,7 @@ impl Chain {
                                     SandboxStatePatch::default(),
                                 )?,
                             ));
-                            Ok(NewUpdateShardResult::Stateless(result))
+                            Ok(ShardUpdateResult::Stateless(result))
                         });
                     process_job(Ok(Some(job)))?;
 
@@ -4315,8 +4314,8 @@ impl Chain {
             shard_id,
             is_new_chunk,
         )?;
-        Ok(Some(Box::new(move |parent_span| -> Result<NewUpdateShardResult, Error> {
-            Ok(NewUpdateShardResult::Stateful(process_shard_update(
+        Ok(Some(Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
+            Ok(ShardUpdateResult::Stateful(process_shard_update(
                 parent_span,
                 runtime.as_ref(),
                 epoch_manager.as_ref(),
@@ -5266,15 +5265,15 @@ impl<'a> ChainUpdate<'a> {
     fn apply_chunk_postprocessing(
         &mut self,
         block: &Block,
-        apply_results: Vec<NewUpdateShardResult>,
+        apply_results: Vec<ShardUpdateResult>,
     ) -> Result<(), Error> {
         let _span = tracing::debug_span!(target: "chain", "apply_chunk_postprocessing").entered();
         for result in apply_results {
             match result {
-                NewUpdateShardResult::Stateful(result) => {
+                ShardUpdateResult::Stateful(result) => {
                     self.process_apply_chunk_result(block, result)?
                 }
-                NewUpdateShardResult::Stateless(results) => {
+                ShardUpdateResult::Stateless(results) => {
                     for (block_context, result) in results {
                         eprintln!(
                             "catch {} -> {} | {}",
@@ -5284,7 +5283,7 @@ impl<'a> ChainUpdate<'a> {
                         );
 
                         match result {
-                            UpdateShardResult::NewChunk(NewChunkResult {
+                            ShardBlockUpdateResult::NewChunk(NewChunkResult {
                                 gas_limit,
                                 shard_uid,
                                 apply_result,
@@ -5307,7 +5306,7 @@ impl<'a> ChainUpdate<'a> {
                                     .get_chunk_extra(&block_context.block_hash, &shard_uid)?;
                                 assert_eq!(Arc::new(ce), correct_ce, "unequal chunk extras");
                             }
-                            UpdateShardResult::OldChunk(OldChunkResult {
+                            ShardBlockUpdateResult::OldChunk(OldChunkResult {
                                 shard_uid,
                                 apply_result,
                                 apply_split_result_or_state_changes: _,
@@ -5476,13 +5475,13 @@ impl<'a> ChainUpdate<'a> {
     fn process_apply_chunk_result(
         &mut self,
         block: &Block,
-        result: UpdateShardResult,
+        result: ShardBlockUpdateResult,
     ) -> Result<(), Error> {
         let block_hash = block.hash();
         let prev_hash = block.header().prev_hash();
         let height = block.header().height();
         match result {
-            UpdateShardResult::NewChunk(NewChunkResult {
+            ShardBlockUpdateResult::NewChunk(NewChunkResult {
                 gas_limit,
                 shard_uid,
                 apply_result,
@@ -5533,7 +5532,7 @@ impl<'a> ChainUpdate<'a> {
                     self.process_split_state(block, &shard_uid, apply_results_or_state_changes)?;
                 }
             }
-            UpdateShardResult::OldChunk(OldChunkResult {
+            ShardBlockUpdateResult::OldChunk(OldChunkResult {
                 shard_uid,
                 apply_result,
                 apply_split_result_or_state_changes,
@@ -5560,7 +5559,7 @@ impl<'a> ChainUpdate<'a> {
                     self.process_split_state(block, &shard_uid, apply_results_or_state_changes)?;
                 }
             }
-            UpdateShardResult::StateSplit(StateSplitResult { shard_uid, results }) => {
+            ShardBlockUpdateResult::StateSplit(StateSplitResult { shard_uid, results }) => {
                 self.chain_store_update
                     .remove_state_changes_for_split_states(*block.hash(), shard_uid.shard_id());
                 self.process_split_state(
@@ -5580,7 +5579,7 @@ impl<'a> ChainUpdate<'a> {
         me: &Option<AccountId>,
         block: &Block,
         block_preprocess_info: BlockPreprocessInfo,
-        apply_chunks_results: Vec<Result<NewUpdateShardResult, Error>>,
+        apply_chunks_results: Vec<Result<ShardUpdateResult, Error>>,
     ) -> Result<Option<Tip>, Error> {
         let prev_hash = block.header().prev_hash();
         let results = apply_chunks_results.into_iter().map(|x| {
@@ -6213,8 +6212,8 @@ impl<'a> ChainUpdate<'a> {
 pub fn do_apply_chunks(
     block_hash: CryptoHash,
     block_height: BlockHeight,
-    work: Vec<Box<dyn FnOnce(&Span) -> Result<NewUpdateShardResult, Error> + Send>>,
-) -> Vec<Result<NewUpdateShardResult, Error>> {
+    work: Vec<Box<dyn FnOnce(&Span) -> Result<ShardUpdateResult, Error> + Send>>,
+) -> Vec<Result<ShardUpdateResult, Error>> {
     let parent_span =
         tracing::debug_span!(target: "chain", "do_apply_chunks", block_height, %block_hash)
             .entered();
@@ -6282,7 +6281,7 @@ pub struct BlockCatchUpRequest {
     pub sync_hash: CryptoHash,
     pub block_hash: CryptoHash,
     pub block_height: BlockHeight,
-    pub work: Vec<Box<dyn FnOnce(&Span) -> Result<NewUpdateShardResult, Error> + Send>>,
+    pub work: Vec<Box<dyn FnOnce(&Span) -> Result<ShardUpdateResult, Error> + Send>>,
 }
 
 // Skip `work`, because displaying functions is not possible.
@@ -6302,7 +6301,7 @@ impl Debug for BlockCatchUpRequest {
 pub struct BlockCatchUpResponse {
     pub sync_hash: CryptoHash,
     pub block_hash: CryptoHash,
-    pub results: Vec<Result<NewUpdateShardResult, Error>>,
+    pub results: Vec<Result<ShardUpdateResult, Error>>,
 }
 
 /// Helper to track blocks catch up
@@ -6327,7 +6326,7 @@ pub struct BlocksCatchUpState {
     /// preprocessing
     pub scheduled_blocks: HashSet<CryptoHash>,
     /// Map from block hashes that were processed to (saved store update, process results)
-    pub processed_blocks: HashMap<CryptoHash, Vec<Result<NewUpdateShardResult, Error>>>,
+    pub processed_blocks: HashMap<CryptoHash, Vec<Result<ShardUpdateResult, Error>>>,
     /// Collection of block hashes that are fully processed
     pub done_blocks: Vec<CryptoHash>,
 }
