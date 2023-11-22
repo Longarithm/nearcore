@@ -4064,15 +4064,15 @@ impl Chain {
                                         //     mode == ApplyChunksMode::CatchingUp
                                         //         && shard_info.cares_about_shard_this_epoch
                                         // );
+                                        // return Ok(jobs);
                                         return Err(Error::Other(String::from("resharding")));
-                                        None
                                         // Some(self.get_split_state_roots(block, current_shard_id)?)
                                     } else {
-                                        None
+                                        // None
                                     };
                                     let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, block.header().epoch_id())?;
                                     Ok((
-                                        self.get_block_context(
+                                        self.get_block_context_for_shard_update(
                                             &header,
                                             &prev_header,
                                             current_shard_id,
@@ -4274,7 +4274,7 @@ impl Chain {
             is_new_chunk,
         )?;
         Ok(Some(Box::new(move |parent_span| -> Result<NewUpdateShardResult, Error> {
-            Ok(process_shard_update(
+            Ok(NewUpdateShardResult::Stateful(process_shard_update(
                 parent_span,
                 runtime.as_ref(),
                 epoch_manager.as_ref(),
@@ -4282,7 +4282,7 @@ impl Chain {
                 block_context,
                 ShardContext { shard_uid, will_shard_layout_change },
                 state_patch,
-            )?)
+            )?))
         })))
     }
 
