@@ -1,7 +1,6 @@
 use crate::flat::{
     store_helper, BlockInfo, FlatStorageReadyStatus, FlatStorageStatus, POISONED_LOCK_ERR,
 };
-use near_primitives::block::Block;
 use near_primitives::errors::StorageError;
 use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardUId;
@@ -115,7 +114,7 @@ impl FlatStorageManager {
                             ?new_flat_head,
                             ?err,
                             ?shard_uid,
-                            block_hash = ?block.header().hash(),
+                            // block_hash = ?block.header().hash(),
                             "Cannot update flat head");
                     }
                     _ => {
