@@ -1,4 +1,6 @@
 use crate::types::BlockHeaderInfo;
+#[cfg(feature = "new_epoch_sync")]
+use crate::EpochInfoAggregator;
 use crate::EpochManagerHandle;
 use near_chain_primitives::Error;
 use near_crypto::Signature;
@@ -20,6 +22,8 @@ use near_primitives::version::ProtocolVersion;
 use near_primitives::views::EpochValidatorInfo;
 use near_store::{ShardUId, StoreUpdate};
 use std::cmp::Ordering;
+#[cfg(feature = "new_epoch_sync")]
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// A trait that abstracts the interface of the EpochManager.
@@ -76,6 +80,12 @@ pub trait EpochManagerAdapter: Send + Sync {
     /// Returns true, if given hash is last block in it's epoch.
     fn is_next_block_epoch_start(&self, parent_hash: &CryptoHash) -> Result<bool, EpochError>;
 
+    /// Returns true, if given hash is in an epoch that already finished.
+    /// `is_next_block_epoch_start` works even if we didn't fully process the provided block.
+    /// This function works even if we garbage collected `BlockInfo` of the first block of the epoch.
+    /// Thus, this function is better suited for use in garbage collection.
+    fn is_last_block_in_finished_epoch(&self, hash: &CryptoHash) -> Result<bool, EpochError>;
+
     /// Get epoch id given hash of previous block.
     fn get_epoch_id_from_prev_block(&self, parent_hash: &CryptoHash)
         -> Result<EpochId, EpochError>;
@@ -127,8 +137,6 @@ pub trait EpochManagerAdapter: Send + Sync {
 
     /// Get epoch start from a block belonging to the epoch.
     fn get_epoch_start_height(&self, block_hash: &CryptoHash) -> Result<BlockHeight, EpochError>;
-
-    fn get_prev_epoch_id(&self, block_hash: &CryptoHash) -> Result<EpochId, EpochError>;
 
     /// Get previous epoch id by hash of previous block.
     fn get_prev_epoch_id_from_prev_block(
@@ -386,7 +394,11 @@ pub trait EpochManagerAdapter: Send + Sync {
     fn get_all_epoch_hashes(
         &self,
         last_block_info: &BlockInfo,
+        hash_to_prev_hash: Option<&HashMap<CryptoHash, CryptoHash>>,
     ) -> Result<Vec<CryptoHash>, EpochError>;
+
+    #[cfg(feature = "new_epoch_sync")]
+    fn force_update_aggregator(&self, epoch_id: &EpochId, hash: &CryptoHash);
 }
 
 impl EpochManagerAdapter for EpochManagerHandle {
@@ -477,6 +489,11 @@ impl EpochManagerAdapter for EpochManagerHandle {
         epoch_manager.is_next_block_epoch_start(parent_hash)
     }
 
+    fn is_last_block_in_finished_epoch(&self, hash: &CryptoHash) -> Result<bool, EpochError> {
+        let epoch_manager = self.read();
+        epoch_manager.is_last_block_in_finished_epoch(hash)
+    }
+
     fn get_epoch_id_from_prev_block(
         &self,
         parent_hash: &CryptoHash,
@@ -559,11 +576,6 @@ impl EpochManagerAdapter for EpochManagerHandle {
     fn get_epoch_start_height(&self, block_hash: &CryptoHash) -> Result<BlockHeight, EpochError> {
         let epoch_manager = self.read();
         epoch_manager.get_epoch_start_height(block_hash)
-    }
-
-    fn get_prev_epoch_id(&self, block_hash: &CryptoHash) -> Result<EpochId, EpochError> {
-        let epoch_manager = self.read();
-        epoch_manager.get_prev_epoch_id(block_hash)
     }
 
     fn get_prev_epoch_id_from_prev_block(
@@ -958,8 +970,20 @@ impl EpochManagerAdapter for EpochManagerHandle {
     fn get_all_epoch_hashes(
         &self,
         last_block_info: &BlockInfo,
+        hash_to_prev_hash: Option<&HashMap<CryptoHash, CryptoHash>>,
     ) -> Result<Vec<CryptoHash>, EpochError> {
         let epoch_manager = self.read();
-        epoch_manager.get_all_epoch_hashes(last_block_info)
+        match hash_to_prev_hash {
+            None => epoch_manager.get_all_epoch_hashes_from_db(last_block_info),
+            Some(hash_to_prev_hash) => {
+                epoch_manager.get_all_epoch_hashes_from_cache(last_block_info, hash_to_prev_hash)
+            }
+        }
+    }
+
+    #[cfg(feature = "new_epoch_sync")]
+    fn force_update_aggregator(&self, epoch_id: &EpochId, hash: &CryptoHash) {
+        let mut epoch_manager = self.write();
+        epoch_manager.epoch_info_aggregator = EpochInfoAggregator::new(epoch_id.clone(), *hash);
     }
 }
