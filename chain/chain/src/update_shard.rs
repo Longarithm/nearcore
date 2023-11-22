@@ -20,7 +20,7 @@ use std::collections::HashMap;
 /// - queries to epoch manager
 /// - allowing contracts to get current chain data
 #[derive(Clone, Debug)]
-pub(crate) struct BlockContext {
+pub struct BlockContext {
     pub block_hash: CryptoHash,
     pub prev_block_hash: CryptoHash,
     pub challenges_result: ChallengesResult,
