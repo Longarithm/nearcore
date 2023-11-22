@@ -61,6 +61,7 @@ pub struct StateSplitResult {
     pub(crate) results: Vec<ApplySplitStateResult>,
 }
 
+#[derive(Debug)]
 pub enum NewUpdateShardResult {
     Stateful(UpdateShardResult),
     Stateless(Vec<(BlockContext, UpdateShardResult)>),
