@@ -3977,7 +3977,7 @@ impl Chain {
                         return Ok(());
                     };
 
-                    let update_shard_job = self.get_update_shard_job(
+                    let stateful_job = self.get_update_shard_job(
                         me,
                         block,
                         prev_block,
@@ -3988,9 +3988,9 @@ impl Chain {
                         incoming_receipts,
                         state_patch,
                     );
-                    process_job(update_shard_job)?;
+                    process_job(stateful_job)?;
 
-                    let update_shard_job = self.get_shadow_job(
+                    let stateless_job = self.get_update_shard_stateless_job(
                         me,
                         block,
                         prev_block,
@@ -3999,7 +3999,7 @@ impl Chain {
                         shard_id as ShardId,
                         mode,
                     );
-                    process_job(update_shard_job)?;
+                    process_job(stateless_job)?;
 
                     return Ok(jobs);
                 },
@@ -4173,7 +4173,7 @@ impl Chain {
         })))
     }
 
-    fn get_shadow_job(
+    fn get_update_shard_stateless_job(
         &self,
         me: &Option<AccountId>,
         block: &Block,
@@ -4186,7 +4186,7 @@ impl Chain {
         let last_shard_context = self.get_shard_context(me, block.header(), shard_id, mode)?;
         let is_new_chunk = chunk_header.height_included() == block.header().height();
 
-        if !last_shard_context.should_apply_transactions {
+        if !last_shard_context.should_apply_transactions || !is_new_chunk {
             return Ok(None);
         }
 
@@ -4196,7 +4196,7 @@ impl Chain {
         let prev_chunk_height_included = prev_chunk_header.height_included();
         let prev_chunk_prev_hash = prev_chunk_header.prev_block_hash().clone();
 
-        if !is_new_chunk || &prev_chunk_prev_hash == &CryptoHash::default() {
+        if prev_chunk_prev_hash == CryptoHash::default() {
             return Ok(None);
         }
 
