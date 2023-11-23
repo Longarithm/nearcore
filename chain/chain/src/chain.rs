@@ -4281,37 +4281,24 @@ impl Chain {
             })
             .rev()
             .collect();
-        println!("!!!!!");
         if skip_due_to_resharding {
             return Ok(None);
         }
         let mut block_infos = block_infos_res?;
         assert!(block_infos.len() >= 1);
         let receipts = collect_receipts_from_response(receipts_response);
-        println!("chunk extra?");
         let mut prev_chunk_extra: ChunkExtra = self
             .get_chunk_extra(&block_infos[0].0.prev_block_hash, &block_infos[0].1.shard_uid)?
             .as_ref()
             .clone();
-        println!("ce found");
-        let causeh = block.header().height();
-        let (fh, lh) = (block_infos[0].0.height, block_infos.last().unwrap().0.height);
         let (last_block, shard_apply_info) = block_infos.pop().unwrap();
         let first_blocks = block_infos.into_iter();
         let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
         Ok(Some(Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
-            let span = tracing::debug_span!(
-                target: "chain",
-                parent: parent_span,
-                "stateless",
-                shard_id
-            )
-            .entered();
-            eprintln!("SPAWN {fh} {lh} {} cause {causeh}", shard_apply_info.shard_uid);
             let mut result = vec![];
             for (block_context, shard_apply_info) in first_blocks {
                 let r = process_shard_update(
-                    &span,
+                    parent_span,
                     runtime.as_ref(),
                     epoch_manager.as_ref(),
                     ShardUpdateReason::OldChunk(prev_chunk_extra.clone(), None),
@@ -4327,7 +4314,7 @@ impl Chain {
             result.push((
                 last_block.clone(),
                 process_shard_update(
-                    &span,
+                    parent_span,
                     runtime.as_ref(),
                     epoch_manager.as_ref(),
                     ShardUpdateReason::NewChunk(prev_chunk, receipts, None),
