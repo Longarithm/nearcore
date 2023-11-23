@@ -4076,7 +4076,7 @@ impl Chain {
                                 println!("check2 {} {current_shard_id}", prev_header.hash());
                                 // let shard_info =
                                 //     self.get_shard_context(me, prev_header.hash(), current_shard_id)?;
-                                // let prev_hash = prev_header.hash();
+                                let prev_hash = prev_header.hash();
                                 // let cares_about_shard_next_epoch =
                                 //     self.shard_tracker.will_care_about_shard(
                                 //         me.as_ref(),
@@ -4084,8 +4084,8 @@ impl Chain {
                                 //         shard_id as ShardId,
                                 //         true,
                                 //     );
-                                // let will_shard_layout_change =
-                                //     self.epoch_manager.will_shard_layout_change(prev_hash)?;
+                                let will_shard_layout_change =
+                                    self.epoch_manager.will_shard_layout_change(prev_hash)?;
                                 // let need_to_split_states =
                                 //     will_shard_layout_change && cares_about_shard_next_epoch;
                                 // skip_due_to_resharding |= need_to_split_states;
