@@ -97,8 +97,11 @@ pub(crate) enum ShardUpdateReason {
 /// Information about shard to update.
 pub(crate) struct ShardContext {
     pub shard_uid: ShardUId,
+    pub cares_about_shard_this_epoch: bool,
     /// Whether shard layout changes in the next epoch.
     pub will_shard_layout_change: bool,
+    pub should_apply_transactions: bool,
+    pub need_to_split_states: bool,
 }
 
 /// Processes shard update with given block and shard.
