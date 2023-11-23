@@ -4025,30 +4025,30 @@ impl Chain {
                         return Ok(jobs);
                     }
 
-                    // let mut last_blocks = self.iterate_until_height(
-                    //     prev_block.hash().clone(),
-                    //     prev_chunk_height_included,
-                    // )?;
-                    // let prev_chunk_block_hash = last_blocks.pop().unwrap();
-                    let mut prev_chunk_block_hash = prev_block.hash().clone();
-                    loop {
-                        let header = self.get_block_header(&prev_chunk_block_hash)?;
-                        if header.height() < prev_chunk_height_included {
-                            panic!("...");
-                        }
-
-                        // if header.height() == prev_chunk_height_included {
-                        //     break;
-                        // }
-                        //
-                        // let prev_hash = header.prev_hash().clone();
-                        // prev_chunk_block_hash = prev_hash;
-                        let prev_hash = header.prev_hash().clone();
-                        if prev_hash == prev_chunk_prev_hash {
-                            break;
-                        }
-                        prev_chunk_block_hash = prev_hash;
-                    }
+                    let mut last_blocks = self.iterate_until_height(
+                        prev_block.hash().clone(),
+                        prev_chunk_height_included,
+                    )?;
+                    let prev_chunk_block_hash = last_blocks.pop().unwrap();
+                    // let mut prev_chunk_block_hash = prev_block.hash().clone();
+                    // loop {
+                    //     let header = self.get_block_header(&prev_chunk_block_hash)?;
+                    //     if header.height() < prev_chunk_height_included {
+                    //         panic!("...");
+                    //     }
+                    //
+                    //     // if header.height() == prev_chunk_height_included {
+                    //     //     break;
+                    //     // }
+                    //     //
+                    //     // let prev_hash = header.prev_hash().clone();
+                    //     // prev_chunk_block_hash = prev_hash;
+                    //     let prev_hash = header.prev_hash().clone();
+                    //     if prev_hash == prev_chunk_prev_hash {
+                    //         break;
+                    //     }
+                    //     prev_chunk_block_hash = prev_hash;
+                    // }
                     println!("{prev_chunk_block_hash}");
                     let prev_chunk_block_header = self.get_block_header(&prev_chunk_block_hash)?;
                     assert_eq!(prev_chunk_block_header.prev_hash(), &prev_chunk_prev_hash);
