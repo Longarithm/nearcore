@@ -3908,8 +3908,9 @@ impl Chain {
         &self,
         mut prev_chunk_block_hash: CryptoHash,
         prev_chunk_height_included: BlockHeight,
+        include_last: bool,
     ) -> Result<Vec<CryptoHash>, Error> {
-        let mut blocks = vec![prev_chunk_block_hash];
+        let mut blocks = vec![];
         loop {
             let header = self.get_block_header(&prev_chunk_block_hash)?;
             if header.height() < prev_chunk_height_included {
@@ -3920,8 +3921,11 @@ impl Chain {
                 break;
             }
 
+            blocks.push(prev_chunk_block_hash);
             let prev_hash = header.prev_hash().clone();
             prev_chunk_block_hash = prev_hash;
+        }
+        if include_last {
             blocks.push(prev_chunk_block_hash);
         }
         Ok(blocks)
@@ -4028,6 +4032,7 @@ impl Chain {
                     let mut last_blocks = self.iterate_until_height(
                         prev_block.hash().clone(),
                         prev_chunk_height_included,
+                        true,
                     )?;
                     let prev_chunk_block_hash = last_blocks.pop().unwrap();
                     println!("{prev_chunk_block_hash}");
@@ -4069,6 +4074,7 @@ impl Chain {
                     let block_hashes = self.iterate_until_height(
                         prev_chunk_block_hash,
                         prev_prev_chunk_height_included,
+                        false,
                     )?;
                     // let block_hashes: Vec<_> =
                     //     receipts_response.iter().map(|r| r.0.clone()).collect();
