@@ -4030,25 +4030,6 @@ impl Chain {
                         prev_chunk_height_included,
                     )?;
                     let prev_chunk_block_hash = last_blocks.pop().unwrap();
-                    // let mut prev_chunk_block_hash = prev_block.hash().clone();
-                    // loop {
-                    //     let header = self.get_block_header(&prev_chunk_block_hash)?;
-                    //     if header.height() < prev_chunk_height_included {
-                    //         panic!("...");
-                    //     }
-                    //
-                    //     // if header.height() == prev_chunk_height_included {
-                    //     //     break;
-                    //     // }
-                    //     //
-                    //     // let prev_hash = header.prev_hash().clone();
-                    //     // prev_chunk_block_hash = prev_hash;
-                    //     let prev_hash = header.prev_hash().clone();
-                    //     if prev_hash == prev_chunk_prev_hash {
-                    //         break;
-                    //     }
-                    //     prev_chunk_block_hash = prev_hash;
-                    // }
                     println!("{prev_chunk_block_hash}");
                     let prev_chunk_block_header = self.get_block_header(&prev_chunk_block_hash)?;
                     assert_eq!(prev_chunk_block_header.prev_hash(), &prev_chunk_prev_hash);
@@ -4085,8 +4066,12 @@ impl Chain {
                         prev_chunk_block_hash,
                         prev_prev_chunk_height_included,
                     )?;
-                    let block_hashes: Vec<_> =
-                        receipts_response.iter().map(|r| r.0.clone()).collect();
+                    let block_hashes = self.iterate_until_height(
+                        prev_chunk_block_hash,
+                        prev_prev_chunk_height_included,
+                    )?;
+                    // let block_hashes: Vec<_> =
+                    //     receipts_response.iter().map(|r| r.0.clone()).collect();
                     let current_shard_id = shard_id;
                     println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
                     let mut skip_due_to_resharding = false;
