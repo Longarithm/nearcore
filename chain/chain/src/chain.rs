@@ -4176,6 +4176,13 @@ impl Chain {
                         self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
                     let job: UpdateShardJob =
                         Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
+                            let span = tracing::debug_span!(
+                                target: "chain",
+                                parent: parent_span,
+                                "stateless",
+                                shard_id
+                            )
+                            .entered();
                             eprintln!(
                                 "SPAWN {fh} {lh} {} cause {causeh}",
                                 shard_apply_info.shard_uid
@@ -4183,7 +4190,7 @@ impl Chain {
                             let mut result = vec![];
                             for (block_context, shard_apply_info) in first_blocks {
                                 let r = process_shard_update(
-                                    parent_span,
+                                    &span,
                                     runtime.as_ref(),
                                     epoch_manager.as_ref(),
                                     ShardUpdateReason::OldChunk(prev_chunk_extra.clone(), None),
@@ -4199,7 +4206,7 @@ impl Chain {
                             result.push((
                                 last_block.clone(),
                                 process_shard_update(
-                                    parent_span,
+                                    &span,
                                     runtime.as_ref(),
                                     epoch_manager.as_ref(),
                                     ShardUpdateReason::NewChunk(prev_chunk, receipts, None),

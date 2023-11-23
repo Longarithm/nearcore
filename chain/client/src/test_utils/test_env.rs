@@ -87,7 +87,7 @@ impl TestEnv {
         let paused_blocks = Arc::clone(&self.paused_blocks);
         paused_blocks.lock().unwrap().insert(*block, Arc::new(OnceCell::new()));
         capture.set_callback(move |msg| {
-            if msg.starts_with("do_apply_chunks") {
+            if msg.starts_with("do_apply_chunks") && !msg.contains("stateless") {
                 let cell = paused_blocks.lock().unwrap().iter().find_map(|(block_hash, cell)| {
                     if msg.contains(&format!("block_hash={block_hash}")) {
                         Some(Arc::clone(cell))
