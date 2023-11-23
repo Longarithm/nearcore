@@ -4054,9 +4054,9 @@ impl Chain {
                     )?;
                     let block_hashes: Vec<_> =
                         receipts_response.iter().map(|r| r.0.clone()).collect();
-                    let mut current_shard_id = shard_id;
+                    let current_shard_id = shard_id;
                     println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
-                    let mut skip_due_to_resharding = false;
+                    let skip_due_to_resharding = false;
                     let block_infos_res: Result<Vec<(BlockContext, ShardContext)>, Error> =
                         block_hashes
                             .into_iter()
