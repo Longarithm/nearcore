@@ -4008,10 +4008,11 @@ impl Chain {
                             panic!("...");
                         }
 
-                        let prev_hash = header.prev_hash().clone();
-                        if prev_hash == prev_chunk_prev_hash {
+                        if header.height() == prev_chunk_height_included {
                             break;
                         }
+
+                        let prev_hash = header.prev_hash().clone();
                         prev_chunk_block_hash = prev_hash;
                     }
                     // println!("{prev_chunk_block_hash}");
