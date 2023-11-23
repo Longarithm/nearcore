@@ -3903,6 +3903,7 @@ impl Chain {
             .collect()
     }
 
+    #[allow(unused)]
     fn iterate_until_height(
         &self,
         mut prev_chunk_block_hash: CryptoHash,
