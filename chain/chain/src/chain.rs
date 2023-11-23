@@ -4024,11 +4024,11 @@ impl Chain {
                         return Ok(jobs);
                     }
 
-                    let last_blocks = self.iterate_until_height(
+                    let mut last_blocks = self.iterate_until_height(
                         prev_block.hash().clone(),
                         prev_chunk_height_included,
                     )?;
-                    let prev_chunk_block_hash = last_blocks.last().unwrap();
+                    let prev_chunk_block_hash = last_blocks.pop().unwrap();
                     // loop {
                     //     let header = self.get_block_header(&prev_chunk_block_hash)?;
                     //     if header.height() < prev_chunk_height_included {
