@@ -4074,11 +4074,6 @@ impl Chain {
                                 // }
 
                                 println!("check2 {} {current_shard_id}", prev_header.hash());
-                                let shard_info = self.get_shard_context(
-                                    me,
-                                    prev_header.hash(),
-                                    current_shard_id,
-                                )?;
                                 let prev_hash = prev_header.hash();
                                 let cares_about_shard_next_epoch =
                                     self.shard_tracker.will_care_about_shard(
