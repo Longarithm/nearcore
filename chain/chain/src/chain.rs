@@ -4063,48 +4063,48 @@ impl Chain {
                             .map(|b| -> Result<(BlockContext, ShardContext), Error> {
                                 let header = self.get_block_header(&b)?;
                                 let prev_header = self.get_previous_header(&header)?;
-                                let shard_layout = epoch_manager
-                                    .get_shard_layout_from_prev_block(header.hash())?;
-                                let prev_shard_layout = epoch_manager
-                                    .get_shard_layout_from_prev_block(prev_header.hash())?;
-                                if shard_layout != prev_shard_layout {
-                                    current_shard_id =
-                                        shard_layout.get_parent_shard_id(current_shard_id)?;
-                                    skip_due_to_resharding = true;
-                                }
+                                // let shard_layout = epoch_manager
+                                //     .get_shard_layout_from_prev_block(header.hash())?;
+                                // let prev_shard_layout = epoch_manager
+                                //     .get_shard_layout_from_prev_block(prev_header.hash())?;
+                                // if shard_layout != prev_shard_layout {
+                                //     current_shard_id =
+                                //         shard_layout.get_parent_shard_id(current_shard_id)?;
+                                //     skip_due_to_resharding = true;
+                                // }
 
                                 println!("check2 {} {current_shard_id}", prev_header.hash());
                                 // let shard_info =
                                 //     self.get_shard_context(me, prev_header.hash(), current_shard_id)?;
-                                let prev_hash = prev_header.hash();
-                                let cares_about_shard_next_epoch =
-                                    self.shard_tracker.will_care_about_shard(
-                                        me.as_ref(),
-                                        prev_hash,
-                                        shard_id as ShardId,
-                                        true,
-                                    );
-                                let will_shard_layout_change =
-                                    self.epoch_manager.will_shard_layout_change(prev_hash)?;
-                                let need_to_split_states =
-                                    will_shard_layout_change && cares_about_shard_next_epoch;
-                                skip_due_to_resharding |= need_to_split_states;
-                                let need_to_split_states =
-                                    will_shard_layout_change && cares_about_shard_next_epoch;
-                                let _ssr = if need_to_split_states
-                                    && mode != ApplyChunksMode::NotCaughtUp
-                                {
-                                    skip_due_to_resharding = true;
-                                    // assert!(
-                                    //     mode == ApplyChunksMode::CatchingUp
-                                    //         && shard_info.cares_about_shard_this_epoch
-                                    // );
-                                    // return Ok(jobs);
-                                    return Err(Error::Other(String::from("resharding")));
-                                    // Some(self.get_split_state_roots(block, current_shard_id)?)
-                                } else {
-                                    // None
-                                };
+                                // let prev_hash = prev_header.hash();
+                                // let cares_about_shard_next_epoch =
+                                //     self.shard_tracker.will_care_about_shard(
+                                //         me.as_ref(),
+                                //         prev_hash,
+                                //         shard_id as ShardId,
+                                //         true,
+                                //     );
+                                // let will_shard_layout_change =
+                                //     self.epoch_manager.will_shard_layout_change(prev_hash)?;
+                                // let need_to_split_states =
+                                //     will_shard_layout_change && cares_about_shard_next_epoch;
+                                // skip_due_to_resharding |= need_to_split_states;
+                                // let need_to_split_states =
+                                //     will_shard_layout_change && cares_about_shard_next_epoch;
+                                // let _ssr = if need_to_split_states
+                                //     && mode != ApplyChunksMode::NotCaughtUp
+                                // {
+                                //     skip_due_to_resharding = true;
+                                //     // assert!(
+                                //     //     mode == ApplyChunksMode::CatchingUp
+                                //     //         && shard_info.cares_about_shard_this_epoch
+                                //     // );
+                                //     // return Ok(jobs);
+                                //     return Err(Error::Other(String::from("resharding")));
+                                //     // Some(self.get_split_state_roots(block, current_shard_id)?)
+                                // } else {
+                                //     // None
+                                // };
                                 let shard_uid = self
                                     .epoch_manager
                                     .shard_id_to_uid(shard_id, header.epoch_id())?;
