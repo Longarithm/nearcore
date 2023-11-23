@@ -4056,7 +4056,7 @@ impl Chain {
                         receipts_response.iter().map(|r| r.0.clone()).collect();
                     let current_shard_id = shard_id;
                     println!("{} {} -> {:?}", block.hash(), block.header().height(), block_hashes);
-                    let skip_due_to_resharding = false;
+                    let mut skip_due_to_resharding = false;
                     let block_infos_res: Result<Vec<(BlockContext, ShardContext)>, Error> =
                         block_hashes
                             .into_iter()
@@ -4074,23 +4074,27 @@ impl Chain {
                                 // }
 
                                 println!("check2 {} {current_shard_id}", prev_header.hash());
-                                // let shard_info =
-                                //     self.get_shard_context(me, prev_header.hash(), current_shard_id)?;
+                                let shard_info = self.get_shard_context(
+                                    me,
+                                    prev_header.hash(),
+                                    current_shard_id,
+                                )?;
                                 let prev_hash = prev_header.hash();
-                                // let cares_about_shard_next_epoch =
-                                //     self.shard_tracker.will_care_about_shard(
-                                //         me.as_ref(),
-                                //         prev_hash,
-                                //         shard_id as ShardId,
-                                //         true,
-                                //     );
+                                let cares_about_shard_next_epoch =
+                                    self.shard_tracker.will_care_about_shard(
+                                        me.as_ref(),
+                                        prev_hash,
+                                        shard_id as ShardId,
+                                        true,
+                                    );
                                 let will_shard_layout_change =
                                     self.epoch_manager.will_shard_layout_change(prev_hash)?;
-                                // let need_to_split_states =
-                                //     will_shard_layout_change && cares_about_shard_next_epoch;
-                                // skip_due_to_resharding |= need_to_split_states;
-                                // let need_to_split_states =
-                                //     will_shard_layout_change && cares_about_shard_next_epoch;
+                                let need_to_split_states =
+                                    will_shard_layout_change && cares_about_shard_next_epoch;
+                                skip_due_to_resharding |= need_to_split_states;
+                                if need_to_split_states && mode != ApplyChunksMode::NotCaughtUp {
+                                    return Err(Error::Other(String::from("resharding")));
+                                }
                                 // let _ssr = if need_to_split_states
                                 //     && mode != ApplyChunksMode::NotCaughtUp
                                 // {
