@@ -4299,7 +4299,7 @@ impl Chain {
         let (last_block, shard_apply_info) = block_infos.pop().unwrap();
         let first_blocks = block_infos.into_iter();
         let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
-        Ok(Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
+        Ok(Some(Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
             let span = tracing::debug_span!(
                 target: "chain",
                 parent: parent_span,
@@ -4337,7 +4337,7 @@ impl Chain {
                 )?,
             ));
             Ok(ShardUpdateResult::Stateless(result))
-        }))
+        })))
     }
 
     /// Function to create a new snapshot if needed
