@@ -13,7 +13,7 @@ use crate::store::{ChainStore, ChainStoreAccess, ChainStoreUpdate, GCMode};
 use crate::types::{
     AcceptedBlock, ApplySplitStateResultOrStateChanges, ApplyTransactionResult, Block,
     BlockEconomicsConfig, BlockHeader, BlockStatus, ChainConfig, ChainGenesis, Provenance,
-    RuntimeAdapter, RuntimeStorageConfig,
+    RuntimeAdapter, RuntimeStorageConfig, StorageDataSource,
 };
 use crate::update_shard::{
     process_shard_update, BlockContext, NewChunkResult, OldChunkResult, ShardBlockUpdateResult,
@@ -86,7 +86,7 @@ use near_primitives::views::{
 };
 use near_store::config::StateSnapshotType;
 use near_store::flat::{store_helper, FlatStorageReadyStatus, FlatStorageStatus};
-use near_store::get_genesis_state_roots;
+use near_store::{get_genesis_state_roots, PartialStorage};
 use near_store::{DBCol, ShardTries};
 use once_cell::sync::OnceCell;
 use rand::seq::SliceRandom;
@@ -4016,6 +4016,7 @@ impl Chain {
         block_header: &BlockHeader,
         shard_id: ShardId,
         mode: ApplyChunksMode,
+        storage_data_source: StorageDataSource,
     ) -> Result<ShardContext, Error> {
         let prev_hash = block_header.prev_hash();
         let epoch_id = block_header.epoch_id();
@@ -4037,6 +4038,7 @@ impl Chain {
             will_shard_layout_change,
             should_apply_transactions,
             need_to_split_states,
+            storage_data_source,
         })
     }
 
@@ -4054,7 +4056,8 @@ impl Chain {
         state_patch: SandboxStatePatch,
     ) -> Result<Option<UpdateShardJob>, Error> {
         let prev_hash = block.header().prev_hash();
-        let shard_context = self.get_shard_context(me, block.header(), shard_id, mode)?;
+        let shard_context =
+            self.get_shard_context(me, block.header(), shard_id, mode, StorageDataSource::Db)?;
 
         // We can only split states when states are ready, i.e., mode != ApplyChunksMode::NotCaughtUp
         // 1) if should_apply_transactions == true && split_state_roots.is_some(),
@@ -4183,7 +4186,8 @@ impl Chain {
         shard_id: ShardId,
         mode: ApplyChunksMode,
     ) -> Result<Option<UpdateShardJob>, Error> {
-        let last_shard_context = self.get_shard_context(me, block.header(), shard_id, mode)?;
+        let last_shard_context =
+            self.get_shard_context(me, block.header(), shard_id, mode, StorageDataSource::Db)?;
         let is_new_chunk = chunk_header.height_included() == block.header().height();
 
         if !last_shard_context.should_apply_transactions || !is_new_chunk {
@@ -4243,7 +4247,13 @@ impl Chain {
         for block_hash in blocks_to_execute {
             let block_header = self.get_block_header(&block_hash)?;
             let prev_block_header = self.get_previous_header(&block_header)?;
-            let shard_context = self.get_shard_context(me, &block_header, shard_id, mode)?;
+            let shard_context = self.get_shard_context(
+                me,
+                &block_header,
+                shard_id,
+                mode,
+                StorageDataSource::Recorded(PartialStorage::default()),
+            )?;
             if shard_context.need_to_split_states {
                 return Ok(None);
             }

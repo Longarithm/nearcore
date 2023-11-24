@@ -60,7 +60,7 @@ pub mod update;
 const POISONED_LOCK_ERR: &str = "The lock was poisoned.";
 
 /// For fraud proofs
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PartialStorage {
     pub nodes: PartialState,
 }

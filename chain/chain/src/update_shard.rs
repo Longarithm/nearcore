@@ -1,7 +1,7 @@
 use crate::crypto_hash_timer::CryptoHashTimer;
 use crate::types::{
     ApplySplitStateResult, ApplySplitStateResultOrStateChanges, ApplyTransactionResult,
-    RuntimeAdapter, RuntimeStorageConfig,
+    RuntimeAdapter, RuntimeStorageConfig, StorageDataSource,
 };
 use near_chain_primitives::Error;
 use near_epoch_manager::EpochManagerAdapter;
@@ -102,6 +102,7 @@ pub(crate) struct ShardContext {
     pub will_shard_layout_change: bool,
     pub should_apply_transactions: bool,
     pub need_to_split_states: bool,
+    pub storage_data_source: StorageDataSource,
 }
 
 /// Processes shard update with given block and shard.
@@ -155,14 +156,14 @@ fn apply_new_chunk(
     parent_span: &tracing::Span,
     block_context: BlockContext,
     chunk: ShardChunk,
-    shard_info: ShardContext,
+    shard_context: ShardContext,
     receipts: Vec<Receipt>,
     state_patch: SandboxStatePatch,
     runtime: &dyn RuntimeAdapter,
     epoch_manager: &dyn EpochManagerAdapter,
     split_state_roots: Option<SplitStateRoots>,
 ) -> Result<ShardBlockUpdateResult, Error> {
-    let shard_id = shard_info.shard_uid.shard_id();
+    let shard_id = shard_context.shard_uid.shard_id();
     let _span = tracing::debug_span!(
         target: "chain",
         parent: parent_span,
@@ -175,7 +176,7 @@ fn apply_new_chunk(
     let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
     let storage_config = RuntimeStorageConfig {
         state_root: *chunk_inner.prev_state_root(),
-        use_flat_storage: true,
+        use_flat_storage: shard_context.storage_data_source == StorageDataSource::Db,
         source: crate::types::StorageDataSource::Db,
         state_patch,
         record_storage: false,
@@ -198,7 +199,7 @@ fn apply_new_chunk(
         block_context.is_first_block_with_chunk_of_version,
     ) {
         Ok(apply_result) => {
-            let apply_split_result_or_state_changes = if shard_info.will_shard_layout_change {
+            let apply_split_result_or_state_changes = if shard_context.will_shard_layout_change {
                 Some(apply_split_state_changes(
                     epoch_manager,
                     runtime,
@@ -211,7 +212,7 @@ fn apply_new_chunk(
             };
             Ok(ShardBlockUpdateResult::NewChunk(NewChunkResult {
                 gas_limit,
-                shard_uid: shard_info.shard_uid,
+                shard_uid: shard_context.shard_uid,
                 apply_result,
                 apply_split_result_or_state_changes,
             }))
@@ -227,13 +228,13 @@ fn apply_old_chunk(
     parent_span: &tracing::Span,
     block_context: BlockContext,
     prev_chunk_extra: &ChunkExtra,
-    shard_info: ShardContext,
+    shard_context: ShardContext,
     state_patch: SandboxStatePatch,
     runtime: &dyn RuntimeAdapter,
     epoch_manager: &dyn EpochManagerAdapter,
     split_state_roots: Option<SplitStateRoots>,
 ) -> Result<ShardBlockUpdateResult, Error> {
-    let shard_id = shard_info.shard_uid.shard_id();
+    let shard_id = shard_context.shard_uid.shard_id();
     let _span = tracing::debug_span!(
         target: "chain",
         parent: parent_span,
@@ -243,7 +244,7 @@ fn apply_old_chunk(
 
     let storage_config = RuntimeStorageConfig {
         state_root: *prev_chunk_extra.state_root(),
-        use_flat_storage: true,
+        use_flat_storage: shard_context.storage_data_source == StorageDataSource::Db,
         source: crate::types::StorageDataSource::Db,
         state_patch,
         record_storage: false,
@@ -266,7 +267,7 @@ fn apply_old_chunk(
         false,
     ) {
         Ok(apply_result) => {
-            let apply_split_result_or_state_changes = if shard_info.will_shard_layout_change {
+            let apply_split_result_or_state_changes = if shard_context.will_shard_layout_change {
                 Some(apply_split_state_changes(
                     epoch_manager,
                     runtime,
@@ -278,7 +279,7 @@ fn apply_old_chunk(
                 None
             };
             Ok(ShardBlockUpdateResult::OldChunk(OldChunkResult {
-                shard_uid: shard_info.shard_uid,
+                shard_uid: shard_context.shard_uid,
                 apply_result,
                 apply_split_result_or_state_changes,
             }))
