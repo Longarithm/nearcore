@@ -65,7 +65,7 @@ pub struct StateSplitResult {
 #[derive(Debug)]
 pub enum ShardUpdateResult {
     Stateful(ShardBlockUpdateResult),
-    Stateless(Vec<(BlockContext, ShardBlockUpdateResult)>),
+    Stateless(Vec<(CryptoHash, ShardUId, ChunkExtra)>),
 }
 
 // shard update for new block
