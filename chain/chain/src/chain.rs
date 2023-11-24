@@ -3936,8 +3936,8 @@ impl Chain {
                 let state_patch = state_patch.take();
 
                 let mut jobs = vec![];
-                // Insert job into list of all jobs, if it is valid/
-                let mut process_job = |job: Result<Option<UpdateShardJob>, Error>| {
+                // Insert job into list of all jobs to run, if job is valid.
+                let mut insert_job = |job: Result<Option<UpdateShardJob>, Error>| {
                     match job {
                         Ok(Some(processor)) => jobs.push(processor),
                         Ok(None) => {}
@@ -3962,7 +3962,7 @@ impl Chain {
                     incoming_receipts,
                     state_patch,
                 );
-                process_job(stateful_job)?;
+                insert_job(stateful_job)?;
 
                 let stateless_job = self.get_stateless_validation_job(
                     me,
@@ -3973,7 +3973,7 @@ impl Chain {
                     shard_id as ShardId,
                     mode,
                 );
-                process_job(stateless_job)?;
+                insert_job(stateless_job)?;
 
                 return Ok(jobs);
             })
