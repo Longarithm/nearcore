@@ -4283,7 +4283,7 @@ impl Chain {
         // Then, we process updates for missing chunks, until we find a block at which
         // `prev_chunk` was created.
         // And finally we process update for the `prev_chunk`.
-        let mut current_chunk_extra = ChunkExtra::clone(
+        let current_chunk_extra = ChunkExtra::clone(
             self.get_chunk_extra(
                 &execution_contexts[0].0.prev_block_hash,
                 &execution_contexts[0].1.shard_uid,
