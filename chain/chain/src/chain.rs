@@ -4316,6 +4316,7 @@ impl Chain {
                     result.push((block_context.block_hash, shard_uid, current_chunk_extra.clone()));
                 }
             }
+            assert_eq!(current_chunk_extra.state_root(), &prev_chunk.prev_state_root());
             let block_result = process_shard_update(
                 parent_span,
                 runtime.as_ref(),
