@@ -13,7 +13,8 @@ use near_chain::test_utils::ValidatorSchedule;
 use near_chain::types::{LatestKnown, RuntimeAdapter};
 use near_chain::validate::validate_chunk_with_chunk_extra;
 use near_chain::{
-    Block, BlockProcessingArtifact, ChainGenesis, ChainStore, ChainStoreAccess, Error, Provenance,
+    Block, BlockProcessingArtifact, Chain, ChainGenesis, ChainStore, ChainStoreAccess, Error,
+    Provenance,
 };
 use near_chain_configs::{Genesis, DEFAULT_GC_NUM_EPOCHS_TO_KEEP};
 use near_chunks::test_utils::MockClientAdapterForShardsManager;
@@ -40,7 +41,7 @@ use near_primitives::epoch_manager::RngSeed;
 use near_primitives::errors::TxExecutionError;
 use near_primitives::errors::{ActionError, ActionErrorKind, InvalidTxError};
 use near_primitives::hash::{hash, CryptoHash};
-use near_primitives::merkle::{verify_hash, PartialMerkleTree};
+use near_primitives::merkle::{merklize, verify_hash, PartialMerkleTree};
 use near_primitives::receipt::DelayedReceiptIndices;
 use near_primitives::runtime::config::RuntimeConfig;
 use near_primitives::runtime::config_store::RuntimeConfigStore;
@@ -2377,12 +2378,24 @@ fn test_validate_chunk_extra() {
         .get_chunk_headers_ready_for_inclusion(block1.header().epoch_id(), &block1.hash());
     let chunk_extra =
         env.clients[0].chain.get_chunk_extra(block1.hash(), &ShardUId::single_shard()).unwrap();
+    let prev_outgoing_receipts_root = {
+        let outgoing_receipts = chain_store.get_outgoing_receipts_for_shard(
+            env.clients[0].epoch_manager.as_ref(),
+            *block1.hash(),
+            chunk_header.shard_id(),
+            block1.chunks()[0].height_included(),
+        )?;
+        let outgoing_receipts_hashes = {
+            let shard_layout =
+                env.clients[0].epoch_manager.get_shard_layout_from_prev_block(block1.hash())?;
+            Chain::build_receipts_hashes(&outgoing_receipts, &shard_layout)
+        };
+        let (outgoing_receipts_root, _) = merklize(&outgoing_receipts_hashes);
+        outgoing_receipts_root
+    };
     assert!(validate_chunk_with_chunk_extra(
-        &mut chain_store,
-        env.clients[0].epoch_manager.as_ref(),
-        block1.hash(),
+        prev_outgoing_receipts_root,
         &chunk_extra,
-        block1.chunks()[0].height_included(),
         &chunks.get(&0).cloned().unwrap().0,
     )
     .is_ok());
