@@ -13,11 +13,11 @@ use near_primitives::merkle::merklize;
 use near_primitives::sharding::{ShardChunk, ShardChunkHeader};
 use near_primitives::transaction::SignedTransaction;
 use near_primitives::types::chunk_extra::ChunkExtra;
-use near_primitives::types::{AccountId, BlockHeight, EpochId, MerkleHash, Nonce};
+use near_primitives::types::{AccountId, EpochId, MerkleHash, Nonce};
 
 use crate::types::RuntimeAdapter;
+use crate::Error;
 use crate::{byzantine_assert, Chain};
-use crate::{ChainStore, Error};
 
 /// Gas limit cannot be adjusted for more than 0.1% at a time.
 const GAS_LIMIT_ADJUSTMENT_FACTOR: u64 = 1000;
