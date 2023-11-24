@@ -5277,7 +5277,7 @@ impl<'a> ChainUpdate<'a> {
                             self.chain_store_update.get_chunk_extra(&block_hash, &shard_uid)?;
                         assert_eq!(
                             &chunk_extra,
-                            &expected_chunk_extra,
+                            expected_chunk_extra.as_ref(),
                             "For stateless validation, chunk extras for block {} and shard {} do not match",
                             block_hash,
                             shard_uid
