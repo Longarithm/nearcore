@@ -3957,7 +3957,7 @@ impl Chain {
                 let state_patch = state_patch.take();
 
                 let mut jobs = vec![];
-
+                // Insert job into list of all jobs, if it is valid/
                 let mut process_job = |job: Result<Option<UpdateShardJob>, Error>| {
                     match job {
                         Ok(Some(processor)) => jobs.push(processor),
@@ -4187,6 +4187,9 @@ impl Chain {
         if !last_shard_context.should_apply_transactions || !is_new_chunk {
             return Ok(None);
         }
+
+        let chunk = self.get_chunk_clone_from_header(&chunk_header)?;
+        self.validate_chunk_transactions(&block, prev_block.header(), &chunk)?;
 
         let runtime = self.runtime_adapter.clone();
         let epoch_manager = self.epoch_manager.clone();
