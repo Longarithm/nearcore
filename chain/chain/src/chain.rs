@@ -4294,7 +4294,7 @@ impl Chain {
         let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
         Ok(Some(Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
             let mut result = vec![];
-            for (i, (block_context, shard_context)) in execution_contexts.iter().enumerate() {
+            for (i, (block_context, shard_context)) in execution_contexts.into_iter().enumerate() {
                 let block_result = process_shard_update(
                     parent_span,
                     runtime.as_ref(),
