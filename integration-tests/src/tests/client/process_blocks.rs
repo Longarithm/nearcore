@@ -2379,12 +2379,14 @@ fn test_validate_chunk_extra() {
     let chunk_extra =
         env.clients[0].chain.get_chunk_extra(block1.hash(), &ShardUId::single_shard()).unwrap();
     let prev_outgoing_receipts_root = {
-        let outgoing_receipts = chain_store.get_outgoing_receipts_for_shard(
-            env.clients[0].epoch_manager.as_ref(),
-            *block1.hash(),
-            chunk_header.shard_id(),
-            block1.chunks()[0].height_included(),
-        )?;
+        let outgoing_receipts = chain_store
+            .get_outgoing_receipts_for_shard(
+                env.clients[0].epoch_manager.as_ref(),
+                *block1.hash(),
+                chunk_header.shard_id(),
+                block1.chunks()[0].height_included(),
+            )
+            .unwrap();
         let outgoing_receipts_hashes = {
             let shard_layout = env.clients[0]
                 .epoch_manager
