@@ -4283,7 +4283,7 @@ impl Chain {
         // Then, we process updates for missing chunks, until we find a block at which
         // `prev_chunk` was created.
         // And finally we process update for the `prev_chunk`.
-        let current_chunk_extra = ChunkExtra::clone(
+        let mut current_chunk_extra = ChunkExtra::clone(
             self.get_chunk_extra(
                 &execution_contexts[0].0.prev_block_hash,
                 &execution_contexts[0].1.shard_uid,
@@ -4294,7 +4294,7 @@ impl Chain {
         let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
         Ok(Some(Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
             let mut result = vec![];
-            for (block_context, shard_context) in execution_contexts {
+            for (i, (block_context, shard_context)) in execution_contexts.iter().enumerate() {
                 let block_result = process_shard_update(
                     parent_span,
                     runtime.as_ref(),
@@ -4306,12 +4306,18 @@ impl Chain {
                 )?;
                 if let ShardBlockUpdateResult::OldChunk(OldChunkResult {
                     shard_uid,
-                    apply_result: _,
+                    apply_result,
                     apply_split_result_or_state_changes: _,
                 }) = block_result
                 {
-                    // *current_chunk_extra.state_root_mut() = apply_result.new_root;
-                    result.push((block_context.block_hash, shard_uid, current_chunk_extra.clone()));
+                    if i == 0 {
+                        *current_chunk_extra.state_root_mut() = apply_result.new_root;
+                        result.push((
+                            block_context.block_hash,
+                            shard_uid,
+                            current_chunk_extra.clone(),
+                        ));
+                    }
                 }
             }
             let block_result = process_shard_update(
