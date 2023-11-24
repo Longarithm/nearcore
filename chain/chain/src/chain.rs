@@ -4072,23 +4072,7 @@ impl Chain {
                 let prev_chunk_height_included = prev_chunk_header.height_included();
 
                 // Validate that all next chunk information matches previous chunk extra.
-                let prev_outgoing_receipts_root = {
-                    // It's safe here to use ChainStore instead of ChainStoreUpdate
-                    // because we're asking prev_chunk_header for already committed block
-                    let outgoing_receipts = self.store().get_outgoing_receipts_for_shard(
-                        self.epoch_manager.as_ref(),
-                        *prev_hash,
-                        chunk_header.shard_id(),
-                        prev_chunk_height_included,
-                    )?;
-                    let outgoing_receipts_hashes = {
-                        let shard_layout =
-                            self.epoch_manager.get_shard_layout_from_prev_block(&prev_hash)?;
-                        Chain::build_receipts_hashes(&outgoing_receipts, &shard_layout)
-                    };
-                    let (outgoing_receipts_root, _) = merklize(&outgoing_receipts_hashes);
-                    outgoing_receipts_root
-                };
+                let prev_outgoing_receipts_root = {};
                 validate_chunk_with_chunk_extra(
                     prev_outgoing_receipts_root,
                     prev_chunk_extra.as_ref(),
