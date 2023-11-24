@@ -1,6 +1,7 @@
 use crate::flat::{
     store_helper, BlockInfo, FlatStorageReadyStatus, FlatStorageStatus, POISONED_LOCK_ERR,
 };
+use near_primitives::block::Block;
 use near_primitives::errors::StorageError;
 use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardUId;
@@ -85,10 +86,10 @@ impl FlatStorageManager {
     pub fn update_flat_storage_for_shard(
         &self,
         shard_uid: ShardUId,
-        mut new_flat_head: CryptoHash,
+        block: &Block,
     ) -> Result<(), StorageError> {
         if let Some(flat_storage) = self.get_flat_storage_for_shard(shard_uid) {
-            // let mut new_flat_head = *block.header().last_final_block();
+            let mut new_flat_head = *block.header().last_final_block();
             if new_flat_head == CryptoHash::default() {
                 let genesis_hash = get_genesis_hash(&self.0.store)
                     .map_err(|e| FlatStorageError::StorageInternalError(e.to_string()))?
