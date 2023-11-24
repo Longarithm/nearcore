@@ -5273,13 +5273,11 @@ impl<'a> ChainUpdate<'a> {
                 }
                 ShardUpdateResult::Stateless(results) => {
                     for (block_hash, shard_uid, chunk_extra) in results {
-                        let expected_chunk_extra = self
-                            .chain_store_update
-                            .get_chunk_extra(&block_hash, &shard_uid)?
-                            .as_ref();
+                        let expected_chunk_extra =
+                            self.chain_store_update.get_chunk_extra(&block_hash, &shard_uid)?;
                         assert_eq!(
                             &chunk_extra,
-                            expected_chunk_extra,
+                            &expected_chunk_extra,
                             "For stateless validation, chunk extras for block {} and shard {} do not match",
                             block_hash,
                             shard_uid
