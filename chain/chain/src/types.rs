@@ -244,6 +244,7 @@ impl ChainGenesis {
 #[derive(PartialEq, Eq)]
 pub enum StorageDataSource {
     Db,
+    DbTrieOnly,
     Recorded(PartialStorage),
 }
 

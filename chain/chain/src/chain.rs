@@ -4252,7 +4252,7 @@ impl Chain {
                 &block_header,
                 shard_id,
                 mode,
-                StorageDataSource::Recorded(PartialStorage::default()),
+                StorageDataSource::DbTrieOnly,
             )?;
             if shard_context.need_to_split_states {
                 return Ok(None);

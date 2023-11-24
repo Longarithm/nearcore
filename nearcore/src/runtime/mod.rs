@@ -850,6 +850,12 @@ impl RuntimeAdapter for NightshadeRuntime {
                 storage_config.state_root,
                 storage_config.use_flat_storage,
             )?,
+            StorageDataSource::DbTrieOnly => self.get_trie_for_shard(
+                shard_id,
+                prev_block_hash,
+                storage_config.state_root,
+                false,
+            )?,
             StorageDataSource::Recorded(storage) => Trie::from_recorded_storage(
                 storage,
                 storage_config.state_root,
