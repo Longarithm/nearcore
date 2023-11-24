@@ -4306,11 +4306,11 @@ impl Chain {
                 )?;
                 if let ShardBlockUpdateResult::OldChunk(OldChunkResult {
                     shard_uid,
-                    apply_result,
+                    apply_result: _,
                     apply_split_result_or_state_changes: _,
                 }) = block_result
                 {
-                    *current_chunk_extra.state_root_mut() = apply_result.new_root;
+                    // *current_chunk_extra.state_root_mut() = apply_result.new_root;
                     result.push((block_context.block_hash, shard_uid, current_chunk_extra.clone()));
                 }
             }
