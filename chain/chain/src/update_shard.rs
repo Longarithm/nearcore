@@ -176,7 +176,7 @@ fn apply_new_chunk(
     let _timer = CryptoHashTimer::new(chunk.chunk_hash().0);
     let storage_config = RuntimeStorageConfig {
         state_root: *chunk_inner.prev_state_root(),
-        use_flat_storage: true,
+        use_flat_storage: shard_context.storage_data_source == StorageDataSource::Db,
         source: shard_context.storage_data_source,
         state_patch,
         record_storage: false,
@@ -244,7 +244,7 @@ fn apply_old_chunk(
 
     let storage_config = RuntimeStorageConfig {
         state_root: *prev_chunk_extra.state_root(),
-        use_flat_storage: true,
+        use_flat_storage: shard_context.storage_data_source == StorageDataSource::Db,
         source: shard_context.storage_data_source,
         state_patch,
         record_storage: false,
