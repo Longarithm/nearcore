@@ -844,17 +844,11 @@ impl RuntimeAdapter for NightshadeRuntime {
             metrics::APPLYING_CHUNKS_TIME.with_label_values(&[&shard_id.to_string()]).start_timer();
 
         let mut trie = match storage_config.source {
-            StorageDataSource::Db => self.get_trie_for_shard(
+            StorageDataSource::Db | StorageDataSource::DbTrieOnly => self.get_trie_for_shard(
                 shard_id,
                 prev_block_hash,
                 storage_config.state_root,
                 storage_config.use_flat_storage,
-            )?,
-            StorageDataSource::DbTrieOnly => self.get_trie_for_shard(
-                shard_id,
-                prev_block_hash,
-                storage_config.state_root,
-                false,
             )?,
             StorageDataSource::Recorded(storage) => Trie::from_recorded_storage(
                 storage,
@@ -864,6 +858,9 @@ impl RuntimeAdapter for NightshadeRuntime {
         };
         if storage_config.record_storage {
             trie = trie.recording_reads();
+        }
+        if storage_config.source == StorageDataSource::DbTrieOnly {
+            trie.dont_charge_gas_for_trie_node_access();
         }
 
         match self.process_state_update(
