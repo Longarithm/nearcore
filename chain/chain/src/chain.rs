@@ -4312,12 +4312,8 @@ impl Chain {
                 {
                     if i == 0 {
                         *current_chunk_extra.state_root_mut() = apply_result.new_root;
-                        result.push((
-                            block_context.block_hash,
-                            shard_uid,
-                            current_chunk_extra.clone(),
-                        ));
                     }
+                    result.push((block_context.block_hash, shard_uid, current_chunk_extra.clone()));
                 }
             }
             let block_result = process_shard_update(
