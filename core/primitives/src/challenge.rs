@@ -9,14 +9,18 @@ use near_crypto::Signature;
 /// Serialized TrieNodeWithSize or state value.
 pub type TrieValue = std::sync::Arc<[u8]>;
 
-#[derive(
-    BorshSerialize, BorshDeserialize, serde::Serialize, Debug, Default, Clone, Eq, PartialEq,
-)]
+#[derive(BorshSerialize, BorshDeserialize, serde::Serialize, Debug, Clone, Eq, PartialEq)]
 /// TODO (#8984): consider supporting format containing trie values only for
 /// state part boundaries and storing state items for state part range.
 pub enum PartialState {
     /// State represented by the set of unique trie values (`RawTrieNodeWithSize`s and state values).
     TrieValues(Vec<TrieValue>),
+}
+
+impl Default for PartialState {
+    fn default() -> Self {
+        PartialState::TrieValues(vec![])
+    }
 }
 
 impl PartialState {
