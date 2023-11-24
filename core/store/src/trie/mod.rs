@@ -649,6 +649,7 @@ impl Trie {
         }
     }
 
+    /// Temporary helper, must be removed after stateless validation release.
     pub fn dont_charge_gas_for_trie_node_access(&mut self) {
         self.charge_gas_for_trie_node_access = false;
     }

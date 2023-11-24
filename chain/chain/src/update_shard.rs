@@ -61,14 +61,18 @@ pub struct StateSplitResult {
     pub(crate) results: Vec<ApplySplitStateResult>,
 }
 
-// generic shard update
+/// Result of processing shard update, covering both stateful and stateless scenarios.
 #[derive(Debug)]
 pub enum ShardUpdateResult {
+    /// Stateful scenario - processed update for a single block.
     Stateful(ShardBlockUpdateResult),
+    /// Stateless scenario - processed update based on state witness in a chunk.
+    /// Contains `ChunkExtra`s - results for processing updates corresponding
+    /// to state witness.
     Stateless(Vec<(CryptoHash, ShardUId, ChunkExtra)>),
 }
 
-// shard update for new block
+/// Result for a shard update for a single block.
 #[derive(Debug)]
 pub enum ShardBlockUpdateResult {
     NewChunk(NewChunkResult),
@@ -97,11 +101,15 @@ pub(crate) enum ShardUpdateReason {
 /// Information about shard to update.
 pub(crate) struct ShardContext {
     pub shard_uid: ShardUId,
+    /// Whether node cares about shard in this epoch.
     pub cares_about_shard_this_epoch: bool,
     /// Whether shard layout changes in the next epoch.
     pub will_shard_layout_change: bool,
+    /// Whether transactions should be applied.
     pub should_apply_transactions: bool,
+    /// See comment in `get_update_shard_job`.
     pub need_to_split_states: bool,
+    /// Data source used for processing shard update.
     pub storage_data_source: StorageDataSource,
 }
 
