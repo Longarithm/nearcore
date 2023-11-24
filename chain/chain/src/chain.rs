@@ -3951,59 +3951,53 @@ impl Chain {
             .iter()
             .zip(prev_chunk_headers.iter())
             .enumerate()
-            .map(
-                |(shard_id, (chunk_header, prev_chunk_header)): (
-                    usize,
-                    (&ShardChunkHeader, &ShardChunkHeader),
-                )|
-                 -> Result<Vec<_>, Error> {
-                    // XXX: This is a bit questionable -- sandbox state patching works
-                    // only for a single shard. This so far has been enough.
-                    let state_patch = state_patch.take();
+            .map(|(shard_id, (chunk_header, prev_chunk_header))| -> Result<Vec<_>, Error> {
+                // XXX: This is a bit questionable -- sandbox state patching works
+                // only for a single shard. This so far has been enough.
+                let state_patch = state_patch.take();
 
-                    let mut jobs = vec![];
+                let mut jobs = vec![];
 
-                    let mut process_job = |job: Result<Option<UpdateShardJob>, Error>| {
-                        match job {
-                            Ok(Some(processor)) => jobs.push(processor),
-                            Ok(None) => {}
-                            Err(err) => {
-                                if err.is_bad_data() {
-                                    invalid_chunks.push(chunk_header.clone());
-                                }
-                                return Err(err);
+                let mut process_job = |job: Result<Option<UpdateShardJob>, Error>| {
+                    match job {
+                        Ok(Some(processor)) => jobs.push(processor),
+                        Ok(None) => {}
+                        Err(err) => {
+                            if err.is_bad_data() {
+                                invalid_chunks.push(chunk_header.clone());
                             }
+                            return Err(err);
                         }
-                        return Ok(());
-                    };
+                    }
+                    return Ok(());
+                };
 
-                    let stateful_job = self.get_update_shard_job(
-                        me,
-                        block,
-                        prev_block,
-                        chunk_header,
-                        prev_chunk_header,
-                        shard_id as ShardId,
-                        mode,
-                        incoming_receipts,
-                        state_patch,
-                    );
-                    process_job(stateful_job)?;
+                let stateful_job = self.get_update_shard_job(
+                    me,
+                    block,
+                    prev_block,
+                    chunk_header,
+                    prev_chunk_header,
+                    shard_id as ShardId,
+                    mode,
+                    incoming_receipts,
+                    state_patch,
+                );
+                process_job(stateful_job)?;
 
-                    let stateless_job = self.get_update_shard_stateless_job(
-                        me,
-                        block,
-                        prev_block,
-                        chunk_header,
-                        prev_chunk_header,
-                        shard_id as ShardId,
-                        mode,
-                    );
-                    process_job(stateless_job)?;
+                let stateless_job = self.get_update_shard_stateless_job(
+                    me,
+                    block,
+                    prev_block,
+                    chunk_header,
+                    prev_chunk_header,
+                    shard_id as ShardId,
+                    mode,
+                );
+                process_job(stateless_job)?;
 
-                    return Ok(jobs);
-                },
-            )
+                return Ok(jobs);
+            })
             .collect::<Result<Vec<Vec<UpdateShardJob>>, Error>>()?
             .into_iter()
             .flatten()
