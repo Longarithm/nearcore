@@ -3903,30 +3903,35 @@ impl Chain {
             .collect()
     }
 
-    #[allow(unused)]
-    fn iterate_until_height(
+    /// Returns sequence of blocks in chain from `last_block_hash` (inclusive)
+    /// until the block with height `first_block_height` (inclusive if `include_with_height`
+    /// is true). For each block hash in resulting `Vec`, next entry contains hash of its
+    /// parent on chain.
+    /// TODO(logunov): consider uniting with `get_incoming_receipts_for_shard` because it
+    /// has the same purpose.
+    fn get_blocks_until_height(
         &self,
-        mut prev_chunk_block_hash: CryptoHash,
-        prev_chunk_height_included: BlockHeight,
-        include_last: bool,
+        mut last_block_hash: CryptoHash,
+        first_block_height: BlockHeight,
+        include_with_height: bool,
     ) -> Result<Vec<CryptoHash>, Error> {
         let mut blocks = vec![];
         loop {
-            let header = self.get_block_header(&prev_chunk_block_hash)?;
-            if header.height() < prev_chunk_height_included {
-                panic!("...");
+            let header = self.get_block_header(&last_block_hash)?;
+            if header.height() < first_block_height {
+                return Err(Error::InvalidBlockHeight(first_block_height));
             }
 
-            if header.height() == prev_chunk_height_included {
+            if header.height() == first_block_height {
                 break;
             }
 
-            blocks.push(prev_chunk_block_hash);
+            blocks.push(last_block_hash);
             let prev_hash = header.prev_hash().clone();
-            prev_chunk_block_hash = prev_hash;
+            last_block_hash = prev_hash;
         }
-        if include_last {
-            blocks.push(prev_chunk_block_hash);
+        if include_with_height {
+            blocks.push(last_block_hash);
         }
         Ok(blocks)
     }
@@ -3985,7 +3990,7 @@ impl Chain {
                 );
                 process_job(stateful_job)?;
 
-                let stateless_job = self.get_update_shard_stateless_job(
+                let stateless_job = self.get_stateless_validation_job(
                     me,
                     block,
                     prev_block,
@@ -4170,7 +4175,15 @@ impl Chain {
         })))
     }
 
-    fn get_update_shard_stateless_job(
+    /// Returns closure which should validate a chunk without state, if chunk is present.
+    /// TODO(logunov):
+    /// 1. Currently result of this job is not applied and used only to validate with
+    /// stateful chunk execution. Later current execution must be deprecated in favour of
+    /// this one.
+    /// 2. Use state witness and make this method truly stateless.
+    /// 3. Use range of blocks between chunk and previous existing chunk to collect
+    /// incoming receipts.
+    fn get_stateless_validation_job(
         &self,
         me: &Option<AccountId>,
         block: &Block,
@@ -4184,10 +4197,12 @@ impl Chain {
             self.get_shard_context(me, block.header(), shard_id, mode, StorageDataSource::Db)?;
         let is_new_chunk = chunk_header.height_included() == block.header().height();
 
+        // If we don't track a shard or there is no chunk, there is nothing to validate.
         if !last_shard_context.should_apply_transactions || !is_new_chunk {
             return Ok(None);
         }
 
+        // Validate transactions in chunk.
         let chunk = self.get_chunk_clone_from_header(&chunk_header)?;
         self.validate_chunk_transactions(&block, prev_block.header(), &chunk)?;
 
@@ -4197,36 +4212,50 @@ impl Chain {
         let prev_chunk_height_included = prev_chunk_header.height_included();
         let prev_chunk_prev_hash = prev_chunk_header.prev_block_hash().clone();
 
+        // If previous chunk is genesis chunk, its execution is trivial.
+        // TODO(logunov): check that state witness is empty.
         if prev_chunk_prev_hash == CryptoHash::default() {
             return Ok(None);
         }
 
-        let mut last_blocks =
-            self.iterate_until_height(prev_block.hash().clone(), prev_chunk_height_included, true)?;
+        // Find the block at which height previous chunk was created.
+        // We will apply previous chunk to validate state witness in current chunk.
+        let mut last_blocks = self.get_blocks_until_height(
+            prev_block.hash().clone(),
+            prev_chunk_height_included,
+            true,
+        )?;
         let prev_chunk_block_hash = last_blocks.pop().unwrap();
         let prev_chunk_block_header = self.get_block_header(&prev_chunk_block_hash)?;
         assert_eq!(prev_chunk_block_header.prev_hash(), &prev_chunk_prev_hash);
 
+        // Check that current and previous chunks have the same shard layouts because
+        // resharding is not supported yet - we need to determine parent shard id otherwise.
         let prev_chunk_prev_block = self.get_block(&prev_chunk_prev_hash)?;
         let shard_layout =
             epoch_manager.get_shard_layout_from_prev_block(prev_block.header().prev_hash())?;
         let prev_shard_layout = epoch_manager
             .get_shard_layout_from_prev_block(prev_chunk_prev_block.header().prev_hash())?;
-        // check because may change
         if shard_layout != prev_shard_layout {
             return Ok(None);
         }
 
+        // Do the same check for previous and previous-previous chunk, because we
+        // iterate over blocks between them to check shard update, and we will use
+        // the same shard id again for simplicity.
+        // TODO(logunov): does `prev_prev_chunk` always exist in DB?
         let prev_prev_chunk = &prev_chunk_prev_block.chunks()[shard_id as usize];
         let prev_prev_chunk_prev_hash = prev_prev_chunk.prev_block_hash();
+        let prev_prev_chunk_height_included = prev_prev_chunk.height_included();
         let prev_prev_shard_layout =
             epoch_manager.get_shard_layout_from_prev_block(prev_prev_chunk_prev_hash)?;
         if prev_shard_layout != prev_prev_shard_layout {
             return Ok(None);
         }
-        let prev_prev_chunk_height_included = prev_prev_chunk.height_included();
 
-        // reverse order
+        // Collect receipts appeared on chain between previous and previous-previous chunk.
+        // Ideally we should collect receipts from current chunk (excluded) to previous chunk
+        // (included). But now we verify results against current stateful logic.
         let receipts_response = &self.store().get_incoming_receipts_for_shard(
             self.epoch_manager.as_ref(),
             shard_id,
@@ -4235,7 +4264,8 @@ impl Chain {
         )?;
         let receipts = collect_receipts_from_response(receipts_response);
 
-        let blocks_to_execute = self.iterate_until_height(
+        // Get sequence of blocks for which we will process shard update.
+        let blocks_to_execute = self.get_blocks_until_height(
             prev_chunk_block_hash,
             prev_prev_chunk_height_included,
             false,
@@ -4266,6 +4296,11 @@ impl Chain {
         }
         execution_contexts.reverse();
 
+        // Create stateless validation job.
+        // Its initial state corresponds to the block at which `prev_prev_chunk` was created.
+        // Then, we process updates for missing chunks, until we find a block at which
+        // `prev_chunk` was created.
+        // And finally we process update for the `prev_chunk`.
         let mut current_chunk_extra = ChunkExtra::clone(
             self.get_chunk_extra(
                 &execution_contexts[0].0.prev_block_hash,
