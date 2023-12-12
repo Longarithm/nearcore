@@ -4007,7 +4007,7 @@ impl Chain {
             cares_about_shard_next_epoch,
         );
         let need_to_split_states = will_shard_layout_change && cares_about_shard_next_epoch;
-        let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
+        let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
         Ok(ShardContext {
             shard_uid,
             cares_about_shard_this_epoch,
