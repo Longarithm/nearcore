@@ -69,14 +69,15 @@ use near_primitives::sharding::{
 };
 use near_primitives::static_clock::StaticClock;
 use near_primitives::transaction::SignedTransaction;
+use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::Gas;
 use near_primitives::types::StateRoot;
 use near_primitives::types::{AccountId, ApprovalStake, BlockHeight, EpochId, NumBlocks, ShardId};
-use near_primitives::unwrap_or_return;
 use near_primitives::utils::MaybeValidated;
 use near_primitives::validator_signer::ValidatorSigner;
 use near_primitives::version::PROTOCOL_VERSION;
 use near_primitives::views::{CatchupStatusView, DroppedReason};
+use near_primitives::{checked_feature, unwrap_or_return};
 use near_store::metadata::DbKind;
 use near_store::ShardUId;
 use std::cmp::max;
@@ -837,10 +838,32 @@ impl Client {
         debug!(target: "client", me = ?validator_signer.validator_id(), next_height, shard_id, "Producing chunk");
 
         let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
-        let chunk_extra = self
-            .chain
-            .get_chunk_extra(&prev_block_hash, &shard_uid)
-            .map_err(|err| Error::ChunkProducer(format!("No chunk extra available: {}", err)))?;
+        let prev_block_hash = *prev_block.hash();
+        let protocol_version = self.epoch_manager.get_epoch_protocol_version(epoch_id)?;
+        let (chunk_extra, outgoing_receipts) =
+            if checked_feature!("stable", ChunkValidation, protocol_version) {
+                let me = match &self.validator_signer {
+                    Some(validator_signer) => Some(validator_signer.validator_id().clone()),
+                    None => None,
+                };
+                let result = self.chain.apply_chunk_from_block_before_production(
+                    &me,
+                    prev_block,
+                    shard_id as usize,
+                );
+                result? // if there is an error, it means something weird which I don't perceive yet
+            } else {
+                let chunk_extra =
+                    self.chain.get_chunk_extra(&prev_block_hash, &shard_uid).map_err(|err| {
+                        Error::ChunkProducer(format!("No chunk extra available: {}", err))
+                    })?;
+                let outgoing_receipts = self.chain.get_outgoing_receipts_for_shard(
+                    prev_block_hash,
+                    shard_id,
+                    last_header.height_included(),
+                )?;
+                (chunk_extra, outgoing_receipts)
+            };
 
         let prev_block_header = self.chain.get_block_header(&prev_block_hash)?;
         let transactions = self.prepare_transactions(
@@ -857,11 +880,6 @@ impl Client {
         );
         let num_filtered_transactions = transactions.len();
         let (tx_root, _) = merklize(&transactions);
-        let outgoing_receipts = self.chain.get_outgoing_receipts_for_shard(
-            prev_block_hash,
-            shard_id,
-            last_header.height_included(),
-        )?;
 
         let outgoing_receipts_root = self.calculate_receipts_root(epoch_id, &outgoing_receipts)?;
         let protocol_version = self.epoch_manager.get_epoch_protocol_version(epoch_id)?;

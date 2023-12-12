@@ -3947,9 +3947,8 @@ impl Chain {
             if checked_feature!("stable", ChunkValidation, protocol_version) {
                 let stateless_job = self.get_stateless_validation_job(
                     me,
-                    block,
+                    Some((block, chunk_header)),
                     prev_block,
-                    chunk_header,
                     prev_chunk_header,
                     shard_id as ShardId,
                     mode,
@@ -3992,12 +3991,11 @@ impl Chain {
     fn get_shard_context(
         &self,
         me: &Option<AccountId>,
-        block_header: &BlockHeader,
+        prev_hash: &CryptoHash,
         shard_id: ShardId,
         mode: ApplyChunksMode,
     ) -> Result<ShardContext, Error> {
-        let prev_hash = block_header.prev_hash();
-        let epoch_id = block_header.epoch_id();
+        let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(prev_hash)?;
         let cares_about_shard_this_epoch =
             self.shard_tracker.care_about_shard(me.as_ref(), prev_hash, shard_id, true);
         let cares_about_shard_next_epoch =
@@ -4034,7 +4032,7 @@ impl Chain {
     ) -> Result<Option<UpdateShardJob>, Error> {
         let _span = tracing::debug_span!(target: "chain", "get_update_shard_job").entered();
         let prev_hash = block.header().prev_hash();
-        let shard_context = self.get_shard_context(me, block.header(), shard_id, mode)?;
+        let shard_context = self.get_shard_context(me, prev_hash, shard_id, mode)?;
 
         // We can only split states when states are ready, i.e., mode != ApplyChunksMode::NotCaughtUp
         // 1) if should_apply_transactions == true && split_state_roots.is_some(),
@@ -4191,16 +4189,20 @@ impl Chain {
     fn get_stateless_validation_job(
         &self,
         me: &Option<AccountId>,
-        block: &Block,
+        block_and_chunk: Option<(&Block, &ShardChunkHeader)>, // if i am producer, it is none
         prev_block: &Block,
-        chunk_header: &ShardChunkHeader,
         prev_chunk_header: &ShardChunkHeader,
         shard_id: ShardId,
         mode: ApplyChunksMode,
     ) -> Result<Option<UpdateShardJob>, Error> {
         let _span = tracing::debug_span!(target: "chain", "get_stateless_validation_job").entered();
-        let last_shard_context = self.get_shard_context(me, block.header(), shard_id, mode)?;
-        let is_new_chunk = chunk_header.height_included() == block.header().height();
+        let last_shard_context = self.get_shard_context(me, prev_block.hash(), shard_id, mode)?;
+        let is_new_chunk = match block_and_chunk {
+            None => true,
+            Some((block, chunk_header)) => {
+                chunk_header.height_included() == block.header().height()
+            }
+        };
 
         // If we don't track a shard or there is no chunk, there is nothing to validate.
         if !last_shard_context.should_apply_transactions || !is_new_chunk {
@@ -4208,8 +4210,10 @@ impl Chain {
         }
 
         // Validate transactions in chunk.
-        let chunk = self.get_chunk_clone_from_header(&chunk_header)?;
-        self.validate_chunk_transactions(&block, prev_block.header(), &chunk)?;
+        if let Some((block, chunk_header)) = block_and_chunk {
+            let chunk = self.get_chunk_clone_from_header(chunk_header)?;
+            self.validate_chunk_transactions(block, prev_block.header(), &chunk)?;
+        }
 
         let runtime = self.runtime_adapter.clone();
         let epoch_manager = self.epoch_manager.clone();
@@ -4236,8 +4240,8 @@ impl Chain {
         let prev_chunk_prev_block = match self.get_block(&prev_chunk_prev_hash) {
             Ok(b) => b,
             Err(e) => {
-                let block_height = block.header().height();
-                let block_hash = block.hash();
+                let block_height = prev_block.header().height();
+                let block_hash = prev_block.hash();
                 // TODO(logunov): this is probably happening just after state sync; needs to be
                 // fixed before stateless validation release.
                 debug!(target: "client", block_height, ?block_hash, shard_id, ?prev_chunk_prev_hash, "Previous block for previous chunk is missing: {e}");
@@ -4286,7 +4290,8 @@ impl Chain {
         for block_hash in blocks_to_execute {
             let block_header = self.get_block_header(&block_hash)?;
             let prev_block_header = self.get_previous_header(&block_header)?;
-            let shard_context = self.get_shard_context(me, &block_header, shard_id, mode)?;
+            let shard_context =
+                self.get_shard_context(me, prev_block_header.hash(), shard_id, mode)?;
             if shard_context.need_to_split_states {
                 return Ok(None);
             }
@@ -4312,8 +4317,8 @@ impl Chain {
         ) {
             Ok(c) => ChunkExtra::clone(c.as_ref()),
             Err(e) => {
-                let block_height = block.header().height();
-                let block_hash = block.hash();
+                let block_height = prev_block.header().height();
+                let block_hash = prev_block.hash();
                 let requested_block_hash = execution_contexts[0].0.prev_block_hash;
                 let requested_shard_uid = execution_contexts[0].1.shard_uid;
                 debug!(target: "client", block_height, ?block_hash, ?requested_block_hash, ?requested_shard_uid, "Chunk extra is missing: {e}");
@@ -4377,6 +4382,62 @@ impl Chain {
                 }
             }),
         )))
+    }
+
+    pub fn apply_chunk_from_block_before_production(
+        &mut self,
+        me: &Option<AccountId>,
+        block: &Block,
+        shard_id: usize,
+    ) -> Result<(Arc<ChunkExtra>, Vec<Receipt>), Error> {
+        let _span =
+            tracing::debug_span!(target: "chain", "apply_chunk_from_block_before_production")
+                .entered();
+
+        let maybe_job = self.get_stateless_validation_job(
+            me,
+            None,
+            block,
+            &block.chunks()[shard_id],
+            shard_id as ShardId,
+            ApplyChunksMode::IsCaughtUp, // if I am producer, this is the case, right?
+        )?;
+
+        let (shard_id, job) = match maybe_job {
+            Some(job) => job,
+            None => {
+                panic!("...");
+            } // no chunk => no chunk extra to save
+        };
+        let shard_update_result = job(&_span)?;
+
+        let mut chain_update = self.chain_update();
+        let receipts_map =
+            chain_update.get_receipt_id_to_shard_id(block.hash(), shard_id as u64)?;
+        for (receipt_id, to_shard_id) in receipts_map.into_iter() {
+            chain_update.chain_store_update.save_receipt_id_to_shard_id(receipt_id, to_shard_id);
+        }
+        chain_update.commit()?;
+
+        if let ShardUpdateResult::Stateless(_, (_, outer_apply_result)) = shard_update_result {
+            let gas_limit = outer_apply_result.gas_limit;
+            let apply_result = outer_apply_result.apply_result;
+            let (outcome_root, _) =
+                ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
+
+            // Save state root after applying transactions.
+            let chunk_extra = ChunkExtra::new(
+                &apply_result.new_root,
+                outcome_root,
+                apply_result.validator_proposals,
+                apply_result.total_gas_burnt,
+                gas_limit,
+                apply_result.total_balance_burnt,
+            );
+            Ok((Arc::new(chunk_extra), apply_result.outgoing_receipts))
+        } else {
+            Err(Error::Other(String::from("stateful???")))
+        }
     }
 
     /// Function to create a new snapshot if needed
