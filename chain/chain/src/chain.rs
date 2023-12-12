@@ -4390,7 +4390,7 @@ impl Chain {
         me: &Option<AccountId>,
         block: &Block,
         shard_id: usize,
-    ) -> Result<Option<(Arc<ChunkExtra>, Vec<Receipt>)>, Error> {
+    ) -> Result<(Arc<ChunkExtra>, Vec<Receipt>), Error> {
         println!("APPLY BEFORE PROD {} {}", block.header().height(), block.header().hash());
         let _span =
             tracing::debug_span!(target: "chain", "apply_chunk_from_block_before_production")
@@ -4418,7 +4418,7 @@ impl Chain {
 
             let (shard_id, job) = match maybe_job {
                 Some(job) => job,
-                None => return Ok(None),
+                None => panic!("Something not supported"),
             };
             let shard_update_result = job(&_span)?;
 
@@ -4453,7 +4453,7 @@ impl Chain {
             }
         };
 
-        Ok(Some((Arc::new(current_chunk_extra), outgoing_receipts)))
+        Ok((Arc::new(current_chunk_extra), outgoing_receipts))
     }
 
     /// Function to create a new snapshot if needed

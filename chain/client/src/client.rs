@@ -839,23 +839,18 @@ impl Client {
         let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
         let prev_block_hash = *prev_block.hash();
         let protocol_version = self.epoch_manager.get_epoch_protocol_version(epoch_id)?;
-        let maybe_results = if checked_feature!("stable", ChunkValidation, protocol_version) {
-            let me = match &self.validator_signer {
-                Some(validator_signer) => Some(validator_signer.validator_id().clone()),
-                None => None,
-            };
-            self.chain.apply_chunk_from_block_before_production(
-                &me,
-                prev_block,
-                shard_id as usize,
-            )?
-        } else {
-            None
-        };
-
-        let (chunk_extra, outgoing_receipts) = match maybe_results {
-            Some((chunk_extra, outgoing_receipts)) => (chunk_extra, outgoing_receipts),
-            None => {
+        let (chunk_extra, outgoing_receipts) =
+            if checked_feature!("stable", ChunkValidation, protocol_version) {
+                let me = match &self.validator_signer {
+                    Some(validator_signer) => Some(validator_signer.validator_id().clone()),
+                    None => None,
+                };
+                self.chain.apply_chunk_from_block_before_production(
+                    &me,
+                    prev_block,
+                    shard_id as usize,
+                )?
+            } else {
                 let chunk_extra =
                     self.chain.get_chunk_extra(&prev_block_hash, &shard_uid).map_err(|err| {
                         Error::ChunkProducer(format!("No chunk extra available: {}", err))
@@ -866,8 +861,7 @@ impl Client {
                     last_header.height_included(),
                 )?;
                 (chunk_extra, outgoing_receipts)
-            }
-        };
+            };
 
         let prev_block_header = self.chain.get_block_header(&prev_block_hash)?;
         let transactions = self.prepare_transactions(
