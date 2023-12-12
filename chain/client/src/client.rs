@@ -69,7 +69,6 @@ use near_primitives::sharding::{
 };
 use near_primitives::static_clock::StaticClock;
 use near_primitives::transaction::SignedTransaction;
-use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::Gas;
 use near_primitives::types::StateRoot;
 use near_primitives::types::{AccountId, ApprovalStake, BlockHeight, EpochId, NumBlocks, ShardId};
