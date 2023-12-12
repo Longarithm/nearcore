@@ -4389,7 +4389,7 @@ impl Chain {
         me: &Option<AccountId>,
         block: &Block,
         shard_id: usize,
-    ) -> Result<(Arc<ChunkExtra>, Vec<Receipt>), Error> {
+    ) -> Result<Option<(Arc<ChunkExtra>, Vec<Receipt>)>, Error> {
         println!("APPLY BEFORE PROD {} {}", block.header().height(), block.header().hash());
         let _span =
             tracing::debug_span!(target: "chain", "apply_chunk_from_block_before_production")
@@ -4406,9 +4406,7 @@ impl Chain {
 
         let (shard_id, job) = match maybe_job {
             Some(job) => job,
-            None => {
-                panic!("...");
-            } // no chunk => no chunk extra to save
+            None => Ok(None),
         };
         let shard_update_result = job(&_span)?;
 
@@ -4435,7 +4433,7 @@ impl Chain {
                 gas_limit,
                 apply_result.total_balance_burnt,
             );
-            Ok((Arc::new(chunk_extra), apply_result.outgoing_receipts))
+            Ok(Some((Arc::new(chunk_extra), apply_result.outgoing_receipts)))
         } else {
             Err(Error::Other(String::from("stateful???")))
         }
