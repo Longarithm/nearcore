@@ -4406,7 +4406,7 @@ impl Chain {
 
         let (shard_id, job) = match maybe_job {
             Some(job) => job,
-            None => Ok(None),
+            None => return Ok(None),
         };
         let shard_update_result = job(&_span)?;
 
