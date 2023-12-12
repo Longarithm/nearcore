@@ -4396,48 +4396,64 @@ impl Chain {
             tracing::debug_span!(target: "chain", "apply_chunk_from_block_before_production")
                 .entered();
 
-        let maybe_job = self.get_stateless_validation_job(
-            me,
-            None,
-            block,
-            &block.chunks()[shard_id],
-            shard_id as ShardId,
-            ApplyChunksMode::IsCaughtUp, // if I am producer, this is the case, right?
-        )?;
+        let prev_chunk_header = &block.chunks()[shard_id];
+        let prev_chunk_prev_hash = *prev_chunk_header.prev_block_hash();
 
-        let (shard_id, job) = match maybe_job {
-            Some(job) => job,
-            None => return Ok(None),
-        };
-        let shard_update_result = job(&_span)?;
-
-        let mut chain_update = self.chain_update();
-        let receipts_map =
-            chain_update.get_receipt_id_to_shard_id(block.hash(), shard_id as u64)?;
-        for (receipt_id, to_shard_id) in receipts_map.into_iter() {
-            chain_update.chain_store_update.save_receipt_id_to_shard_id(receipt_id, to_shard_id);
-        }
-        chain_update.commit()?;
-
-        if let ShardUpdateResult::Stateless(_, (_, outer_apply_result)) = shard_update_result {
-            let gas_limit = outer_apply_result.gas_limit;
-            let apply_result = outer_apply_result.apply_result;
-            let (outcome_root, _) =
-                ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
-
-            // Save state root after applying transactions.
-            let chunk_extra = ChunkExtra::new(
-                &apply_result.new_root,
-                outcome_root,
-                apply_result.validator_proposals,
-                apply_result.total_gas_burnt,
-                gas_limit,
-                apply_result.total_balance_burnt,
-            );
-            Ok(Some((Arc::new(chunk_extra), apply_result.outgoing_receipts)))
+        let (current_chunk_extra, outgoing_receipts) = if prev_chunk_prev_hash
+            == CryptoHash::default()
+        {
+            let block_hash = self.genesis().hash();
+            let epoch_id = self.genesis().epoch_id();
+            let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id as ShardId, epoch_id)?;
+            (ChunkExtra::clone(self.get_chunk_extra(block_hash, &shard_uid)?.as_ref()), vec![])
         } else {
-            Err(Error::Other(String::from("stateful???")))
-        }
+            let maybe_job = self.get_stateless_validation_job(
+                me,
+                None,
+                block,
+                &prev_chunk_header,
+                shard_id as ShardId,
+                ApplyChunksMode::IsCaughtUp, // if I am producer, this is the case, right?
+            )?;
+
+            let (shard_id, job) = match maybe_job {
+                Some(job) => job,
+                None => return Ok(None),
+            };
+            let shard_update_result = job(&_span)?;
+
+            let mut chain_update = self.chain_update();
+            let receipts_map =
+                chain_update.get_receipt_id_to_shard_id(block.hash(), shard_id as u64)?;
+            for (receipt_id, to_shard_id) in receipts_map.into_iter() {
+                chain_update
+                    .chain_store_update
+                    .save_receipt_id_to_shard_id(receipt_id, to_shard_id);
+            }
+            chain_update.commit()?;
+
+            if let ShardUpdateResult::Stateless(_, (_, outer_apply_result)) = shard_update_result {
+                let gas_limit = outer_apply_result.gas_limit;
+                let apply_result = outer_apply_result.apply_result;
+                let (outcome_root, _) =
+                    ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
+
+                // Save state root after applying transactions.
+                let chunk_extra = ChunkExtra::new(
+                    &apply_result.new_root,
+                    outcome_root,
+                    apply_result.validator_proposals,
+                    apply_result.total_gas_burnt,
+                    gas_limit,
+                    apply_result.total_balance_burnt,
+                );
+                (chunk_extra, apply_result.outgoing_receipts)
+            } else {
+                return Err(Error::Other(String::from("stateful???")));
+            }
+        };
+
+        Ok((Arc::new(current_chunk_extra), outgoing_receipts))
     }
 
     /// Function to create a new snapshot if needed
