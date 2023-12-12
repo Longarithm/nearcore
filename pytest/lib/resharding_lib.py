@@ -1,7 +1,9 @@
 # A library with the common constants and functions for testing resharding.
 
+# TODO(resharding) The resharding V2 is now stabilized so the V1 code is no
+# longer exercised and can be removed.
 V1_PROTOCOL_VERSION = 48
-V2_PROTOCOL_VERSION = 135
+V2_PROTOCOL_VERSION = 64
 
 V0_SHARD_LAYOUT = {
     "V0": {
@@ -19,6 +21,20 @@ V1_SHARD_LAYOUT = {
         "version": 1
     }
 }
+
+
+def get_genesis_config_changes(epoch_length,
+                               binary_protocol_version,
+                               logger=None):
+    genesis_config_changes = [
+        ["epoch_length", epoch_length],
+    ]
+    append_shard_layout_config_changes(
+        genesis_config_changes,
+        binary_protocol_version,
+        logger,
+    )
+    return genesis_config_changes
 
 
 # Append the genesis config changes that are required for testing resharding.
@@ -122,3 +138,28 @@ def get_epoch_offset(binary_protocol_version):
         return 0
 
     assert False
+
+
+def get_client_config_changes(num_nodes, initial_delay=None):
+    single = {
+        "tracked_shards": [0],
+        "state_split_config": {
+            "batch_size": 1000000,
+            # don't throttle resharding
+            "batch_delay": {
+                "secs": 0,
+                "nanos": 0,
+            },
+            # retry often to start resharding as fast as possible
+            "retry_delay": {
+                "secs": 0,
+                "nanos": 100_000_000
+            }
+        }
+    }
+    if initial_delay is not None:
+        single["state_split_config"]["initial_delay"] = {
+            "secs": initial_delay,
+            "nanos": 0
+        }
+    return {i: single for i in range(num_nodes)}

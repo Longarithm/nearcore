@@ -19,7 +19,7 @@ use near_epoch_manager::EpochManagerAdapter;
 use near_o11y::{handler_debug_span, log_assert, OpenTelemetrySpanExt, WithSpanContext};
 use near_performance_metrics_macros::perf;
 use near_primitives::state_sync::get_num_state_parts;
-use near_primitives::types::{AccountId, BlockHeight, ShardId, ValidatorInfoIdentifier};
+use near_primitives::types::{AccountId, BlockHeight, NumShards, ShardId, ValidatorInfoIdentifier};
 use near_primitives::{
     hash::CryptoHash,
     state_sync::{ShardStateSyncResponseHeader, StateHeaderKey},
@@ -334,13 +334,15 @@ impl ClientActor {
         let epoch_id = self.client.chain.header_head()?.epoch_id;
         let fetch_hash = self.client.chain.header_head()?.last_block_hash;
         let me = self.client.validator_signer.as_ref().map(|x| x.validator_id().clone());
-        let num_shards = self.client.epoch_manager.num_shards(&epoch_id).unwrap();
-        let shards_tracked_this_epoch = (0..num_shards)
-            .map(|shard_id| {
+        let shard_ids = self.client.epoch_manager.shard_ids(&epoch_id).unwrap();
+        let shards_tracked_this_epoch = shard_ids
+            .iter()
+            .map(|&shard_id| {
                 self.client.shard_tracker.care_about_shard(me.as_ref(), &fetch_hash, shard_id, true)
             })
             .collect();
-        let shards_tracked_next_epoch = (0..num_shards)
+        let shards_tracked_next_epoch = shard_ids
+            .into_iter()
             .map(|shard_id| {
                 self.client.shard_tracker.will_care_about_shard(
                     me.as_ref(),
@@ -554,7 +556,7 @@ impl ClientActor {
                     .map(|f| f.to_string())
                     .unwrap_or_default();
 
-                let num_chunks = self.client.epoch_manager.num_shards(&epoch_id)?;
+                let shard_ids = self.client.epoch_manager.shard_ids(&epoch_id)?;
 
                 if block_producer == validator_id {
                     // For each height - we want to collect information about received approvals.
@@ -565,7 +567,7 @@ impl ClientActor {
                     has_block_or_chunks_to_produce = true;
                 }
 
-                for shard_id in 0..num_chunks {
+                for shard_id in shard_ids {
                     let chunk_producer = self
                         .client
                         .epoch_manager
@@ -616,7 +618,8 @@ impl ClientActor {
                 })
                 .ok(),
             head_height: head.height,
-            shards: self.client.epoch_manager.num_shards(&head.epoch_id).unwrap_or_default(),
+            shards: self.client.epoch_manager.shard_ids(&head.epoch_id).unwrap_or_default().len()
+                as NumShards,
             approval_history: self.client.doomslug.get_approval_history(),
             production: productions,
             banned_chunk_producers: self

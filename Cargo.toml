@@ -7,7 +7,11 @@ repository = "https://github.com/near/nearcore"
 license = "MIT OR Apache-2.0"
 
 [workspace.metadata.workspaces]
-# shared version of all public crates in the workspace
+# Shared version of all public crates in the workspace.
+# This is only used for crates that are not stable.
+# Most crates are not stable on purpose, as maintaining API compatibility is a
+# significant developer time expense. Please think thoroughly before adding
+# anything to the list of stable crates.
 version = "0.17.0"
 exclude = ["neard"]
 
@@ -119,7 +123,7 @@ bencher = "0.1.5"
 bitflags = "1.2"
 blake2 = "0.9.1"
 bn = { package = "zeropool-bn", version = "0.5.11", default-features = false }
-bolero = { version = "0.10.0", git = "https://github.com/Ekleog-NEAR/bolero", rev = "8f4e49d65c702a2f9858ed3c217b1cb52ce91243", features = ["arbitrary"] }
+bolero = { version = "0.10.0", git = "https://github.com/Ekleog-NEAR/bolero", rev = "56da8e6d1d018519a30b36d85d3a53fe35a42eaf", features = ["arbitrary"] }
 borsh = { version = "1.0.0", features = ["derive", "rc"] }
 bs58 = "0.4"
 bytes = "1"
@@ -138,14 +142,14 @@ crossbeam = "0.8"
 crossbeam-channel = "0.5.8"
 crossbeam-queue = "0.3.8"
 csv = "1.2.1"
-curve25519-dalek = "3"
+curve25519-dalek = { version = "4.1.1", default-features = false, features = ["alloc", "precomputed-tables", "rand_core"] }
 derive-enum-from-into = "0.1.1"
 derive_more = "0.99.9"
 dirs = "4"
 dynasm = "2.0"
 dynasmrt = "2.0"
 easy-ext = "0.2"
-ed25519-dalek = "1"
+ed25519-dalek = { version = "2.1.0", default-features = false, features = ["hazmat", "rand_core"] }
 elastic-array = "0.11"
 enum-map = "2.1.0"
 enumset = "1.0"
@@ -180,7 +184,7 @@ lru = "0.7.2"
 memmap2 = "0.5"
 memoffset = "0.8"
 more-asserts = "0.2"
-near-account-id = { version = "1.0.0-alpha.2", features = ["internal_unstable", "serde", "borsh"] }
+near-account-id = { version = "1.0.0-alpha.4", features = ["internal_unstable", "serde", "borsh"] }
 near-actix-test-utils = { path = "test-utils/actix-test-utils" }
 near-amend-genesis = { path = "tools/amend-genesis" }
 near-database-tool= { path = "tools/database" }
@@ -249,7 +253,7 @@ num_cpus = "1.11"
 num-rational = { version = "0.3.1", features = ["serde"] }
 num-traits = "0.2.15"
 once_cell = "1.13.1"
-openssl = { version = "0.10", features = ["vendored"] }
+openssl = { version = "0.10.60", features = ["vendored"] }
 openssl-probe = "0.1.4"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio", "trace"] }
 opentelemetry-otlp = "0.10.0"

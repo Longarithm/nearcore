@@ -1,4 +1,5 @@
 //! Chain Client Configuration
+use crate::ExternalStorageLocation::GCS;
 use crate::MutableConfigValue;
 use near_primitives::types::{
     AccountId, BlockHeight, BlockHeightDelta, Gas, NumBlocks, NumSeats, ShardId,
@@ -148,7 +149,7 @@ impl SyncConfig {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(default)]
 pub struct StateSplitConfig {
     /// The soft limit on the size of a single batch. The batch size can be
@@ -192,6 +193,90 @@ impl Default for StateSplitConfig {
     }
 }
 
+pub fn default_header_sync_initial_timeout() -> Duration {
+    Duration::from_secs(10)
+}
+
+pub fn default_header_sync_progress_timeout() -> Duration {
+    Duration::from_secs(2)
+}
+
+pub fn default_header_sync_stall_ban_timeout() -> Duration {
+    Duration::from_secs(120)
+}
+
+pub fn default_state_sync_timeout() -> Duration {
+    Duration::from_secs(60)
+}
+
+pub fn default_header_sync_expected_height_per_second() -> u64 {
+    10
+}
+
+pub fn default_sync_check_period() -> Duration {
+    Duration::from_secs(10)
+}
+
+pub fn default_sync_step_period() -> Duration {
+    Duration::from_millis(10)
+}
+
+pub fn default_sync_height_threshold() -> u64 {
+    1
+}
+
+pub fn default_epoch_sync_enabled() -> bool {
+    false
+}
+
+pub fn default_state_sync() -> Option<StateSyncConfig> {
+    Some(StateSyncConfig {
+        dump: None,
+        sync: SyncConfig::ExternalStorage(ExternalStorageConfig {
+            location: GCS { bucket: "state-parts".to_string() },
+            num_concurrent_requests: DEFAULT_STATE_SYNC_NUM_CONCURRENT_REQUESTS_EXTERNAL,
+            num_concurrent_requests_during_catchup:
+                DEFAULT_STATE_SYNC_NUM_CONCURRENT_REQUESTS_ON_CATCHUP_EXTERNAL,
+        }),
+    })
+}
+
+pub fn default_state_sync_enabled() -> bool {
+    true
+}
+
+pub fn default_view_client_threads() -> usize {
+    4
+}
+
+pub fn default_log_summary_period() -> Duration {
+    Duration::from_secs(10)
+}
+
+pub fn default_view_client_throttle_period() -> Duration {
+    Duration::from_secs(30)
+}
+
+pub fn default_trie_viewer_state_size_limit() -> Option<u64> {
+    Some(50_000)
+}
+
+pub fn default_transaction_pool_size_limit() -> Option<u64> {
+    Some(100_000_000) // 100 MB.
+}
+
+pub fn default_tx_routing_height_horizon() -> BlockHeightDelta {
+    4
+}
+
+pub fn default_enable_multiline_logging() -> Option<bool> {
+    Some(true)
+}
+
+pub fn default_produce_chunk_add_transactions_time_limit() -> Option<Duration> {
+    Some(Duration::from_millis(200))
+}
+
 /// ClientConfig where some fields can be updated at runtime.
 #[derive(Clone, serde::Serialize)]
 pub struct ClientConfig {
@@ -225,7 +310,7 @@ pub struct ClientConfig {
     pub header_sync_progress_timeout: Duration,
     /// How much time to wait before banning a peer in header sync if sync is too slow
     pub header_sync_stall_ban_timeout: Duration,
-    /// Expected increase of header head weight per second during header sync
+    /// Expected increase of header head height per second during header sync
     pub header_sync_expected_height_per_second: u64,
     /// How long to wait for a response during state sync
     pub state_sync_timeout: Duration,
@@ -301,7 +386,15 @@ pub struct ClientConfig {
     // Allows more detailed logging, for example a list of orphaned blocks.
     pub enable_multiline_logging: bool,
     // Configuration for resharding.
-    pub state_split_config: StateSplitConfig,
+    pub state_split_config: MutableConfigValue<StateSplitConfig>,
+    /// If the node is not a chunk producer within that many blocks, then route
+    /// to upcoming chunk producers.
+    pub tx_routing_height_horizon: BlockHeightDelta,
+    /// Limit the time of adding transactions to a chunk.
+    /// A node produces a chunk by adding transactions from the transaction pool until
+    /// some limit is reached. This time limit ensures that adding transactions won't take
+    /// longer than the specified duration, which helps to produce the chunk quickly.
+    pub produce_chunk_add_transactions_time_limit: MutableConfigValue<Option<Duration>>,
 }
 
 impl ClientConfig {
@@ -376,7 +469,15 @@ impl ClientConfig {
             state_sync: StateSyncConfig::default(),
             transaction_pool_size_limit: None,
             enable_multiline_logging: false,
-            state_split_config: StateSplitConfig::default(),
+            state_split_config: MutableConfigValue::new(
+                StateSplitConfig::default(),
+                "state_split_config",
+            ),
+            tx_routing_height_horizon: 4,
+            produce_chunk_add_transactions_time_limit: MutableConfigValue::new(
+                default_produce_chunk_add_transactions_time_limit(),
+                "produce_chunk_add_transactions_time_limit",
+            ),
         }
     }
 }

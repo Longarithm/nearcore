@@ -51,13 +51,13 @@ pub fn initialize_genesis_state(store: Store, genesis: &Genesis, home_dir: Optio
         store_update.commit().expect("Store failed on genesis intialization");
     }
 
-    let genesis_config = &genesis.config;
+    let num_shards = genesis.config.shard_layout.shard_ids().count() as NumShards;
     assert_eq!(
-        genesis_config.shard_layout.num_shards(),
-        genesis_config.num_block_producer_seats_per_shard.len() as NumShards,
+        num_shards,
+        genesis.config.num_block_producer_seats_per_shard.len() as NumShards,
         "genesis config shard_layout and num_block_producer_seats_per_shard indicate inconsistent number of shards {} vs {}",
-        genesis_config.shard_layout.num_shards(),
-        genesis_config.num_block_producer_seats_per_shard.len() as NumShards,
+        num_shards,
+        genesis.config.num_block_producer_seats_per_shard.len() as NumShards,
     );
 }
 
@@ -99,9 +99,9 @@ fn genesis_state_from_genesis(store: Store, genesis: &Genesis) -> Vec<StateRoot>
     let storage_usage_config = &runtime_config.fees.storage_usage_config;
     let initial_epoch_config = EpochConfig::from(&genesis.config);
     let shard_layout = initial_epoch_config.shard_layout;
-    let num_shards = shard_layout.num_shards();
+    let shard_ids: Vec<_> = shard_layout.shard_ids().collect();
     let mut shard_account_ids: Vec<HashSet<AccountId>> =
-        (0..num_shards).map(|_| HashSet::new()).collect();
+        shard_ids.iter().map(|_| HashSet::new()).collect();
     let mut has_protocol_account = false;
     info!(target: "store","distributing records to shards");
 
@@ -118,13 +118,13 @@ fn genesis_state_from_genesis(store: Store, genesis: &Genesis) -> Vec<StateRoot>
     let tries = ShardTries::new(
         store.clone(),
         TrieConfig::default(),
-        &genesis.config.shard_layout.get_shard_uids(),
+        &genesis.config.shard_layout.shard_uids().collect::<Vec<_>>(),
         FlatStorageManager::new(store),
         StateSnapshotConfig::default(),
     );
 
     let writers = std::sync::atomic::AtomicUsize::new(0);
-    (0..num_shards)
+    shard_ids
         .into_par_iter()
         .map(|shard_id| {
             let validators = genesis

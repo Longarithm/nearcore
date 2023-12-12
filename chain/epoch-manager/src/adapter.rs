@@ -15,7 +15,7 @@ use near_primitives::shard_layout::{account_id_to_shard_id, ShardLayout, ShardLa
 use near_primitives::sharding::{ChunkHash, ShardChunkHeader};
 use near_primitives::types::validator_stake::ValidatorStake;
 use near_primitives::types::{
-    AccountId, ApprovalStake, Balance, BlockHeight, EpochHeight, EpochId, NumShards, ShardId,
+    AccountId, ApprovalStake, Balance, BlockHeight, EpochHeight, EpochId, ShardId,
     ValidatorInfoIdentifier,
 };
 use near_primitives::version::ProtocolVersion;
@@ -34,8 +34,8 @@ pub trait EpochManagerAdapter: Send + Sync {
     /// Check if epoch exists.
     fn epoch_exists(&self, epoch_id: &EpochId) -> bool;
 
-    /// Get current number of shards.
-    fn num_shards(&self, epoch_id: &EpochId) -> Result<NumShards, EpochError>;
+    /// Get the list of shard ids
+    fn shard_ids(&self, epoch_id: &EpochId) -> Result<Vec<ShardId>, EpochError>;
 
     /// Number of Reed-Solomon parts we split each chunk into.
     ///
@@ -407,9 +407,9 @@ impl EpochManagerAdapter for EpochManagerHandle {
         epoch_manager.get_epoch_info(epoch_id).is_ok()
     }
 
-    fn num_shards(&self, epoch_id: &EpochId) -> Result<NumShards, EpochError> {
+    fn shard_ids(&self, epoch_id: &EpochId) -> Result<Vec<ShardId>, EpochError> {
         let epoch_manager = self.read();
-        Ok(epoch_manager.get_shard_layout(epoch_id)?.num_shards())
+        Ok(epoch_manager.get_shard_layout(epoch_id)?.shard_ids().collect())
     }
 
     fn num_total_parts(&self) -> usize {
@@ -537,8 +537,9 @@ impl EpochManagerAdapter for EpochManagerHandle {
                     .into_iter()
                     .map(|shard_id| {
                         shard_layout.get_parent_shard_id(shard_id).map(|parent_shard_id|{
-                            assert!(parent_shard_id < prev_shard_layout.num_shards(),
-                                    "invalid shard layout {:?}: parent shard {} does not exist in last shard layout",
+                            assert!(prev_shard_layout.shard_ids().any(|i| i == parent_shard_id),
+                                    "invalid shard layout.  parent_shard_id: {}\nshard_layout: {:?}\nprev_shard_layout: {:?}",
+                                    parent_shard_id,
                                     shard_layout,
                                     parent_shard_id
                             );
