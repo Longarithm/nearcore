@@ -4453,7 +4453,7 @@ impl Chain {
             }
         };
 
-        Ok((Arc::new(current_chunk_extra), outgoing_receipts))
+        Ok(Some((Arc::new(current_chunk_extra), outgoing_receipts)))
     }
 
     /// Function to create a new snapshot if needed
