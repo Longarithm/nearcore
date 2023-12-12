@@ -3938,19 +3938,6 @@ impl Chain {
             // only for a single shard. This so far has been enough.
             let state_patch = state_patch.take();
 
-            let stateful_job = self.get_update_shard_job(
-                me,
-                block,
-                prev_block,
-                chunk_header,
-                prev_chunk_header,
-                shard_id as ShardId,
-                mode,
-                incoming_receipts,
-                state_patch,
-            );
-            maybe_jobs.push((shard_id, stateful_job));
-
             let protocol_version =
                 self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
             if checked_feature!("stable", ChunkValidation, protocol_version) {
@@ -3964,6 +3951,19 @@ impl Chain {
                     mode,
                 );
                 maybe_jobs.push((shard_id, stateless_job));
+            } else {
+                let stateful_job = self.get_update_shard_job(
+                    me,
+                    block,
+                    prev_block,
+                    chunk_header,
+                    prev_chunk_header,
+                    shard_id as ShardId,
+                    mode,
+                    incoming_receipts,
+                    state_patch,
+                );
+                maybe_jobs.push((shard_id, stateful_job));
             }
         }
 
