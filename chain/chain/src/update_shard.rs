@@ -53,7 +53,8 @@ pub enum ShardUpdateResult {
     /// Stateless scenario - processed update based on state witness in a chunk.
     /// Contains `ChunkExtra`s - results for processing updates corresponding
     /// to state witness.
-    Stateless(Vec<(CryptoHash, ShardUId, ChunkExtra)>),
+    // Stateless(Vec<(CryptoHash, ShardUId, ChunkExtra)>),
+    Stateless(Vec<(CryptoHash, OldChunkResult)>, (CryptoHash, NewChunkResult)),
 }
 
 /// Result for a shard update for a single block.
