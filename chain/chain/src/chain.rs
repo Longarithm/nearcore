@@ -4221,6 +4221,7 @@ impl Chain {
         let prev_chunk_height_included = prev_chunk_header.height_included();
         let prev_chunk_prev_hash = *prev_chunk_header.prev_block_hash();
 
+        println!("{}", prev_chunk_height_included);
         // If previous chunk is genesis chunk, its execution is trivial.
         // TODO(logunov): check that state witness is empty.
         if prev_chunk_prev_hash == CryptoHash::default() {
