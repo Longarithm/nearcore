@@ -4343,6 +4343,8 @@ impl Chain {
                         shard_context,
                     )?;
                     if let ShardBlockUpdateResult::OldChunk(old_chunk_result) = block_result {
+                        *current_chunk_extra.state_root_mut() =
+                            old_chunk_result.apply_result.new_root;
                         old_results.push((block_context.block_hash, old_chunk_result));
                     }
                 }
