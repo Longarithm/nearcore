@@ -4390,6 +4390,7 @@ impl Chain {
         block: &Block,
         shard_id: usize,
     ) -> Result<(Arc<ChunkExtra>, Vec<Receipt>), Error> {
+        println!("APPLY BEFORE PROD {} {}", block.header().height(), block.header().hash());
         let _span =
             tracing::debug_span!(target: "chain", "apply_chunk_from_block_before_production")
                 .entered();
