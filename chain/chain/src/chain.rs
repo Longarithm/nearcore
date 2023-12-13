@@ -4531,6 +4531,7 @@ impl Chain {
                     "OLD CHUNK STATE CHANGES SIZE = {}",
                     old_chunk_result.apply_result.trie_changes.state_changes().len()
                 );
+
                 let mut su = self.store.store().store_update();
                 old_chunk_result.apply_result.trie_changes.insertions_into(&mut su);
                 *current_chunk_extra.state_root_mut() = old_chunk_result.apply_result.new_root;
