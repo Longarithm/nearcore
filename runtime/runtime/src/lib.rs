@@ -1455,6 +1455,7 @@ impl Runtime {
 
         state_update.commit(StateChangeCause::UpdatedDelayedReceipts);
         self.apply_state_patch(&mut state_update, state_patch);
+        println!("RUNTIME APPLY - FINALIZE {}", apply_state.block_height);
         let (trie, trie_changes, state_changes) = state_update.finalize()?;
 
         // Dedup proposals from the same account.
@@ -1471,6 +1472,7 @@ impl Runtime {
 
         let state_root = trie_changes.new_root;
         let proof = trie.recorded_storage();
+        println!("RUNTIME APPLY - END {}", apply_state.block_height);
         Ok(ApplyResult {
             state_root,
             trie_changes,
