@@ -22,6 +22,7 @@ use near_primitives::utils::MaybeValidated;
 use near_primitives::version::ProtocolFeature;
 use near_primitives::version::PROTOCOL_VERSION;
 use near_primitives::views::{ExecutionStatusView, FinalExecutionStatus, QueryRequest};
+use near_primitives_core::checked_feature;
 use near_primitives_core::num_rational::Rational32;
 use near_store::flat::FlatStorageStatus;
 use near_store::test_utils::{gen_account, gen_unique_accounts};
@@ -790,6 +791,17 @@ fn check_outgoing_receipts_reassigned_impl(
 /// This function checks both state_root from chunk extra and state root from chunk header, if
 /// the corresponding chunk is included in the block
 fn check_account(env: &TestEnv, account_id: &AccountId, block: &Block) {
+    let prev_hash = block.header().prev_hash();
+    if prev_hash == &CryptoHash::default() {
+        return;
+    }
+    let prev_block = env.clients[0].chain.get_block(prev_hash).unwrap();
+    let block = if checked_feature!("stable", ChunkValidation, PROTOCOL_VERSION) {
+        &prev_block
+    } else {
+        block
+    };
+
     tracing::trace!(target: "test", ?account_id, block_height=block.header().height(), "checking account");
     let prev_hash = block.header().prev_hash();
     let shard_layout =
