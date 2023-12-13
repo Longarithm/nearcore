@@ -140,6 +140,7 @@ impl TrieUpdate {
                     .data
                     .clone();
                 state_changes.push(changes_with_trie_key);
+                println!("STATE CHANGE: {:?} {:?}", k, data);
                 (k, data)
             }))?;
         Ok((trie, trie_changes, state_changes))
