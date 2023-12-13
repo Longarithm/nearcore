@@ -62,7 +62,7 @@ use near_primitives::merkle::{
 use near_primitives::receipt::Receipt;
 use near_primitives::sandbox::state_patch::SandboxStatePatch;
 use near_primitives::shard_layout::{
-    account_id_to_shard_id, account_id_to_shard_uid, ShardLayout, ShardUId,
+    account_id_to_shard_id, account_id_to_shard_uid, get_block_shard_uid, ShardLayout, ShardUId,
 };
 use near_primitives::sharding::{
     ChunkHash, ChunkHashHeight, EncodedShardChunk, ReceiptList, ReceiptProof, ShardChunk,
@@ -4448,10 +4448,11 @@ impl Chain {
             }
             chain_update.commit()?;
 
-            if let ShardUpdateResult::Stateless(_, (_, outer_apply_result)) = shard_update_result {
+            if let ShardUpdateResult::Stateless(_, (block_hash, outer_apply_result)) =
+                shard_update_result
+            {
                 let mut su = self.store.store().store_update();
                 outer_apply_result.apply_result.trie_changes.insertions_into(&mut su);
-                su.commit()?;
 
                 let gas_limit = outer_apply_result.gas_limit;
                 let apply_result = outer_apply_result.apply_result;
@@ -4467,6 +4468,13 @@ impl Chain {
                     gas_limit,
                     apply_result.total_balance_burnt,
                 );
+                su.set_ser(
+                    DBCol::ChunkExtra,
+                    &get_block_shard_uid(block_hash, apply_result.trie_changes.shard_uid),
+                    chunk_extra,
+                )?;
+                su.commit()?;
+
                 (chunk_extra, apply_result.outgoing_receipts)
             } else {
                 return Err(Error::Other(String::from("stateful???")));
