@@ -285,6 +285,7 @@ impl ShardTries {
         let mut buffer = itoa::Buffer::new();
         let shard_id = buffer.format(shard_uid.shard_id);
 
+        println!("OLD CHUNK TRIE INSERTIONS SIZE = {}", trie_changes.insertions.len());
         metrics::APPLIED_TRIE_INSERTIONS
             .with_label_values(&[&shard_id])
             .inc_by(trie_changes.insertions.len() as u64);
