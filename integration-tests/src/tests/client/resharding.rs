@@ -815,7 +815,14 @@ fn check_account(env: &TestEnv, account_id: &AccountId, block: &Block) {
         if !care_about_shard {
             continue;
         }
-        let chunk_extra = &client.chain.get_chunk_extra(block.hash(), &shard_uid).unwrap();
+        let chunk_prev_block_hash =
+            block.chunks().get(shard_id as usize).unwrap().prev_block_hash().clone();
+        if chunk_prev_block_hash == CryptoHash::default() {
+            continue;
+        }
+        let chunk_prev_block = env.clients[i].chain.get_block(&chunk_prev_block_hash).unwrap();
+        let chunk_extra =
+            &client.chain.get_chunk_extra(chunk_prev_block.hash(), &shard_uid).unwrap();
         let state_root = *chunk_extra.state_root();
         client
             .runtime_adapter
