@@ -2726,6 +2726,8 @@ fn test_delayed_receipt_count_limit() {
 
 #[test]
 fn test_execution_metadata() {
+    init_test_logger();
+
     // Prepare TestEnv with a very simple WASM contract.
     let wasm_code = wat::parse_str(
         r#"
