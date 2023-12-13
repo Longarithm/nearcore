@@ -4353,7 +4353,7 @@ impl Chain {
                         shard_context,
                     )?;
                     if let ShardBlockUpdateResult::OldChunk(old_chunk_result) = block_result {
-                        eprintln!(
+                        println!(
                             "OLD CHUNK STATE CHANGES SIZE = {}",
                             old_chunk_result.apply_result.trie_changes.state_changes().len()
                         );

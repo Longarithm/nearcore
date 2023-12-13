@@ -250,6 +250,7 @@ impl ShardTries {
         for TrieRefcountAddition { trie_node_or_value_hash, trie_node_or_value, rc } in
             insertions.iter()
         {
+            println!("INSERTING {}", trie_node_or_value_hash);
             let key = TrieCachingStorage::get_key_from_shard_uid_and_hash(
                 shard_uid,
                 trie_node_or_value_hash,
