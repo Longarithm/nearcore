@@ -4452,7 +4452,7 @@ impl Chain {
                 shard_update_result
             {
                 let mut su = self.store.store().store_update();
-                outer_apply_result.apply_result.trie_changes.insertions_into(&mut su);
+                // outer_apply_result.apply_result.trie_changes.insertions_into(&mut su);
 
                 let gas_limit = outer_apply_result.gas_limit;
                 let apply_result = outer_apply_result.apply_result;
