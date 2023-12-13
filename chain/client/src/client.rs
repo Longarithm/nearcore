@@ -863,6 +863,7 @@ impl Client {
                 (chunk_extra, outgoing_receipts)
             };
 
+        println!("APPLIED PREV BLOCK");
         let prev_block_header = self.chain.get_block_header(&prev_block_hash)?;
         let transactions = self.prepare_transactions(
             shard_uid,
@@ -870,6 +871,8 @@ impl Client {
             *chunk_extra.state_root(),
             &prev_block_header,
         )?;
+        println!("PREPARE TXS");
+
         #[cfg(feature = "test_features")]
         let transactions = Self::maybe_insert_invalid_transaction(
             transactions,
@@ -884,6 +887,7 @@ impl Client {
         let gas_used = chunk_extra.gas_used();
         #[cfg(feature = "test_features")]
         let gas_used = if self.produce_invalid_chunks { gas_used + 1 } else { gas_used };
+        println!("CREATING CHUNK");
         let (encoded_chunk, merkle_paths) = ShardsManager::create_encoded_shard_chunk(
             prev_block_hash,
             *chunk_extra.state_root(),
