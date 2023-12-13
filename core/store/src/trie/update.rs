@@ -143,6 +143,7 @@ impl TrieUpdate {
                 println!("STATE CHANGE: {:?} {:?}", k, data);
                 (k, data)
             }))?;
+        println!("TRIE CHANGES LEN: {}", trie_changes.insertions.len());
         Ok((trie, trie_changes, state_changes))
     }
 
