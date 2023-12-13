@@ -4328,6 +4328,10 @@ impl Chain {
         };
         let (last_block_context, last_shard_context) = execution_contexts.pop().unwrap();
         let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
+
+        // TEMPORARY HACK
+        let store = self.store.store().clone();
+
         Ok(Some((
             shard_id,
             Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
@@ -4353,6 +4357,10 @@ impl Chain {
                             "OLD CHUNK STATE CHANGES SIZE = {}",
                             old_chunk_result.apply_result.trie_changes.state_changes().len()
                         );
+                        let mut su = store.store_update();
+                        old_chunk_result.apply_result.trie_changes.insertions_into(&mut su);
+                        su.commit()?;
+
                         *current_chunk_extra.state_root_mut() =
                             old_chunk_result.apply_result.new_root;
                         old_results.push((block_context.block_hash, old_chunk_result));
