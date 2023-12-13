@@ -4349,6 +4349,10 @@ impl Chain {
                         shard_context,
                     )?;
                     if let ShardBlockUpdateResult::OldChunk(old_chunk_result) = block_result {
+                        eprintln!(
+                            "OLD CHUNK STATE CHANGES SIZE = {}",
+                            old_chunk_result.apply_result.trie_changes.state_changes().len()
+                        );
                         *current_chunk_extra.state_root_mut() =
                             old_chunk_result.apply_result.new_root;
                         old_results.push((block_context.block_hash, old_chunk_result));
@@ -4388,15 +4392,19 @@ impl Chain {
     pub fn apply_chunk_from_block_before_production(
         &mut self,
         me: &Option<AccountId>,
-        block: &Block,
+        prev_block: &Block,
         shard_id: usize,
     ) -> Result<(Arc<ChunkExtra>, Vec<Receipt>), Error> {
-        println!("APPLY BEFORE PROD {} {}", block.header().height(), block.header().hash());
+        println!(
+            "APPLY BEFORE PROD {} {}",
+            prev_block.header().height(),
+            prev_block.header().hash()
+        );
         let _span =
             tracing::debug_span!(target: "chain", "apply_chunk_from_block_before_production")
                 .entered();
 
-        let prev_chunk_header = &block.chunks()[shard_id];
+        let prev_chunk_header = &prev_block.chunks()[shard_id];
         let prev_chunk_prev_hash = *prev_chunk_header.prev_block_hash();
 
         let (current_chunk_extra, outgoing_receipts) = if prev_chunk_prev_hash
@@ -4410,7 +4418,7 @@ impl Chain {
             let maybe_job = self.get_stateless_validation_job(
                 me,
                 None,
-                block,
+                prev_block,
                 &prev_chunk_header,
                 shard_id as ShardId,
                 ApplyChunksMode::IsCaughtUp, // if I am producer, this is the case, right?
@@ -4424,7 +4432,7 @@ impl Chain {
 
             let mut chain_update = self.chain_update();
             let receipts_map =
-                chain_update.get_receipt_id_to_shard_id(block.hash(), shard_id as u64)?;
+                chain_update.get_receipt_id_to_shard_id(prev_block.hash(), shard_id as u64)?;
             for (receipt_id, to_shard_id) in receipts_map.into_iter() {
                 chain_update
                     .chain_store_update
