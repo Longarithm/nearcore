@@ -871,7 +871,7 @@ impl Client {
             *chunk_extra.state_root(),
             &prev_block_header,
         )?;
-        println!("PREPARE TXS");
+        println!("PREPARED TXS");
 
         #[cfg(feature = "test_features")]
         let transactions = Self::maybe_insert_invalid_transaction(
@@ -2175,7 +2175,8 @@ impl Client {
             let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
             let state_root = match self.chain.get_chunk_extra(&head.last_block_hash, &shard_uid) {
                 Ok(chunk_extra) => *chunk_extra.state_root(),
-                Err(_) => {
+                Err(e) => {
+                    println!("ERROR FOR TX {}: {}", tx.get_hash(), e);
                     // Not being able to fetch a state root most likely implies that we haven't
                     //     caught up with the next epoch yet.
                     if is_forwarded {
