@@ -459,6 +459,7 @@ impl NightshadeRuntime {
             })?;
 
         let shard_uid = self.get_shard_uid_from_prev_hash(shard_id, prev_block_hash)?;
+        println!("GOT STATE UPDATE {}", apply_state.block_height);
 
         let result = ApplyTransactionResult {
             trie_changes: WrappedTrieChanges::new(

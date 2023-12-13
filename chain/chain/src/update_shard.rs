@@ -197,6 +197,7 @@ fn apply_new_chunk(
         chunk.transactions(),
     ) {
         Ok(apply_result) => {
+            println!("GOT APPLY RESULT {}", block.height);
             let apply_split_result_or_state_changes = if shard_context.will_shard_layout_change {
                 Some(apply_split_state_changes(
                     epoch_manager,
