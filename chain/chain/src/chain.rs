@@ -4470,8 +4470,8 @@ impl Chain {
                 );
                 su.set_ser(
                     DBCol::ChunkExtra,
-                    &get_block_shard_uid(block_hash, apply_result.trie_changes.shard_uid),
-                    chunk_extra,
+                    &get_block_shard_uid(&block_hash, &apply_result.trie_changes.shard_uid),
+                    &chunk_extra,
                 )?;
                 su.commit()?;
 
