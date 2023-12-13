@@ -4330,7 +4330,7 @@ impl Chain {
         let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
 
         // TEMPORARY HACK
-        let store = self.store.store().clone();
+        // let store = self.store.store().clone();
 
         Ok(Some((
             shard_id,
