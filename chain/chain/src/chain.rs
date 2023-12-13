@@ -4408,14 +4408,14 @@ impl Chain {
             prev_block.header().height(),
             prev_block.header().hash()
         );
-        let _span =
+        let parent_span =
             tracing::debug_span!(target: "chain", "apply_chunk_from_block_before_production")
                 .entered();
 
         let prev_chunk_header = &prev_block.chunks()[shard_id];
         let prev_chunk_prev_hash = *prev_chunk_header.prev_block_hash();
 
-        let (current_chunk_extra, outgoing_receipts) = if prev_chunk_prev_hash
+        let (mut current_chunk_extra, outgoing_receipts) = if prev_chunk_prev_hash
             == CryptoHash::default()
         {
             let block_hash = self.genesis().hash();
@@ -4436,7 +4436,7 @@ impl Chain {
                 Some(job) => job,
                 None => panic!("Something not supported"),
             };
-            let shard_update_result = job(&_span)?;
+            let shard_update_result = job(&parent_span)?;
 
             let mut chain_update = self.chain_update();
             let receipts_map =
@@ -4480,6 +4480,72 @@ impl Chain {
                 return Err(Error::Other(String::from("stateful???")));
             }
         };
+
+        let blocks_to_execute = self.get_blocks_until_height(
+            *prev_block.hash(),
+            prev_chunk_header.height_included(),
+            false,
+        )?;
+        let mut execution_contexts: Vec<(ApplyTransactionsBlockContext, ShardContext)> = vec![];
+        for block_hash in blocks_to_execute {
+            let block_header = self.get_block_header(&block_hash)?;
+            let prev_block_header = self.get_previous_header(&block_header)?;
+            let shard_context = self.get_shard_context(
+                me,
+                prev_block_header.hash(),
+                shard_id as ShardId,
+                ApplyChunksMode::IsCaughtUp,
+            )?;
+            if shard_context.need_to_split_states {
+                return Err(Error::Other(String::from("resharding")));
+            }
+            execution_contexts.push((
+                self.get_apply_transactions_block_context(
+                    &block_header,
+                    &prev_block_header,
+                    false,
+                )?,
+                shard_context,
+            ));
+        }
+        execution_contexts.reverse();
+
+        for (block_context, shard_context) in execution_contexts {
+            let block_result = process_shard_update(
+                &parent_span,
+                self.runtime_adapter.as_ref(),
+                self.epoch_manager.as_ref(),
+                ShardUpdateReason::OldChunk(OldChunkData {
+                    block: block_context.clone(),
+                    split_state_roots: None,
+                    prev_chunk_extra: current_chunk_extra.clone(),
+                    storage_context: StorageContext {
+                        storage_data_source: StorageDataSource::DbTrieOnly,
+                        state_patch: Default::default(),
+                    },
+                }),
+                shard_context,
+            )?;
+            if let ShardBlockUpdateResult::OldChunk(old_chunk_result) = block_result {
+                println!(
+                    "OLD CHUNK STATE CHANGES SIZE = {}",
+                    old_chunk_result.apply_result.trie_changes.state_changes().len()
+                );
+                let mut su = self.store.store().store_update();
+                old_chunk_result.apply_result.trie_changes.insertions_into(&mut su);
+                *current_chunk_extra.state_root_mut() = old_chunk_result.apply_result.new_root;
+                su.set_ser(
+                    DBCol::ChunkExtra,
+                    &get_block_shard_uid(
+                        &block_context.block_hash,
+                        &old_chunk_result.apply_result.trie_changes.shard_uid,
+                    ),
+                    &current_chunk_extra,
+                )?;
+
+                su.commit()?;
+            }
+        }
 
         Ok((Arc::new(current_chunk_extra), outgoing_receipts))
     }
