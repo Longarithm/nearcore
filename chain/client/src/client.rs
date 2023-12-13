@@ -2173,10 +2173,19 @@ impl Client {
         // account shard id from the next epoch, in case shard layout changes
         if care_about_shard || will_care_about_shard {
             let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
-            let state_root = match self.chain.get_chunk_extra(&head.last_block_hash, &shard_uid) {
-                Ok(chunk_extra) => *chunk_extra.state_root(),
-                Err(e) => {
-                    println!("ERROR FOR TX {}: {}", tx.get_hash(), e);
+            let mut i = 0;
+            let block_hashes = [head.last_block_hash, head.prev_block_hash];
+            let state_root = loop {
+                let block_hash = &block_hashes[i];
+                match self.chain.get_chunk_extra(block_hash, &shard_uid) {
+                    Ok(chunk_extra) => break *chunk_extra.state_root(),
+                    Err(e) => {
+                        println!("ERROR FOR TX {}: {}", tx.get_hash(), e);
+                    }
+                }
+
+                i += 1;
+                if i == 2 {
                     // Not being able to fetch a state root most likely implies that we haven't
                     //     caught up with the next epoch yet.
                     if is_forwarded {
