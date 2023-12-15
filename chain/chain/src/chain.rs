@@ -4328,9 +4328,7 @@ impl Chain {
         };
         let (last_block_context, last_shard_context) = execution_contexts.pop().unwrap();
         let prev_chunk = self.get_chunk_clone_from_header(&prev_chunk_header.clone())?;
-
-        // TEMPORARY HACK
-        // let store = self.store.store().clone();
+        let store = self.store.store().clone();
 
         Ok(Some((
             shard_id,
@@ -4357,9 +4355,12 @@ impl Chain {
                             "OLD CHUNK STATE CHANGES SIZE = {}",
                             old_chunk_result.apply_result.trie_changes.state_changes().len()
                         );
-                        // let mut su = store.store_update();
-                        // old_chunk_result.apply_result.trie_changes.insertions_into(&mut su);
-                        // su.commit()?;
+                        // This awful stuff is needed to use new state for new execution.
+                        let mut su = store.store_update();
+                        old_chunk_result.apply_result.trie_changes.insertions_into(&mut su);
+                        su.commit()?;
+                        let tries = runtime.get_tries();
+                        old_chunk_result.apply_result.trie_changes.apply_mem_changes();
 
                         *current_chunk_extra.state_root_mut() =
                             old_chunk_result.apply_result.new_root;
