@@ -488,7 +488,7 @@ impl WrappedTrieChanges {
 
     /// Save insertions of trie nodes into Store.
     pub fn insertions_into(&self, store_update: &mut StoreUpdate) {
-        println!("APPLY INSERTIONS {}", self.block_height);
+        println!("APPLY INSERTIONS {} {}", self.shard_uid.shard_id, self.block_height);
         self.tries.apply_insertions(&self.trie_changes, self.shard_uid, store_update)
     }
 
