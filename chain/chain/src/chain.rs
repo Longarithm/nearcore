@@ -4537,8 +4537,11 @@ impl Chain {
                     old_chunk_result.apply_result.trie_changes.state_changes().len()
                 );
 
-                let mut su = self.store.store().store_update();
+                let store = self.store.store();
+                let mut su = store.store_update();
                 old_chunk_result.apply_result.trie_changes.insertions_into(&mut su);
+                old_chunk_result.apply_result.trie_changes.apply_mem_changes();
+
                 *current_chunk_extra.state_root_mut() = old_chunk_result.apply_result.new_root;
                 su.set_ser(
                     DBCol::ChunkExtra,
