@@ -839,7 +839,7 @@ impl Client {
         let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
         let prev_block_hash = *prev_block.hash();
         let protocol_version = self.epoch_manager.get_epoch_protocol_version(epoch_id)?;
-        let (chunk_extra, outgoing_receipts) =
+        let (chunk_extra, outgoing_receipts, trie_changes) =
             if checked_feature!("stable", ChunkValidation, protocol_version) {
                 let me = match &self.validator_signer {
                     Some(validator_signer) => Some(validator_signer.validator_id().clone()),
@@ -860,7 +860,7 @@ impl Client {
                     shard_id,
                     last_header.height_included(),
                 )?;
-                (chunk_extra, outgoing_receipts)
+                (chunk_extra, outgoing_receipts, vec![])
             };
 
         println!("APPLIED PREV BLOCK");
@@ -872,6 +872,13 @@ impl Client {
             &prev_block_header,
         )?;
         println!("PREPARED TXS");
+
+        let tries = self.runtime_adapter.get_tries();
+        let mut su = tries.store_update();
+        for t in trie_changes {
+            tries.revert_insertions(&t.trie_changes, t.shard_uid, &mut su);
+        }
+        su.commit()?;
 
         #[cfg(feature = "test_features")]
         let transactions = Self::maybe_insert_invalid_transaction(

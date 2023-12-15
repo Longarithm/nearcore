@@ -92,7 +92,7 @@ use near_primitives::views::{
 };
 use near_store::config::StateSnapshotType;
 use near_store::flat::{store_helper, FlatStorageReadyStatus, FlatStorageStatus};
-use near_store::get_genesis_state_roots;
+use near_store::{get_genesis_state_roots, WrappedTrieChanges};
 use near_store::{DBCol, ShardTries};
 use once_cell::sync::OnceCell;
 use rand::seq::SliceRandom;
@@ -4407,7 +4407,7 @@ impl Chain {
         me: &Option<AccountId>,
         prev_block: &Block,
         shard_id: usize,
-    ) -> Result<(Arc<ChunkExtra>, Vec<Receipt>), Error> {
+    ) -> Result<(Arc<ChunkExtra>, Vec<Receipt>, Vec<WrappedTrieChanges>), Error> {
         println!(
             "APPLY BEFORE PROD {} {}",
             prev_block.header().height(),
@@ -4426,7 +4426,11 @@ impl Chain {
             let block_hash = self.genesis().hash();
             let epoch_id = self.genesis().epoch_id();
             let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id as ShardId, epoch_id)?;
-            (ChunkExtra::clone(self.get_chunk_extra(block_hash, &shard_uid)?.as_ref()), vec![])
+            (
+                ChunkExtra::clone(self.get_chunk_extra(block_hash, &shard_uid)?.as_ref()),
+                vec![],
+                vec![],
+            )
         } else {
             let maybe_job = self.get_stateless_validation_job(
                 me,
@@ -4515,6 +4519,7 @@ impl Chain {
         }
         execution_contexts.reverse();
 
+        let mut trie_changes = vec![];
         for (block_context, shard_context) in execution_contexts {
             let block_result = process_shard_update(
                 &parent_span,
@@ -4541,6 +4546,7 @@ impl Chain {
                 let mut su = store.store_update();
                 old_chunk_result.apply_result.trie_changes.insertions_into(&mut su);
                 old_chunk_result.apply_result.trie_changes.apply_mem_changes();
+                trie_changes.push(old_chunk_result.apply_result.trie_changes);
 
                 *current_chunk_extra.state_root_mut() = old_chunk_result.apply_result.new_root;
                 su.set_ser(
@@ -4556,7 +4562,7 @@ impl Chain {
             }
         }
 
-        Ok((Arc::new(current_chunk_extra), outgoing_receipts))
+        Ok((Arc::new(current_chunk_extra), outgoing_receipts, trie_changes))
     }
 
     /// Function to create a new snapshot if needed
