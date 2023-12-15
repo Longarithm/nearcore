@@ -878,7 +878,7 @@ impl Client {
         for t in trie_changes {
             tries.revert_insertions(&t.trie_changes, t.shard_uid, &mut su);
         }
-        su.commit()?;
+        su.commit().unwrap();
 
         #[cfg(feature = "test_features")]
         let transactions = Self::maybe_insert_invalid_transaction(
