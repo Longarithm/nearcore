@@ -4358,9 +4358,8 @@ impl Chain {
                         // This awful stuff is needed to use new state for new execution.
                         let mut su = store.store_update();
                         old_chunk_result.apply_result.trie_changes.insertions_into(&mut su);
-                        su.commit()?;
-                        let tries = runtime.get_tries();
                         old_chunk_result.apply_result.trie_changes.apply_mem_changes();
+                        su.commit()?;
 
                         *current_chunk_extra.state_root_mut() =
                             old_chunk_result.apply_result.new_root;
