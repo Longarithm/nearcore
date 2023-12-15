@@ -4420,13 +4420,17 @@ impl Chain {
         let prev_chunk_header = &prev_block.chunks()[shard_id];
         let prev_chunk_prev_hash = *prev_chunk_header.prev_block_hash();
 
-        let (mut current_chunk_extra, outgoing_receipts) = if prev_chunk_prev_hash
+        let (mut current_chunk_extra, outgoing_receipts, mut trie_changes) = if prev_chunk_prev_hash
             == CryptoHash::default()
         {
             let block_hash = self.genesis().hash();
             let epoch_id = self.genesis().epoch_id();
             let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id as ShardId, epoch_id)?;
-            (ChunkExtra::clone(self.get_chunk_extra(block_hash, &shard_uid)?.as_ref()), vec![])
+            (
+                ChunkExtra::clone(self.get_chunk_extra(block_hash, &shard_uid)?.as_ref()),
+                vec![],
+                vec![],
+            )
         } else {
             let maybe_job = self.get_stateless_validation_job(
                 me,
@@ -4453,9 +4457,15 @@ impl Chain {
             }
             chain_update.commit()?;
 
-            if let ShardUpdateResult::Stateless(_, (block_hash, outer_apply_result)) =
-                shard_update_result
+            let mut trie_changes = vec![];
+            if let ShardUpdateResult::Stateless(
+                old_apply_results,
+                (block_hash, outer_apply_result),
+            ) = shard_update_result
             {
+                for (_, t) in old_apply_results {
+                    trie_changes.push(t.apply_result.trie_changes);
+                }
                 let mut su = self.store.store().store_update();
                 // outer_apply_result.apply_result.trie_changes.insertions_into(&mut su);
 
@@ -4480,7 +4490,7 @@ impl Chain {
                 )?;
                 su.commit()?;
 
-                (chunk_extra, apply_result.outgoing_receipts)
+                (chunk_extra, apply_result.outgoing_receipts, trie_changes)
             } else {
                 return Err(Error::Other(String::from("stateful???")));
             }
@@ -4515,7 +4525,6 @@ impl Chain {
         }
         execution_contexts.reverse();
 
-        let mut trie_changes = vec![];
         for (block_context, shard_context) in execution_contexts {
             let block_result = process_shard_update(
                 &parent_span,
