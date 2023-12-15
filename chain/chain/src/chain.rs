@@ -4489,6 +4489,7 @@ impl Chain {
                     &chunk_extra,
                 )?;
                 su.commit()?;
+                trie_changes.push(apply_result.trie_changes);
 
                 (chunk_extra, apply_result.outgoing_receipts, trie_changes)
             } else {
