@@ -4386,6 +4386,11 @@ impl Chain {
                     last_shard_context,
                 )?;
                 if let ShardBlockUpdateResult::NewChunk(new_chunk_result) = block_result {
+                    // This awful stuff is needed to use new state for new execution.
+                    let mut su = store.store_update();
+                    new_chunk_result.apply_result.trie_changes.insertions_into(&mut su);
+                    new_chunk_result.apply_result.trie_changes.apply_mem_changes();
+                    su.commit()?;
                     Ok(ShardUpdateResult::Stateless(
                         old_results,
                         (last_block_context.block_hash, new_chunk_result),
