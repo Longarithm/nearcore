@@ -18,6 +18,7 @@ use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{
     BlockHeight, RawStateChange, RawStateChangesWithTrieKey, StateChangeCause, StateRoot,
 };
+use near_vm_runner::logic::ProtocolVersion;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -438,6 +439,7 @@ pub struct WrappedTrieChanges {
     state_changes: Vec<RawStateChangesWithTrieKey>,
     block_hash: CryptoHash,
     block_height: BlockHeight,
+    pub protocol_version: ProtocolVersion,
 }
 
 // Partial implementation. Skips `tries` due to its complexity and
@@ -463,6 +465,7 @@ impl WrappedTrieChanges {
         state_changes: Vec<RawStateChangesWithTrieKey>,
         block_hash: CryptoHash,
         block_height: BlockHeight,
+        protocol_version: ProtocolVersion,
     ) -> Self {
         WrappedTrieChanges {
             tries,
@@ -471,6 +474,7 @@ impl WrappedTrieChanges {
             state_changes,
             block_hash,
             block_height,
+            protocol_version,
         }
     }
 

@@ -191,6 +191,7 @@ fn apply_state_changes(
                 state_changes,
                 *block_hash,
                 block_height,
+                0,
             );
             let mut store_update = chain_store.store_update();
             store_update.save_trie_changes(wrapped_trie_changes);

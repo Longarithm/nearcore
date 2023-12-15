@@ -1179,6 +1179,7 @@ impl RuntimeAdapter for KeyValueRuntime {
                 Default::default(),
                 block.block_hash,
                 block.height,
+                0,
             ),
             new_root: state_root,
             outcomes: tx_results,

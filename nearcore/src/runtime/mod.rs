@@ -469,6 +469,7 @@ impl NightshadeRuntime {
                 apply_result.state_changes,
                 block_hash,
                 apply_state.block_height,
+                apply_state.current_protocol_version,
             ),
             new_root: apply_result.state_root,
             outcomes: apply_result.outcomes,
@@ -1120,6 +1121,7 @@ impl RuntimeAdapter for NightshadeRuntime {
                 state_changes,
                 *block_hash,
                 block_height,
+                0,
             );
             applied_split_state_results.push(ApplySplitStateResult {
                 shard_uid,

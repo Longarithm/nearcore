@@ -12,6 +12,7 @@ use near_primitives::merkle::PartialMerkleTree;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::test_utils::{create_test_signer, TestBlockBuilder};
 use near_primitives::types::{NumBlocks, NumShards, StateRoot};
+use near_primitives::version::PROTOCOL_VERSION;
 use near_store::test_utils::{create_test_store, gen_changes};
 use near_store::{ShardTries, Trie, WrappedTrieChanges};
 use rand::Rng;
@@ -140,6 +141,7 @@ fn do_fork(
                 Default::default(),
                 *block.hash(),
                 block.header().height(),
+                0,
             );
             store_update.save_trie_changes(wrapped_trie_changes);
 

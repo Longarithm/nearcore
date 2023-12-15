@@ -3203,8 +3203,10 @@ impl<'a> ChainStoreUpdate<'a> {
         let mut deletions_store_update = self.store().store_update();
         for mut wrapped_trie_changes in self.trie_changes.drain(..) {
             // This awful stuff is needed to use new state for new execution.
-            wrapped_trie_changes.apply_mem_changes();
-            wrapped_trie_changes.insertions_into(&mut store_update);
+            if !checked_feature!("stable", ChunkValidation, wrapped_trie_changes.protocol_version) {
+                wrapped_trie_changes.apply_mem_changes();
+                wrapped_trie_changes.insertions_into(&mut store_update);
+            }
             wrapped_trie_changes.deletions_into(&mut deletions_store_update);
             wrapped_trie_changes.state_changes_into(&mut store_update);
 
