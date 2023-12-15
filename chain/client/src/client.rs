@@ -876,6 +876,7 @@ impl Client {
         let tries = self.runtime_adapter.get_tries();
         let mut su = tries.store_update();
         for t in trie_changes {
+            println!("REVERT INSERTIONS {} {}", t.shard_uid.shard_id, t.block_height);
             tries.revert_insertions(&t.trie_changes, t.shard_uid, &mut su);
         }
         su.commit().unwrap();

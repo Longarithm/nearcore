@@ -438,7 +438,7 @@ pub struct WrappedTrieChanges {
     pub trie_changes: TrieChanges,
     state_changes: Vec<RawStateChangesWithTrieKey>,
     block_hash: CryptoHash,
-    block_height: BlockHeight,
+    pub block_height: BlockHeight,
     pub protocol_version: ProtocolVersion,
 }
 
