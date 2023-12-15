@@ -4426,11 +4426,7 @@ impl Chain {
             let block_hash = self.genesis().hash();
             let epoch_id = self.genesis().epoch_id();
             let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id as ShardId, epoch_id)?;
-            (
-                ChunkExtra::clone(self.get_chunk_extra(block_hash, &shard_uid)?.as_ref()),
-                vec![],
-                vec![],
-            )
+            (ChunkExtra::clone(self.get_chunk_extra(block_hash, &shard_uid)?.as_ref()), vec![])
         } else {
             let maybe_job = self.get_stateless_validation_job(
                 me,
