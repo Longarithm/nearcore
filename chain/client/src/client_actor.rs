@@ -6,8 +6,8 @@
 //! https://github.com/near/nearcore/issues/7899
 
 use crate::adapter::{
-    BlockApproval, BlockHeadersResponse, BlockResponse, ProcessTxRequest, ProcessTxResponse,
-    RecvChallenge, SetNetworkInfo, StateResponse,
+    BlockApproval, BlockHeadersResponse, BlockResponse, ChunkStateWitnessMessage, ProcessTxRequest,
+    ProcessTxResponse, RecvChallenge, SetNetworkInfo, StateResponse,
 };
 #[cfg(feature = "test_features")]
 use crate::client::AdvProduceBlocksMode;
@@ -37,7 +37,7 @@ use near_chain::{
     byzantine_assert, near_chain_primitives, Block, BlockHeader, BlockProcessingArtifact,
     ChainGenesis, DoneApplyChunkCallback, Provenance,
 };
-use near_chain_configs::{ClientConfig, LogSummaryStyle};
+use near_chain_configs::{ClientConfig, LogSummaryStyle, StateSplitHandle};
 use near_chain_primitives::error::EpochErrorResultToChainError;
 use near_chunks::adapter::ShardsManagerRequestFromClient;
 use near_chunks::client::ShardsManagerResponse;
@@ -1978,6 +1978,22 @@ impl Handler<WithSpanContext<SyncMessage>> for ClientActor {
     }
 }
 
+impl Handler<WithSpanContext<ChunkStateWitnessMessage>> for ClientActor {
+    type Result = ();
+
+    #[perf]
+    fn handle(
+        &mut self,
+        msg: WithSpanContext<ChunkStateWitnessMessage>,
+        _: &mut Context<Self>,
+    ) -> Self::Result {
+        let (_span, msg) = handler_debug_span!(target: "client", msg);
+        if let Err(err) = self.client.process_chunk_state_witness(msg.0) {
+            tracing::error!(target: "client", ?err, "Error processing chunk state witness");
+        }
+    }
+}
+
 /// Returns random seed sampled from the current thread
 pub fn random_seed_from_thread() -> RngSeed {
     let mut rng_seed: RngSeed = [0; 32];
@@ -2002,7 +2018,7 @@ pub fn start_client(
     sender: Option<broadcast::Sender<()>>,
     adv: crate::adversarial::Controls,
     config_updater: Option<ConfigUpdater>,
-) -> (Addr<ClientActor>, ArbiterHandle) {
+) -> (Addr<ClientActor>, ArbiterHandle, StateSplitHandle) {
     let client_arbiter = Arbiter::new();
     let client_arbiter_handle = client_arbiter.handle();
 
@@ -2022,6 +2038,7 @@ pub fn start_client(
         snapshot_callbacks,
     )
     .unwrap();
+    let state_split_handle = client.chain.state_split_handle.clone();
     let client_addr = ClientActor::start_in_arbiter(&client_arbiter_handle, move |ctx| {
         ClientActor::new(
             client,
@@ -2038,5 +2055,5 @@ pub fn start_client(
         )
         .unwrap()
     });
-    (client_addr, client_arbiter_handle)
+    (client_addr, client_arbiter_handle, state_split_handle)
 }
