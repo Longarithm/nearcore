@@ -2796,7 +2796,7 @@ impl Chain {
         let does_care_about_shard =
             shard_tracker.care_about_shard(me.as_ref(), parent_hash, shard_id, true);
 
-        tracing::debug!(target: "chain", does_care_about_shard, will_care_about_shard, will_shard_layout_change, "should catch up shard");
+        tracing::debug!(target: "chain", ?me, does_care_about_shard, will_care_about_shard, will_shard_layout_change, "should catch up shard");
 
         will_care_about_shard && (will_shard_layout_change || !does_care_about_shard)
     }
