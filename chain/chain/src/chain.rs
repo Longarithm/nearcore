@@ -3917,6 +3917,11 @@ impl Chain {
         Ok(blocks)
     }
 
+    fn is_chunk_producer(&self, me: &Option<AccountId>, epoch_id: &EpochId) -> Result<bool, Error> {
+        let cps = self.epoch_manager.get_epoch_chunk_producers(epoch_id)?;
+        Ok(me.as_ref().map_or(false, |a| cps.iter().map(|v| v.account_id()).contains(&a)))
+    }
+
     /// Creates jobs which will update shards for the given block and incoming
     /// receipts aggregated for it.
     fn apply_chunks_preprocessing(
@@ -3941,22 +3946,12 @@ impl Chain {
             // only for a single shard. This so far has been enough.
             let state_patch = state_patch.take();
 
-            let stateful_job = self.get_update_shard_job(
-                me,
-                block,
-                prev_block,
-                chunk_header,
-                prev_chunk_header,
-                shard_id as ShardId,
-                mode,
-                incoming_receipts,
-                state_patch,
-            );
-            maybe_jobs.push((shard_id, stateful_job));
-
             let protocol_version =
                 self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
-            if checked_feature!("stable", ChunkValidation, protocol_version) {
+            let epoch_id = block.header().epoch_id();
+            if checked_feature!("stable", ChunkValidation, protocol_version)
+                && !self.is_chunk_producer(me, epoch_id)?
+            {
                 let stateless_job = self.get_stateless_validation_job(
                     me,
                     block,
@@ -3967,6 +3962,19 @@ impl Chain {
                     mode,
                 );
                 maybe_jobs.push((shard_id, stateless_job));
+            } else {
+                let stateful_job = self.get_update_shard_job(
+                    me,
+                    block,
+                    prev_block,
+                    chunk_header,
+                    prev_chunk_header,
+                    shard_id as ShardId,
+                    mode,
+                    incoming_receipts,
+                    state_patch,
+                );
+                maybe_jobs.push((shard_id, stateful_job));
             }
         }
 
