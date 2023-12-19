@@ -679,10 +679,15 @@ impl EpochManagerAdapter for MockEpochManager {
 
     fn get_epoch_chunk_producers(
         &self,
-        _epoch_id: &EpochId,
+        epoch_id: &EpochId,
     ) -> Result<Vec<ValidatorStake>, EpochError> {
-        tracing::warn!("not implemented, returning a dummy value");
-        Ok(vec![])
+        let valset = self.get_valset_for_epoch(epoch_id)?;
+        let mut cps = vec![];
+        for shard_id in 0..self.num_shards {
+            let chunk_producers = self.get_chunk_producers(valset, shard_id);
+            cps.extend(chunk_producers.into_iter());
+        }
+        Ok(cps)
     }
 
     fn get_block_producer(
