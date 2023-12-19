@@ -3939,6 +3939,16 @@ impl Chain {
             Chain::get_prev_chunk_headers(self.epoch_manager.as_ref(), prev_block)?;
 
         let mut maybe_jobs = vec![];
+        let epoch_id = block.header().epoch_id();
+        let protocol_version = self.epoch_manager.get_epoch_protocol_version(epoch_id)?;
+        let mut cps: Vec<_> = self
+            .epoch_manager
+            .get_epoch_chunk_producers(epoch_id)?
+            .into_iter()
+            .map(|v| v.account_id().clone())
+            .collect();
+        cps.sort();
+        eprintln!("CPS: {:?}", cps);
         for (shard_id, (chunk_header, prev_chunk_header)) in
             block.chunks().iter().zip(prev_chunk_headers.iter()).enumerate()
         {
@@ -3946,9 +3956,6 @@ impl Chain {
             // only for a single shard. This so far has been enough.
             let state_patch = state_patch.take();
 
-            let protocol_version =
-                self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
-            let epoch_id = block.header().epoch_id();
             if checked_feature!("stable", ChunkValidation, protocol_version)
                 && !self.is_chunk_producer(me, epoch_id)?
             {
