@@ -4465,7 +4465,6 @@ impl Chain {
                     epoch_manager.as_ref(),
                     execution_contexts_after,
                 )?;
-                result.extend(result_after.into_iter());
                 Ok(ShardUpdateResult::Stateless(result, new_result, result_after))
             }),
         )))
