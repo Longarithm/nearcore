@@ -3948,7 +3948,14 @@ impl Chain {
             .map(|v| v.account_id().clone())
             .collect();
         cps.sort();
-        eprintln!("CPS: {:?}", cps);
+        let mut bps: Vec<_> = self
+            .epoch_manager
+            .get_epoch_block_producers_ordered(epoch_id, block.hash())?
+            .into_iter()
+            .map(|(v, _)| v.account_id().clone())
+            .collect();
+        bps.sort();
+        info!("CPS: {:?}, BPS: {:?}", cps, bps);
         for (shard_id, (chunk_header, prev_chunk_header)) in
             block.chunks().iter().zip(prev_chunk_headers.iter()).enumerate()
         {
