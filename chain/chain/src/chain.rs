@@ -1856,7 +1856,7 @@ impl Chain {
         block_processing_artifacts: &mut BlockProcessingArtifact,
         apply_chunks_done_callback: DoneApplyChunkCallback,
     ) -> (Vec<AcceptedBlock>, HashMap<CryptoHash, Error>) {
-        let _span = debug_span!(target: "chain", "postprocess_ready_blocks_chain").entered();
+        let _span = debug_span!(target: "chain", "postprocess_ready_blocks_chain", ?me).entered();
         let mut accepted_blocks = vec![];
         let mut errors = HashMap::new();
         while let Ok((block_hash, apply_result)) = self.apply_chunks_receiver.try_recv() {
@@ -2134,7 +2134,7 @@ impl Chain {
     ) -> Result<(), Error> {
         let block_height = block.header().height();
         let _span =
-            debug_span!(target: "chain", "start_process_block_impl", block_height).entered();
+            debug_span!(target: "chain", "start_process_block_impl", block_height, ?me).entered();
         // 0) Before we proceed with any further processing, we first check that the block
         // hash and signature matches to make sure the block is indeed produced by the assigned
         // block producer. If not, we drop the block immediately
