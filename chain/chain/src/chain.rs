@@ -4410,7 +4410,7 @@ impl Chain {
             shard_id,
             Box::new(move |parent_span| -> Result<ShardUpdateResult, Error> {
                 // Process missing chunks before previous chunk.
-                let mut result = process_missing_chunks_range(
+                let result = process_missing_chunks_range(
                     parent_span,
                     current_chunk_extra.clone(),
                     runtime.as_ref(),
