@@ -53,7 +53,12 @@ pub enum ShardUpdateResult {
     /// Stateless scenario - processed update based on state witness in a chunk.
     /// Contains `ChunkExtra`s - results for processing updates corresponding
     /// to state witness.
-    Stateless(Vec<(CryptoHash, ShardUId, ChunkExtra)>),
+    // Stateless(Vec<(CryptoHash, ShardUId, ChunkExtra)>),
+    Stateless(
+        Vec<(CryptoHash, OldChunkResult)>,
+        (CryptoHash, NewChunkResult),
+        Vec<(CryptoHash, OldChunkResult)>,
+    ),
 }
 
 /// Result for a shard update for a single block.
@@ -166,27 +171,26 @@ pub(crate) fn process_missing_chunks_range(
     runtime: &dyn RuntimeAdapter,
     epoch_manager: &dyn EpochManagerAdapter,
     execution_contexts: Vec<(ApplyTransactionsBlockContext, ShardContext)>,
-) -> Result<Vec<(CryptoHash, ShardUId, ChunkExtra)>, Error> {
+) -> Result<Vec<(CryptoHash, OldChunkResult)>, Error> {
     let mut result = vec![];
     for (block_context, shard_context) in execution_contexts {
-        let OldChunkResult { shard_uid, apply_result, apply_split_result_or_state_changes: _ } =
-            apply_old_chunk(
-                parent_span,
-                OldChunkData {
-                    block: block_context.clone(),
-                    split_state_roots: None,
-                    prev_chunk_extra: current_chunk_extra.clone(),
-                    storage_context: StorageContext {
-                        storage_data_source: StorageDataSource::DbTrieOnly,
-                        state_patch: Default::default(),
-                    },
+        let old_chunk_result = apply_old_chunk(
+            parent_span,
+            OldChunkData {
+                block: block_context.clone(),
+                split_state_roots: None,
+                prev_chunk_extra: current_chunk_extra.clone(),
+                storage_context: StorageContext {
+                    storage_data_source: StorageDataSource::DbTrieOnly,
+                    state_patch: Default::default(),
                 },
-                shard_context,
-                runtime,
-                epoch_manager,
-            )?;
-        *current_chunk_extra.state_root_mut() = apply_result.new_root;
-        result.push((block_context.block_hash, shard_uid, current_chunk_extra.clone()));
+            },
+            shard_context,
+            runtime,
+            epoch_manager,
+        )?;
+        *current_chunk_extra.state_root_mut() = old_chunk_result.apply_result.new_root;
+        result.push((block_context.block_hash, old_chunk_result));
     }
     Ok(result)
 }

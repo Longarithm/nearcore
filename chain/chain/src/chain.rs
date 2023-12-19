@@ -4418,18 +4418,17 @@ impl Chain {
                     execution_contexts_before,
                 )?;
                 current_chunk_extra = match result.last() {
-                    Some((_, _, chunk_extra)) => chunk_extra.clone(),
+                    Some((_, old_chunk_result)) => {
+                        *current_chunk_extra.state_root_mut() =
+                            old_chunk_result.apply_result.new_root;
+                        current_chunk_extra
+                    }
                     None => current_chunk_extra,
                 };
                 // TODO(logunov): use `validate_chunk_with_chunk_extra`
                 assert_eq!(current_chunk_extra.state_root(), &prev_chunk.prev_state_root());
                 // Process previous chunk.
-                let NewChunkResult {
-                    gas_limit,
-                    shard_uid,
-                    apply_result,
-                    apply_split_result_or_state_changes: _,
-                } = apply_new_chunk(
+                let new_chunk_result = apply_new_chunk(
                     parent_span,
                     NewChunkData {
                         chunk: prev_chunk,
@@ -4446,21 +4445,18 @@ impl Chain {
                     runtime.as_ref(),
                     epoch_manager.as_ref(),
                 )?;
-                let (outcome_root, _) =
-                    ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
-                current_chunk_extra = ChunkExtra::new(
-                    &apply_result.new_root,
-                    outcome_root,
-                    apply_result.validator_proposals,
-                    apply_result.total_gas_burnt,
-                    gas_limit,
-                    apply_result.total_balance_burnt,
+                let (outcome_root, _) = ApplyTransactionResult::compute_outcomes_proof(
+                    &new_chunk_result.apply_result.outcomes,
                 );
-                result.push((
-                    prev_chunk_block_context.block_hash,
-                    shard_uid,
-                    current_chunk_extra.clone(),
-                ));
+                current_chunk_extra = ChunkExtra::new(
+                    &new_chunk_result.apply_result.new_root,
+                    outcome_root,
+                    new_chunk_result.apply_result.validator_proposals.clone(),
+                    new_chunk_result.apply_result.total_gas_burnt,
+                    new_chunk_result.gas_limit,
+                    new_chunk_result.apply_result.total_balance_burnt,
+                );
+                let new_result = (prev_chunk_block_context.block_hash, new_chunk_result);
                 // Process missing chunks after previous chunk.
                 let result_after = process_missing_chunks_range(
                     parent_span,
@@ -4470,7 +4466,7 @@ impl Chain {
                     execution_contexts_after,
                 )?;
                 result.extend(result_after.into_iter());
-                Ok(ShardUpdateResult::Stateless(result))
+                Ok(ShardUpdateResult::Stateless(result, new_result, result_after))
             }),
         )))
     }
@@ -5415,17 +5411,20 @@ impl<'a> ChainUpdate<'a> {
                 ShardUpdateResult::Stateful(result) => {
                     self.process_apply_chunk_result(block, result)?
                 }
-                ShardUpdateResult::Stateless(results) => {
-                    for (block_hash, shard_uid, chunk_extra) in results {
-                        let expected_chunk_extra =
-                            self.chain_store_update.get_chunk_extra(&block_hash, &shard_uid)?;
-                        assert_eq!(
-                            &chunk_extra,
-                            expected_chunk_extra.as_ref(),
-                            "For stateless validation, chunk extras for block {} and shard {} do not match",
-                            block_hash,
-                            shard_uid
-                        );
+                ShardUpdateResult::Stateless(
+                    old_results,
+                    (block_hash, new_result),
+                    old_results_after,
+                ) => {
+                    for (block_hash, old_result) in old_results {
+                        let block = self.chain_store_update.get_block(&block_hash)?;
+                        self.process_old_apply_chunk_result(&block, old_result)?;
+                    }
+                    let block = self.chain_store_update.get_block(&block_hash)?;
+                    self.process_new_apply_chunk_result(&block, new_result)?;
+                    for (block_hash, old_result) in old_results_after {
+                        let block = self.chain_store_update.get_block(&block_hash)?;
+                        self.process_old_apply_chunk_result(&block, old_result)?;
                     }
                 }
             }
@@ -5573,93 +5572,113 @@ impl<'a> ChainUpdate<'a> {
         Ok(())
     }
 
+    fn process_new_apply_chunk_result(
+        &mut self,
+        block: &Block,
+        new_chunk_result: NewChunkResult,
+    ) -> Result<(), Error> {
+        let block_hash = block.hash();
+        let prev_hash = block.header().prev_hash();
+        let height = block.header().height();
+        let NewChunkResult {
+            gas_limit,
+            shard_uid,
+            apply_result,
+            apply_split_result_or_state_changes,
+        } = new_chunk_result;
+        let (outcome_root, outcome_paths) =
+            ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
+        let shard_id = shard_uid.shard_id();
+
+        // Save state root after applying transactions.
+        self.chain_store_update.save_chunk_extra(
+            block_hash,
+            &shard_uid,
+            ChunkExtra::new(
+                &apply_result.new_root,
+                outcome_root,
+                apply_result.validator_proposals,
+                apply_result.total_gas_burnt,
+                gas_limit,
+                apply_result.total_balance_burnt,
+            ),
+        );
+
+        let flat_storage_manager = self.runtime_adapter.get_flat_storage_manager();
+        let store_update = flat_storage_manager.save_flat_state_changes(
+            *block_hash,
+            *prev_hash,
+            height,
+            shard_uid,
+            apply_result.trie_changes.state_changes(),
+        )?;
+        self.chain_store_update.merge(store_update);
+
+        self.chain_store_update.save_trie_changes(apply_result.trie_changes);
+        self.chain_store_update.save_outgoing_receipt(
+            block_hash,
+            shard_id,
+            apply_result.outgoing_receipts,
+        );
+        // Save receipt and transaction results.
+        self.chain_store_update.save_outcomes_with_proofs(
+            block_hash,
+            shard_id,
+            apply_result.outcomes,
+            outcome_paths,
+        );
+        if let Some(apply_results_or_state_changes) = apply_split_result_or_state_changes {
+            self.process_split_state(block, &shard_uid, apply_results_or_state_changes)?;
+        }
+        Ok(())
+    }
+
+    fn process_old_apply_chunk_result(
+        &mut self,
+        block: &Block,
+        old_chunk_result: OldChunkResult,
+    ) -> Result<(), Error> {
+        let block_hash = block.hash();
+        let prev_hash = block.header().prev_hash();
+        let height = block.header().height();
+        let OldChunkResult { shard_uid, apply_result, apply_split_result_or_state_changes } =
+            old_chunk_result;
+        let old_extra = self.chain_store_update.get_chunk_extra(prev_hash, &shard_uid)?;
+
+        let mut new_extra = ChunkExtra::clone(&old_extra);
+        *new_extra.state_root_mut() = apply_result.new_root;
+
+        let flat_storage_manager = self.runtime_adapter.get_flat_storage_manager();
+        let store_update = flat_storage_manager.save_flat_state_changes(
+            *block_hash,
+            *prev_hash,
+            height,
+            shard_uid,
+            apply_result.trie_changes.state_changes(),
+        )?;
+        self.chain_store_update.merge(store_update);
+
+        self.chain_store_update.save_chunk_extra(block_hash, &shard_uid, new_extra);
+        self.chain_store_update.save_trie_changes(apply_result.trie_changes);
+
+        if let Some(apply_results_or_state_changes) = apply_split_result_or_state_changes {
+            self.process_split_state(block, &shard_uid, apply_results_or_state_changes)?;
+        }
+        Ok(())
+    }
+
     /// Processed results of applying chunk
     fn process_apply_chunk_result(
         &mut self,
         block: &Block,
         result: ShardBlockUpdateResult,
     ) -> Result<(), Error> {
-        let block_hash = block.hash();
-        let prev_hash = block.header().prev_hash();
-        let height = block.header().height();
         match result {
-            ShardBlockUpdateResult::NewChunk(NewChunkResult {
-                gas_limit,
-                shard_uid,
-                apply_result,
-                apply_split_result_or_state_changes,
-            }) => {
-                let (outcome_root, outcome_paths) =
-                    ApplyTransactionResult::compute_outcomes_proof(&apply_result.outcomes);
-                let shard_id = shard_uid.shard_id();
-
-                // Save state root after applying transactions.
-                self.chain_store_update.save_chunk_extra(
-                    block_hash,
-                    &shard_uid,
-                    ChunkExtra::new(
-                        &apply_result.new_root,
-                        outcome_root,
-                        apply_result.validator_proposals,
-                        apply_result.total_gas_burnt,
-                        gas_limit,
-                        apply_result.total_balance_burnt,
-                    ),
-                );
-
-                let flat_storage_manager = self.runtime_adapter.get_flat_storage_manager();
-                let store_update = flat_storage_manager.save_flat_state_changes(
-                    *block_hash,
-                    *prev_hash,
-                    height,
-                    shard_uid,
-                    apply_result.trie_changes.state_changes(),
-                )?;
-                self.chain_store_update.merge(store_update);
-
-                self.chain_store_update.save_trie_changes(apply_result.trie_changes);
-                self.chain_store_update.save_outgoing_receipt(
-                    block_hash,
-                    shard_id,
-                    apply_result.outgoing_receipts,
-                );
-                // Save receipt and transaction results.
-                self.chain_store_update.save_outcomes_with_proofs(
-                    block_hash,
-                    shard_id,
-                    apply_result.outcomes,
-                    outcome_paths,
-                );
-                if let Some(apply_results_or_state_changes) = apply_split_result_or_state_changes {
-                    self.process_split_state(block, &shard_uid, apply_results_or_state_changes)?;
-                }
+            ShardBlockUpdateResult::NewChunk(new_chunk_result) => {
+                self.process_new_apply_chunk_result(block, new_chunk_result)?;
             }
-            ShardBlockUpdateResult::OldChunk(OldChunkResult {
-                shard_uid,
-                apply_result,
-                apply_split_result_or_state_changes,
-            }) => {
-                let old_extra = self.chain_store_update.get_chunk_extra(prev_hash, &shard_uid)?;
-
-                let mut new_extra = ChunkExtra::clone(&old_extra);
-                *new_extra.state_root_mut() = apply_result.new_root;
-
-                let flat_storage_manager = self.runtime_adapter.get_flat_storage_manager();
-                let store_update = flat_storage_manager.save_flat_state_changes(
-                    *block_hash,
-                    *prev_hash,
-                    height,
-                    shard_uid,
-                    apply_result.trie_changes.state_changes(),
-                )?;
-                self.chain_store_update.merge(store_update);
-
-                self.chain_store_update.save_chunk_extra(block_hash, &shard_uid, new_extra);
-                self.chain_store_update.save_trie_changes(apply_result.trie_changes);
-
-                if let Some(apply_results_or_state_changes) = apply_split_result_or_state_changes {
-                    self.process_split_state(block, &shard_uid, apply_results_or_state_changes)?;
-                }
+            ShardBlockUpdateResult::OldChunk(old_chunk_result) => {
+                self.process_old_apply_chunk_result(block, old_chunk_result)?;
             }
             ShardBlockUpdateResult::StateSplit(StateSplitResult { shard_uid, results }) => {
                 self.chain_store_update
