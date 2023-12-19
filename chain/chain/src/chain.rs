@@ -3917,6 +3917,17 @@ impl Chain {
         Ok(blocks)
     }
 
+    fn is_chunk_validator(
+        &self,
+        me: &Option<AccountId>,
+        epoch_id: &EpochId,
+        shard_id: ShardId,
+        height: BlockHeight,
+    ) -> Result<bool, Error> {
+        let cvs = self.epoch_manager.get_chunk_validators(epoch_id, shard_id, height)?;
+        Ok(me.as_ref().map_or(false, |a| cvs.contains_key(a)))
+    }
+
     /// Creates jobs which will update shards for the given block and incoming
     /// receipts aggregated for it.
     fn apply_chunks_preprocessing(
@@ -3934,6 +3945,9 @@ impl Chain {
             Chain::get_prev_chunk_headers(self.epoch_manager.as_ref(), prev_block)?;
 
         let mut maybe_jobs = vec![];
+        let epoch_id = block.header().epoch_id();
+        let protocol_version = self.epoch_manager.get_epoch_protocol_version(epoch_id)?;
+
         for (shard_id, (chunk_header, prev_chunk_header)) in
             block.chunks().iter().zip(prev_chunk_headers.iter()).enumerate()
         {
@@ -3954,9 +3968,14 @@ impl Chain {
             );
             maybe_jobs.push((shard_id, stateful_job));
 
-            let protocol_version =
-                self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
-            if checked_feature!("stable", ChunkValidation, protocol_version) {
+            if checked_feature!("stable", ChunkValidation, protocol_version)
+                && self.is_chunk_validator(
+                    me,
+                    epoch_id,
+                    shard_id as ShardId,
+                    block.header().height(),
+                )?
+            {
                 let stateless_job = self.get_stateless_validation_job(
                     me,
                     block,
@@ -5408,6 +5427,7 @@ impl<'a> ChainUpdate<'a> {
                     self.process_apply_chunk_result(block, result)?
                 }
                 ShardUpdateResult::Stateless(results) => {
+                    info!("STATELESS {}", block.header().height());
                     for (block_hash, shard_uid, chunk_extra) in results {
                         let expected_chunk_extra =
                             self.chain_store_update.get_chunk_extra(&block_hash, &shard_uid)?;
