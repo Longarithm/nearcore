@@ -3968,6 +3968,7 @@ impl Chain {
             );
             maybe_jobs.push((shard_id, stateful_job));
 
+            println!("PV: {} {}", block.header().height(), protocol_version);
             if checked_feature!("stable", ChunkValidation, protocol_version)
                 && self.is_chunk_validator(
                     me,
