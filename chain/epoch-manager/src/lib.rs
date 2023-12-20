@@ -926,6 +926,7 @@ impl EpochManager {
     ) -> Result<HashMap<AccountId, AssignmentWeight>, EpochError> {
         let epoch_info = self.get_epoch_info(epoch_id)?;
         let chunk_validators_per_shard = epoch_info.sample_chunk_validators(height);
+        println!("ASSIGNMENT {} {:?}", height, chunk_validators_per_shard);
         let chunk_validators =
             chunk_validators_per_shard.get(shard_id as usize).ok_or_else(|| {
                 EpochError::ChunkValidatorSelectionError(format!(
