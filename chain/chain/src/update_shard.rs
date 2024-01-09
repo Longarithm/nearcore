@@ -13,7 +13,7 @@ use near_primitives::sandbox::state_patch::SandboxStatePatch;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::sharding::ShardChunk;
 use near_primitives::types::chunk_extra::ChunkExtra;
-use near_primitives::types::{BlockHeight, Gas, StateRoot};
+use near_primitives::types::{BlockHeight, Gas, StateChangesForResharding, StateRoot};
 use near_store::PartialStorage;
 use std::collections::HashMap;
 

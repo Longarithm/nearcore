@@ -90,6 +90,7 @@ use near_primitives::views::{
     FinalExecutionOutcomeView, FinalExecutionOutcomeWithReceiptView, FinalExecutionStatus,
     LightClientBlockView, SignedTransactionView,
 };
+use near_store::config::StateSnapshotType;
 use near_store::flat::{store_helper, FlatStorageReadyStatus, FlatStorageStatus};
 use near_store::DBCol;
 use near_store::{get_genesis_state_roots, PartialStorage};
@@ -3583,7 +3584,7 @@ impl Chain {
         if checked_feature!("stable", AccessKeyNonceRange, protocol_version) {
             let transaction_validity_period = self.transaction_validity_period;
             for transaction in chunk.transactions() {
-                self.store()
+                self.chain_store()
                     .check_transaction_validity_period(
                         prev_block.header(),
                         &transaction.transaction.block_hash,
@@ -3750,7 +3751,7 @@ impl Chain {
                 state_proofs,
             )?;
             if current_chunk_extra.state_root() != &witness.chunk_header.prev_state_root() {
-                return Err(Error::InvalidChunkStateWitness);
+                return Err(Error::InvalidChunkStateWitness("Invalid state root"));
             }
             Ok(())
         })))
@@ -4549,8 +4550,9 @@ impl Chain {
             .force_update_aggregator(epoch_id, epoch_sync_info.get_epoch_last_finalised_hash()?);
 
         // TODO(posvyatokum): add EpochSyncInfo validation.
-        chain_update.chain_store_update.merge(store_update);
-        chain_update.commit()?;
+
+        chain_store_update.merge(store_update);
+        chain_store_update.commit()?;
         Ok(())
     }
 }
