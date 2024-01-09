@@ -3751,7 +3751,7 @@ impl Chain {
                 state_proofs,
             )?;
             if current_chunk_extra.state_root() != &witness.chunk_header.prev_state_root() {
-                return Err(Error::InvalidChunkStateWitness("Invalid state root"));
+                return Err(Error::InvalidChunkStateWitness(String::from("Invalid state root")));
             }
             Ok(())
         })))
