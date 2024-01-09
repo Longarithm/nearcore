@@ -56,7 +56,7 @@ impl ChunkValidator {
     pub fn start_validating_chunk(
         &self,
         chunk_header: ShardChunkHeader,
-        job: Box<dyn FnOnce(&Span) -> Result<(), Error> + Send + 'static>,
+        job: Box<dyn FnOnce(&tracing::Span) -> Result<(), Error> + Send + 'static>,
         state_witness: ChunkStateWitness,
         chain_store: &ChainStore,
     ) -> Result<(), Error> {
