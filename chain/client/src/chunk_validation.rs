@@ -39,6 +39,7 @@ pub struct ChunkValidator {
     my_signer: Option<Arc<dyn ValidatorSigner>>,
     epoch_manager: Arc<dyn EpochManagerAdapter>,
     network_sender: Sender<PeerManagerMessageRequest>,
+    runtime_adapter: Arc<dyn RuntimeAdapter>,
 }
 
 impl ChunkValidator {
@@ -46,8 +47,9 @@ impl ChunkValidator {
         my_signer: Option<Arc<dyn ValidatorSigner>>,
         epoch_manager: Arc<dyn EpochManagerAdapter>,
         network_sender: Sender<PeerManagerMessageRequest>,
+        runtime_adapter: Arc<dyn RuntimeAdapter>,
     ) -> Self {
-        Self { my_signer, epoch_manager, network_sender }
+        Self { my_signer, epoch_manager, network_sender, runtime_adapter }
     }
 
     /// Performs the chunk validation logic. When done, it will send the chunk
@@ -474,7 +476,7 @@ impl Client {
         prev_blocks.reverse();
 
         let mut state_proofs = vec![];
-        let store = self.chain.store().store();
+        let store = self.chain.chain_store().store();
         for block_hash in prev_blocks {
             state_proofs.push(
                 store
