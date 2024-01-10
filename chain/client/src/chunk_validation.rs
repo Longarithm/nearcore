@@ -58,7 +58,7 @@ impl ChunkValidator {
     pub fn start_validating_chunk(
         &self,
         chunk_header: ShardChunkHeader,
-        _job: Box<dyn FnOnce(&tracing::Span) -> Result<(), Error> + Send + 'static>,
+        #[allow(unused)] job: Box<dyn FnOnce(&tracing::Span) -> Result<(), Error> + Send + 'static>,
         state_witness: ChunkStateWitness,
         chain_store: &ChainStore,
     ) -> Result<(), Error> {
@@ -79,6 +79,7 @@ impl ChunkValidator {
             return Err(Error::NotAChunkValidator);
         }
 
+        #[allow(unused)]
         let pre_validation_result = pre_validate_chunk_state_witness(
             &state_witness,
             chain_store,
@@ -90,19 +91,20 @@ impl ChunkValidator {
 
         let network_sender = self.network_sender.clone();
         let signer = self.my_signer.clone().unwrap();
+        #[allow(unused)]
         let epoch_manager = self.epoch_manager.clone();
+        #[allow(unused)]
         let runtime_adapter = self.runtime_adapter.clone();
         rayon::spawn(move || {
-            // let parent_span =
-            //     tracing::debug_span!(target: "chain", "start_validating_chunk").entered();
-            // job(&parent_span) {
-            //     Ok(_) => {
-            match validate_chunk_state_witness(
-                state_witness,
-                pre_validation_result,
-                epoch_manager.as_ref(),
-                runtime_adapter.as_ref(),
-            ) {
+            let parent_span =
+                tracing::debug_span!(target: "chain", "start_validating_chunk").entered();
+            match job(&parent_span) {
+                // match validate_chunk_state_witness(
+                //     state_witness,
+                //     pre_validation_result,
+                //     epoch_manager.as_ref(),
+                //     runtime_adapter.as_ref(),
+                // ) {
                 Ok(()) => {
                     tracing::debug!(
                         target: "chunk_validation",
