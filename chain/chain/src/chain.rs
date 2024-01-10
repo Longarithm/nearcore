@@ -3693,7 +3693,7 @@ impl Chain {
             shard_id,
             false,
         )?;
-        let mut state_proofs = witness.implicit_transitions.into_iter();
+        let state_proofs = witness.implicit_transitions.into_iter();
         // Create stateless validation job.
         // It starts at the state before which `prev_chunk` was applied, and then:
         // 1. it processes update for the `prev_chunk`;
