@@ -84,7 +84,10 @@ impl ChunkValidator {
             &state_witness,
             chain_store,
             self.epoch_manager.as_ref(),
-        )?;
+        );
+        if let Err(e) = pre_validation_result {
+            tracing::warn!("not prevalidated: {e}");
+        }
 
         let block_producer =
             self.epoch_manager.get_block_producer(&epoch_id, chunk_header.height_created())?;
