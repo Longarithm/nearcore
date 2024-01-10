@@ -6,7 +6,6 @@ use crate::types::{
 };
 use near_chain_primitives::Error;
 use near_epoch_manager::EpochManagerAdapter;
-use near_primitives::challenge::PartialState;
 use near_primitives::chunk_validation::ChunkStateTransition;
 use near_primitives::hash::CryptoHash;
 use near_primitives::receipt::Receipt;

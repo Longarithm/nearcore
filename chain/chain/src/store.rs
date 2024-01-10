@@ -50,7 +50,6 @@ use near_store::{
 use crate::byzantine_assert;
 use crate::chunks_store::ReadOnlyChunksStore;
 use crate::types::{Block, BlockHeader, LatestKnown};
-use near_primitives::challenge::PartialState;
 use near_primitives::chunk_validation::StoredChunkStateTransitionData;
 use near_store::db::{StoreStatistics, STATE_SYNC_DUMP_KEY};
 use std::sync::Arc;
