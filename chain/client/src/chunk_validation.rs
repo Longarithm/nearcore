@@ -525,7 +525,7 @@ impl Client {
             return Ok(());
         }
         // Previous chunk is genesis chunk.
-        if prev_chunk_header.prev_block_hash() == CryptoHash::default() {
+        if prev_chunk_header.prev_block_hash() == &CryptoHash::default() {
             return Ok(());
         }
         let chunk_header = chunk.cloned_header();
