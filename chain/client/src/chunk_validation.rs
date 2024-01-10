@@ -282,6 +282,7 @@ fn get_state_transition_validation_params(
     })
 }
 
+#[allow(unused)]
 struct ChunkStateTransitionValidationParams {
     chunk: ShardChunkHeader,
     block: BlockHeader,
@@ -289,12 +290,14 @@ struct ChunkStateTransitionValidationParams {
     is_first_block_with_chunk_of_version: bool,
 }
 
+#[allow(unused)]
 struct PreValidationOutput {
     receipts_to_apply: Vec<Receipt>,
     main_transition_params: ChunkStateTransitionValidationParams,
     implicit_transition_params: Vec<ChunkStateTransitionValidationParams>,
 }
 
+#[allow(unused)]
 fn validate_chunk_state_witness(
     state_witness: ChunkStateWitness,
     pre_validation_output: PreValidationOutput,
@@ -402,6 +405,7 @@ fn validate_chunk_state_witness(
     Ok(())
 }
 
+#[allow(unused)]
 fn apply_result_to_chunk_extra(
     apply_result: ApplyTransactionResult,
     chunk: &ShardChunkHeader,
