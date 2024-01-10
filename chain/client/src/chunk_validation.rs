@@ -58,7 +58,7 @@ impl ChunkValidator {
     pub fn start_validating_chunk(
         &self,
         chunk_header: ShardChunkHeader,
-        job: Box<dyn FnOnce(&tracing::Span) -> Result<(), Error> + Send + 'static>,
+        _job: Box<dyn FnOnce(&tracing::Span) -> Result<(), Error> + Send + 'static>,
         state_witness: ChunkStateWitness,
         chain_store: &ChainStore,
     ) -> Result<(), Error> {
@@ -93,8 +93,8 @@ impl ChunkValidator {
         let epoch_manager = self.epoch_manager.clone();
         let runtime_adapter = self.runtime_adapter.clone();
         rayon::spawn(move || {
-            let parent_span =
-                tracing::debug_span!(target: "chain", "start_validating_chunk").entered();
+            // let parent_span =
+            //     tracing::debug_span!(target: "chain", "start_validating_chunk").entered();
             // job(&parent_span) {
             //     Ok(_) => {
             match validate_chunk_state_witness(

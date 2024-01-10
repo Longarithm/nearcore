@@ -1749,7 +1749,6 @@ impl Client {
                 shard_id,
             ) {
                 Ok(Some((encoded_chunk, merkle_paths, receipts))) => {
-                    let chunk_header = encoded_chunk.cloned_header();
                     let shard_chunk = self
                         .persist_and_distribute_encoded_chunk(
                             encoded_chunk,
