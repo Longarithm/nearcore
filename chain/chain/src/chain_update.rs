@@ -370,8 +370,12 @@ impl<'a> ChainUpdate<'a> {
                     apply_result.outcomes,
                     outcome_paths,
                 );
-                self.chain_store_update.save_state_proof(*block_hash, shard_id, apply_result.proof
-                                                         apply_result.exact_receipts_hash);
+                self.chain_store_update.save_state_proof(
+                    *block_hash,
+                    shard_id,
+                    apply_result.proof,
+                    apply_result.exact_receipts_hash,
+                );
                 if let Some(resharding_results) = resharding_results {
                     self.process_resharding_results(block, &shard_uid, resharding_results)?;
                 }
