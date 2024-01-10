@@ -336,6 +336,7 @@ impl Client {
             validator_signer.clone(),
             epoch_manager.clone(),
             network_adapter.clone().into_sender(),
+            runtime_adapter.clone(),
         );
         Ok(Self {
             #[cfg(feature = "test_features")]
