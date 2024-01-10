@@ -3693,7 +3693,7 @@ impl Chain {
             shard_id,
             false,
         )?;
-        let mut state_proofs = witness.state_proofs.into_iter();
+        let mut state_proofs = witness.implicit_transitions.into_iter();
         // Create stateless validation job.
         // It starts at the state before which `prev_chunk` was applied, and then:
         // 1. it processes update for the `prev_chunk`;
@@ -3706,13 +3706,7 @@ impl Chain {
             // TODO(#9292): consider using `validate_chunk_with_chunk_extra`.
             assert_eq!(current_chunk_extra.state_root(), &prev_chunk.prev_state_root());
             // Process previous chunk.
-            let storage = PartialStorage {
-                nodes: state_proofs.next().ok_or(Error::Other(format!(
-                    "Missing state proof for {} {}",
-                    prev_chunk_block_context.block_hash,
-                    prev_chunk_shard_context.shard_uid.shard_id()
-                )))?,
-            };
+            let storage = PartialStorage { nodes: witness.main_state_transition.base_state };
             let NewChunkResult { gas_limit, apply_result, .. } = apply_new_chunk(
                 parent_span,
                 NewChunkData {

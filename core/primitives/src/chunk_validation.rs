@@ -16,8 +16,6 @@ pub struct ChunkStateWitness {
     /// to apply the state transition, it is needed for a chunk validator to
     /// produce a chunk endorsement while knowing what they are endorsing.
     pub chunk_header: ShardChunkHeader,
-    /// State proofs for the range of chunks to apply.
-    pub state_proofs: Vec<PartialState>,
     /// The base state and post-state-root of the main transition where we
     /// apply transactions and receipts. Corresponds to the state transition
     /// that takes us from the pre-state-root of the last new chunk of this
@@ -134,7 +132,7 @@ pub struct ChunkEndorsementMessage {
 
 /// Stored on disk for each chunk, including missing chunks, in order to
 /// produce a chunk state witness when needed.
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct StoredChunkStateTransitionData {
     /// The partial state that is needed to apply the state transition,
     /// whether it is a new chunk state transition or a implicit missing chunk

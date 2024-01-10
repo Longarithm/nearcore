@@ -14,7 +14,7 @@ use near_primitives::challenge::PartialState;
 use near_primitives::checked_feature;
 use near_primitives::chunk_validation::{
     ChunkEndorsement, ChunkEndorsementInner, ChunkEndorsementMessage, ChunkStateTransition,
-    ChunkStateWitness,
+    ChunkStateWitness, StoredChunkStateTransitionData,
 };
 use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::merkle::merklize;
@@ -216,7 +216,7 @@ fn pre_validate_chunk_state_witness(
         }
         receipts_to_apply.extend(receipt_proof.0.iter().cloned());
     }
-    let exact_receipts_hash = hash(&borsh::to_vec(&receipts_to_apply).unwrap());
+    let exact_receipts_hash = hash(&borsh::to_vec(receipts_to_apply.as_slice()).unwrap());
     if exact_receipts_hash != state_witness.exact_receipts_hash {
         return Err(Error::InvalidChunkStateWitness(format!(
             "Receipts hash {:?} does not match expected receipts hash {:?}",
@@ -457,16 +457,19 @@ impl Client {
         &mut self,
         chunk_header: &ShardChunkHeader,
         prev_chunk_header: ShardChunkHeader,
-    ) -> Result<Vec<PartialState>, Error> {
+    ) -> Result<(ChunkStateTransition, Vec<ChunkStateTransition>, CryptoHash), Error> {
         let shard_id = chunk_header.shard_id();
+        let epoch_id =
+            self.epoch_manager.get_epoch_id_from_prev_block(chunk_header.prev_block_hash())?;
+        let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
         let prev_chunk_height_included = prev_chunk_header.height_included();
-        let prev_chunk_prev_hash = *prev_chunk_header.prev_block_hash();
 
+        // let prev_chunk_prev_hash = *prev_chunk_header.prev_block_hash();
         // TODO(#9292): previous chunk is genesis chunk - consider proper
         // result for this corner case.
-        if prev_chunk_prev_hash == CryptoHash::default() {
-            return Ok(vec![]);
-        }
+        // if prev_chunk_prev_hash == CryptoHash::default() {
+        //     return Ok(vec![]);
+        // }
 
         let mut prev_blocks = self.chain.get_blocks_until_height(
             *chunk_header.prev_block_hash(),
@@ -474,23 +477,39 @@ impl Client {
             true,
         )?;
         prev_blocks.reverse();
-
-        let mut state_proofs = vec![];
+        let (main_block, implicit_blocks) = prev_blocks.split_first().unwrap();
         let store = self.chain.chain_store().store();
-        for block_hash in prev_blocks {
-            state_proofs.push(
-                store
-                    .get_ser(
-                        near_store::DBCol::StateProofs,
-                        &near_primitives::utils::get_block_shard_id(&block_hash, shard_id),
-                    )?
-                    .ok_or(Error::Other(format!(
-                        "Missing state proof for block {block_hash} and shard {shard_id}"
-                    )))?,
-            );
+        let StoredChunkStateTransitionData { base_state, receipts_hash } = store
+            .get_ser(
+                near_store::DBCol::StateProofs,
+                &near_primitives::utils::get_block_shard_id(main_block, shard_id),
+            )?
+            .ok_or(Error::Other(format!(
+                "Missing state proof for block {main_block} and shard {shard_id}"
+            )))?;
+        let main_transition = ChunkStateTransition {
+            block_hash: *main_block,
+            base_state,
+            post_state_root: *self.chain.get_chunk_extra(main_block, &shard_uid)?.state_root(),
+        };
+        let mut implicit_transitions = vec![];
+        for block_hash in implicit_blocks {
+            let StoredChunkStateTransitionData { base_state, .. } = store
+                .get_ser(
+                    near_store::DBCol::StateProofs,
+                    &near_primitives::utils::get_block_shard_id(block_hash, shard_id),
+                )?
+                .ok_or(Error::Other(format!(
+                    "Missing state proof for block {block_hash} and shard {shard_id}"
+                )))?;
+            implicit_transitions.push(ChunkStateTransition {
+                block_hash: *block_hash,
+                base_state,
+                post_state_root: *self.chain.get_chunk_extra(block_hash, &shard_uid)?.state_root(),
+            });
         }
 
-        Ok(state_proofs)
+        Ok((main_transition, implicit_transitions, receipts_hash))
     }
 
     /// Distributes the chunk state witness to chunk validators that are
@@ -505,36 +524,30 @@ impl Client {
         if !checked_feature!("stable", ChunkValidation, protocol_version) {
             return Ok(());
         }
+        // Previous chunk is genesis chunk.
+        if prev_chunk_header.prev_block_hash() == CryptoHash::default() {
+            return Ok(());
+        }
         let chunk_header = chunk.cloned_header();
         let chunk_validators = self.epoch_manager.get_chunk_validators(
             epoch_id,
             chunk_header.shard_id(),
             chunk_header.height_created(),
         )?;
-        let state_proofs = self.collect_state_proofs(&chunk_header, prev_chunk_header)?;
+        let (main_state_transition, implicit_transitions, exact_receipts_hash) =
+            self.collect_state_proofs(&chunk_header, prev_chunk_header)?;
         let witness = ChunkStateWitness {
             chunk_header: chunk_header.clone(),
-            state_proofs,
-            main_state_transition: ChunkStateTransition {
-                // TODO(#9292): Fetch from StoredChunkStateTransitionData.
-                base_state: PartialState::default(),
-                // TODO(#9292): Block hash of the last new chunk.
-                block_hash: CryptoHash::default(),
-                // TODO(#9292): Fetch from ChunkExtra of the last new chunk.
-                post_state_root: CryptoHash::default(),
-            },
+            main_state_transition,
             // TODO(#9292): Iterate through the chain to derive this.
             source_receipt_proofs: HashMap::new(),
             // TODO(#9292): Include transactions from the last new chunk.
             transactions: Vec::new(),
-            // TODO(#9292): Fetch from StoredChunkStateTransitionData.
             // (Could also be derived from iterating through the receipts, but
             // that defeats the purpose of this check being a debugging
             // mechanism.)
-            exact_receipts_hash: CryptoHash::default(),
-            // TODO(#9292): Fetch from StoredChunkStateTransitionData for each missing
-            // chunk.
-            implicit_transitions: Vec::new(),
+            exact_receipts_hash,
+            implicit_transitions,
             new_transactions: chunk.transactions().to_vec(),
             // TODO(#9292): Derive this during chunk production, during
             // prepare_transactions or the like.

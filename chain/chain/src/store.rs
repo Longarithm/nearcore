@@ -51,6 +51,7 @@ use crate::byzantine_assert;
 use crate::chunks_store::ReadOnlyChunksStore;
 use crate::types::{Block, BlockHeader, LatestKnown};
 use near_primitives::challenge::PartialState;
+use near_primitives::chunk_validation::StoredChunkStateTransitionData;
 use near_store::db::{StoreStatistics, STATE_SYNC_DUMP_KEY};
 use std::sync::Arc;
 
@@ -1439,7 +1440,7 @@ pub struct ChainStoreUpdate<'a> {
     final_head: Option<Tip>,
     largest_target_height: Option<BlockHeight>,
     trie_changes: Vec<WrappedTrieChanges>,
-    state_proofs: HashMap<(CryptoHash, ShardId), PartialState>,
+    state_proofs: HashMap<(CryptoHash, ShardId), StoredChunkStateTransitionData>,
     // All state changes made by a chunk, this is only used for resharding.
     add_state_changes_for_resharding: HashMap<(CryptoHash, ShardId), StateChangesForResharding>,
     remove_state_changes_for_resharding: HashSet<(CryptoHash, ShardId)>,
@@ -2083,9 +2084,16 @@ impl<'a> ChainStoreUpdate<'a> {
         block_hash: CryptoHash,
         shard_id: ShardId,
         partial_storage: Option<PartialStorage>,
+        exact_receipts_hash: CryptoHash,
     ) {
         if let Some(partial_storage) = partial_storage {
-            self.state_proofs.insert((block_hash, shard_id), partial_storage.nodes);
+            self.state_proofs.insert(
+                (block_hash, shard_id),
+                StoredChunkStateTransitionData {
+                    base_state: partial_storage.nodes,
+                    receipts_hash: exact_receipts_hash,
+                },
+            );
         }
     }
 

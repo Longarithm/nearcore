@@ -7,6 +7,7 @@ use crate::types::{
 use near_chain_primitives::Error;
 use near_epoch_manager::EpochManagerAdapter;
 use near_primitives::challenge::PartialState;
+use near_primitives::chunk_validation::ChunkStateTransition;
 use near_primitives::hash::CryptoHash;
 use near_primitives::receipt::Receipt;
 use near_primitives::sandbox::state_patch::SandboxStatePatch;
@@ -163,7 +164,7 @@ pub(crate) fn process_shard_update(
 /// `current_chunk_extra` must correspond to `ChunkExtra` just before
 /// execution; in the end it will correspond to the latest execution
 /// result.
-pub(crate) fn process_missing_chunks_range<I: Iterator<Item = PartialState>>(
+pub(crate) fn process_missing_chunks_range<I: Iterator<Item = ChunkStateTransition>>(
     parent_span: &tracing::Span,
     mut current_chunk_extra: ChunkExtra,
     runtime: &dyn RuntimeAdapter,
@@ -173,11 +174,14 @@ pub(crate) fn process_missing_chunks_range<I: Iterator<Item = PartialState>>(
 ) -> Result<ChunkExtra, Error> {
     for (block_context, shard_context) in execution_contexts {
         let storage = PartialStorage {
-            nodes: state_proofs.next().ok_or(Error::Other(format!(
-                "Missing state proof for {} {}",
-                block_context.block_hash,
-                shard_context.shard_uid.shard_id()
-            )))?,
+            nodes: state_proofs
+                .next()
+                .ok_or(Error::Other(format!(
+                    "Missing state proof for {} {}",
+                    block_context.block_hash,
+                    shard_context.shard_uid.shard_id()
+                )))?
+                .base_state,
         };
         let OldChunkResult { apply_result, .. } = apply_old_chunk(
             parent_span,
