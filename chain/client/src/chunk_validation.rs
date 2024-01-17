@@ -449,7 +449,7 @@ impl Client {
             )));
         }
 
-        let mut prev_blocks = self.chain.get_blocks_until_height(
+        let prev_blocks = self.chain.get_blocks_until_height(
             *chunk_header.prev_block_hash(),
             prev_chunk_height_included,
             true,
