@@ -345,7 +345,6 @@ fn validate_chunk_state_witness(
         .implicit_transition_params
         .into_iter()
         .zip(state_witness.implicit_transitions.into_iter())
-        .rev()
     {
         let block_hash = block.block_hash;
         let old_chunk_data = OldChunkData {
@@ -455,7 +454,7 @@ impl Client {
             prev_chunk_height_included,
             true,
         )?;
-        prev_blocks.reverse();
+        // prev_blocks.reverse();
         let (main_block, implicit_blocks) = prev_blocks.split_first().unwrap();
         let store = self.chain.chain_store().store();
         let StoredChunkStateTransitionData { base_state, receipts_hash } = store
