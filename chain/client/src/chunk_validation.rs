@@ -24,6 +24,8 @@ use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{AccountId, EpochId};
 use near_primitives::validator_signer::ValidatorSigner;
 use near_store::PartialStorage;
+use rand::prelude::{SliceRandom, StdRng};
+use rand::SeedableRng;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -345,7 +347,6 @@ fn validate_chunk_state_witness(
         .implicit_transition_params
         .into_iter()
         .zip(state_witness.implicit_transitions.into_iter())
-        .rev()
     {
         let block_hash = block.block_hash;
         let old_chunk_data = OldChunkData {
@@ -487,7 +488,8 @@ impl Client {
                 post_state_root: *self.chain.get_chunk_extra(block_hash, &shard_uid)?.state_root(),
             });
         }
-
+        let mut rng: StdRng = SeedableRng::seed_from_u64(1);
+        implicit_transitions.shuffle(&mut rng);
         // TODO(#10265): If the previous block does not exist, we should
         // queue this (similar to orphans) to retry later.
 
