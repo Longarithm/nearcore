@@ -345,6 +345,7 @@ fn validate_chunk_state_witness(
         .implicit_transition_params
         .into_iter()
         .zip(state_witness.implicit_transitions.into_iter())
+        .rev()
     {
         let block_hash = block.block_hash;
         let old_chunk_data = OldChunkData {
