@@ -1,7 +1,7 @@
 use super::ValidatorSchedule;
 use crate::types::{
     ApplyChunkBlockContext, ApplyChunkResult, ApplyChunkShardContext, ApplyResultForResharding,
-    RuntimeAdapter, RuntimeStorageConfig,
+    PreparedTransactions, RuntimeAdapter, RuntimeStorageConfig,
 };
 use crate::BlockHeader;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -13,6 +13,7 @@ use near_epoch_manager::{EpochManagerAdapter, RngSeed};
 use near_pool::types::PoolIterator;
 use near_primitives::account::{AccessKey, Account};
 use near_primitives::block_header::{Approval, ApprovalInner};
+use near_primitives::chunk_validation::{ChunkEndorsement, ChunkValidators};
 use near_primitives::epoch_manager::block_info::BlockInfo;
 use near_primitives::epoch_manager::epoch_info::EpochInfo;
 use near_primitives::epoch_manager::EpochConfig;
@@ -23,7 +24,7 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::receipt::{ActionReceipt, Receipt, ReceiptEnum};
 use near_primitives::shard_layout;
 use near_primitives::shard_layout::{ShardLayout, ShardUId};
-use near_primitives::sharding::ChunkHash;
+use near_primitives::sharding::{ChunkHash, ShardChunkHeader};
 use near_primitives::state_part::PartId;
 use near_primitives::transaction::{
     Action, ExecutionMetadata, ExecutionOutcome, ExecutionOutcomeWithId, ExecutionStatus,
@@ -34,7 +35,6 @@ use near_primitives::types::{
     AccountId, ApprovalStake, Balance, BlockHeight, EpochHeight, EpochId, Gas, Nonce, NumShards,
     ShardId, StateChangesForResharding, StateRoot, StateRootNode, ValidatorInfoIdentifier,
 };
-use near_primitives::validator_mandates::AssignmentWeight;
 use near_primitives::version::{ProtocolVersion, PROTOCOL_VERSION};
 use near_primitives::views::{
     AccessKeyInfoView, AccessKeyList, CallResult, ContractCodeView, EpochValidatorInfo,
@@ -711,8 +711,8 @@ impl EpochManagerAdapter for MockEpochManager {
         _epoch_id: &EpochId,
         _shard_id: ShardId,
         _height: BlockHeight,
-    ) -> Result<HashMap<AccountId, AssignmentWeight>, EpochError> {
-        Ok(HashMap::new())
+    ) -> Result<Arc<ChunkValidators>, EpochError> {
+        Ok(Arc::new(HashMap::new()))
     }
 
     fn get_validator_by_account_id(
@@ -910,6 +910,14 @@ impl EpochManagerAdapter for MockEpochManager {
         }
     }
 
+    fn verify_chunk_endorsement(
+        &self,
+        _chunk_header: &ShardChunkHeader,
+        _endorsement: &ChunkEndorsement,
+    ) -> Result<bool, Error> {
+        Ok(true)
+    }
+
     fn cares_about_shard_from_prev_block(
         &self,
         parent_hash: &CryptoHash,
@@ -1032,12 +1040,12 @@ impl RuntimeAdapter for KeyValueRuntime {
         _chain_validate: &mut dyn FnMut(&SignedTransaction) -> bool,
         _current_protocol_version: ProtocolVersion,
         _time_limit: Option<Duration>,
-    ) -> Result<Vec<SignedTransaction>, Error> {
+    ) -> Result<PreparedTransactions, Error> {
         let mut res = vec![];
         while let Some(iter) = transactions.next() {
             res.push(iter.next().unwrap());
         }
-        Ok(res)
+        Ok(PreparedTransactions { transactions: res, limited_by: None })
     }
 
     fn apply_chunk(
@@ -1198,6 +1206,7 @@ impl RuntimeAdapter for KeyValueRuntime {
             total_balance_burnt: 0,
             proof: None,
             processed_delayed_receipts: vec![],
+            applied_receipts_hash: hash(&borsh::to_vec(receipts).unwrap()),
         })
     }
 

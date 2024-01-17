@@ -1,10 +1,13 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::challenge::PartialState;
 use crate::sharding::{ChunkHash, ReceiptProof, ShardChunkHeader};
 use crate::transaction::SignedTransaction;
+use crate::validator_mandates::AssignmentWeight;
+use crate::validator_signer::ValidatorSigner;
 use borsh::{BorshDeserialize, BorshSerialize};
-use near_crypto::Signature;
+use near_crypto::{PublicKey, Signature};
 use near_primitives_core::hash::CryptoHash;
 use near_primitives_core::types::AccountId;
 
@@ -36,7 +39,7 @@ pub struct ChunkStateWitness {
     ///
     /// The set of blocks B is defined as the contiguous subsequence of blocks
     /// B1 (EXCLUSIVE) to B2 (inclusive) in this chunk's chain (i.e. the linear
-    /// chain that this chunk's parent block is on), where B1 is the block that
+    /// chain that this chunk's parent block is on), where B2 is the block that
     /// contains the last new chunk of shard S before this chunk, and B1 is the
     /// block that contains the last new chunk of shard S before B2.
     ///
@@ -55,7 +58,7 @@ pub struct ChunkStateWitness {
     /// redundant information but is useful for diagnosing why a witness might
     /// fail. This is the hash of the borsh encoding of the Vec<Receipt> in the
     /// order that they should be applied.
-    pub exact_receipts_hash: CryptoHash,
+    pub applied_receipts_hash: CryptoHash,
     /// The transactions to apply. These must be in the correct order in which
     /// they are to be applied.
     pub transactions: Vec<SignedTransaction>,
@@ -98,15 +101,33 @@ pub struct ChunkStateTransition {
 /// chunk validator has verified that the chunk state witness is correct.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct ChunkEndorsement {
-    pub inner: ChunkEndorsementInner,
+    inner: ChunkEndorsementInner,
     pub account_id: AccountId,
     pub signature: Signature,
+}
+
+impl ChunkEndorsement {
+    pub fn new(chunk_hash: ChunkHash, signer: Arc<dyn ValidatorSigner>) -> ChunkEndorsement {
+        let inner = ChunkEndorsementInner::new(chunk_hash);
+        let account_id = signer.validator_id().clone();
+        let signature = signer.sign_chunk_endorsement(&inner);
+        Self { inner, account_id, signature }
+    }
+
+    pub fn verify(&self, public_key: &PublicKey) -> bool {
+        let data = borsh::to_vec(&self.inner).unwrap();
+        self.signature.verify(&data, public_key)
+    }
+
+    pub fn chunk_hash(&self) -> &ChunkHash {
+        &self.inner.chunk_hash
+    }
 }
 
 /// This is the part of the chunk endorsement that is actually being signed.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct ChunkEndorsementInner {
-    pub chunk_hash: ChunkHash,
+    chunk_hash: ChunkHash,
     /// An arbitrary static string to make sure that this struct cannot be
     /// serialized to look identical to another serialized struct. For chunk
     /// production we are signing a chunk hash, so we need to make sure that
@@ -117,7 +138,7 @@ pub struct ChunkEndorsementInner {
 }
 
 impl ChunkEndorsementInner {
-    pub fn new(chunk_hash: ChunkHash) -> Self {
+    fn new(chunk_hash: ChunkHash) -> Self {
         Self { chunk_hash, signature_differentiator: "ChunkEndorsement".to_owned() }
     }
 }
@@ -136,3 +157,5 @@ pub struct StoredChunkStateTransitionData {
     /// to ease debugging of why a state witness may be incorrect.
     pub receipts_hash: CryptoHash,
 }
+
+pub type ChunkValidators = HashMap<AccountId, AssignmentWeight>;

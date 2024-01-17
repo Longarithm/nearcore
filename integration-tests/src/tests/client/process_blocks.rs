@@ -336,6 +336,7 @@ fn receive_network_block() {
                 last_block.header.height + 1,
                 next_block_ordinal,
                 last_block.chunks.into_iter().map(Into::into).collect(),
+                vec![],
                 EpochId::default(),
                 if last_block.header.prev_hash == CryptoHash::default() {
                     EpochId(last_block.header.hash)
@@ -417,6 +418,7 @@ fn produce_block_with_approvals() {
                 last_block.header.height + 1,
                 next_block_ordinal,
                 last_block.chunks.into_iter().map(Into::into).collect(),
+                vec![],
                 EpochId::default(),
                 if last_block.header.prev_hash == CryptoHash::default() {
                     EpochId(last_block.header.hash)
@@ -629,6 +631,7 @@ fn invalid_blocks_common(is_requested: bool) {
                 last_block.header.height + 1,
                 next_block_ordinal,
                 last_block.chunks.iter().cloned().map(Into::into).collect(),
+                vec![],
                 EpochId::default(),
                 if last_block.header.prev_hash == CryptoHash::default() {
                     EpochId(last_block.header.hash)
@@ -1195,9 +1198,8 @@ fn test_bad_orphan() {
         // Orphan block with a valid header, but garbage in body
         let mut block = env.clients[0].produce_block(8).unwrap().unwrap();
         {
-            let block = block.get_mut();
             // Change the chunk in any way, chunk_headers_root won't match
-            let chunk = &mut block.body.chunks[0].get_mut();
+            let chunk = block.mut_chunks()[0].get_mut();
 
             match &mut chunk.inner {
                 ShardChunkHeaderInner::V1(inner) => inner.prev_outcome_root = CryptoHash([1; 32]),
@@ -1227,7 +1229,7 @@ fn test_bad_orphan() {
         let some_signature = Signature::from_parts(KeyType::ED25519, &[1; 64]).unwrap();
         {
             // Change the chunk in any way, chunk_headers_root won't match
-            let chunk = block.get_mut().body.chunks[0].get_mut();
+            let chunk = block.mut_chunks()[0].get_mut();
             chunk.signature = some_signature;
             chunk.hash = ShardChunkHeaderV3::compute_hash(&chunk.inner);
         }
