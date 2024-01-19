@@ -1014,8 +1014,8 @@ impl EpochManagerAdapter for EpochManagerHandle {
             epoch_manager.get_epoch_id_from_prev_block(chunk_header.prev_block_hash())?;
         let chunk_producer = epoch_manager.get_chunk_producer_info(
             &epoch_id,
-            chunk_header.shard_id(),
             chunk_header.height_created(),
+            chunk_header.shard_id(),
         )?;
         Ok(state_witness
             .signature
