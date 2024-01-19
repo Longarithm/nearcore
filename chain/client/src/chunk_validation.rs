@@ -427,7 +427,7 @@ impl Client {
     pub fn process_chunk_state_witness(&mut self, witness: ChunkStateWitness) -> Result<(), Error> {
         // TODO(#10265): If the previous block does not exist, we should
         // queue this (similar to orphans) to retry later.
-        self.chunk_validator.start_validating_chunk(witness, self.chain.chain_store())
+        self.chunk_validator.start_validating_chunk(witness.inner, self.chain.chain_store())
     }
 
     /// Collect state transition data necessary to produce state witness for

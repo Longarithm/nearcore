@@ -12,7 +12,7 @@ use near_primitives_core::hash::CryptoHash;
 use near_primitives_core::types::{AccountId, Balance};
 
 pub struct ChunkStateWitness {
-    inner: ChunkStateWitnessInner,
+    pub inner: ChunkStateWitnessInner,
     pub account_id: AccountId,
     pub signature: Signature,
 }
