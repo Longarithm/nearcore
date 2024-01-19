@@ -146,7 +146,7 @@ impl ChunkValidator {
                     }
                 }
                 Err(err) => {
-                    self.network_sender.send(PeerManagerMessageRequest::NetworkRequests(
+                    network_sender.send(PeerManagerMessageRequest::NetworkRequests(
                         NetworkRequests::BanPeer {
                             peer_id,
                             ban_reason: ReasonForBan::BadChunkStateWitness,

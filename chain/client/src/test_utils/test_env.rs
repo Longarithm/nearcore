@@ -296,8 +296,12 @@ impl TestEnv {
                     found_differing_post_state_root_due_to_state_transitions |=
                         post_state_roots.len() >= 2;
                     for account in accounts {
-                        let sender_public_key =
-                            self.clients[idx].validator_signer.unwrap().public_key();
+                        let sender_public_key = self.clients[idx]
+                            .validator_signer
+                            .as_ref()
+                            .unwrap()
+                            .public_key()
+                            .clone();
                         self.account_indices
                             .lookup_mut(&mut self.clients, &account)
                             .process_chunk_state_witness(
