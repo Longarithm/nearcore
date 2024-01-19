@@ -447,16 +447,18 @@ impl Client {
             self.chain.chain_store(),
             peer_id.clone(),
         ) {
-            result @ Ok(()) | Err(Error::NotAValidator) => result,
             Err(err) => {
-                self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(
-                    NetworkRequests::BanPeer {
-                        peer_id,
-                        ban_reason: ReasonForBan::BadChunkStateWitness,
-                    },
-                ));
+                if err != Error::NotAValidator {
+                    self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(
+                        NetworkRequests::BanPeer {
+                            peer_id,
+                            ban_reason: ReasonForBan::BadChunkStateWitness,
+                        },
+                    ));
+                }
                 Err(err)
             }
+            Ok(()) => Ok(()),
         }
     }
 

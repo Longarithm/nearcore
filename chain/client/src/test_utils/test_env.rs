@@ -22,6 +22,7 @@ use near_primitives::block::Block;
 use near_primitives::epoch_manager::RngSeed;
 use near_primitives::errors::InvalidTxError;
 use near_primitives::hash::CryptoHash;
+use near_primitives::network::PeerId;
 use near_primitives::sharding::{ChunkHash, PartialEncodedChunk};
 use near_primitives::test_utils::create_test_signer;
 use near_primitives::transaction::{Action, FunctionCallAction, SignedTransaction};
@@ -295,9 +296,14 @@ impl TestEnv {
                     found_differing_post_state_root_due_to_state_transitions |=
                         post_state_roots.len() >= 2;
                     for account in accounts {
+                        let sender_public_key =
+                            self.clients[idx].validator_signer.unwrap().public_key();
                         self.account_indices
                             .lookup_mut(&mut self.clients, &account)
-                            .process_chunk_state_witness(chunk_state_witness.clone())
+                            .process_chunk_state_witness(
+                                chunk_state_witness.clone(),
+                                PeerId(Arc::new(sender_public_key)),
+                            )
                             .unwrap();
                     }
                     None
