@@ -532,7 +532,7 @@ impl Client {
             // prepare_transactions or the like.
             new_transactions_validation_state: PartialState::default(),
         };
-        let signer = self.validator_signer.ok_or(Error::NotAValidator)?;
+        let signer = self.validator_signer.as_ref().ok_or(Error::NotAValidator)?;
         let signature = signer.sign_chunk_state_witness(&witness_inner);
         let witness = ChunkStateWitness {
             inner: witness_inner,
