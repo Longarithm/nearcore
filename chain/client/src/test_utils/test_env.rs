@@ -282,6 +282,7 @@ impl TestEnv {
                     NetworkRequests::ChunkStateWitness(accounts, chunk_state_witness),
                 ) = msg
                 {
+                    let chunk_state_witness = chunk_state_witness.inner;
                     let mut post_state_roots =
                         HashSet::from([chunk_state_witness.main_state_transition.post_state_root]);
                     post_state_roots.extend(
