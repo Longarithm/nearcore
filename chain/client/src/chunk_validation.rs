@@ -80,10 +80,11 @@ impl ChunkValidator {
     /// happens in a separate thread.
     pub fn start_validating_chunk(
         &self,
-        state_witness: ChunkStateWitnessInner,
+        state_witness: ChunkStateWitness,
         chain_store: &ChainStore,
     ) -> Result<(), Error> {
-        let chunk_header = state_witness.chunk_header.clone();
+        let state_witness_inner = state_witness.inner;
+        let chunk_header = state_witness_inner.chunk_header.clone();
         let Some(my_signer) = self.my_signer.as_ref() else {
             return Err(Error::NotAValidator);
         };
@@ -100,9 +101,10 @@ impl ChunkValidator {
         if !chunk_validator_assignments.contains(my_signer.validator_id()) {
             return Err(Error::NotAChunkValidator);
         }
+        self.epoch_manager.verify_chunk_state_witness(&state_witness)?;
 
         let pre_validation_result = pre_validate_chunk_state_witness(
-            &state_witness,
+            &state_witness_inner,
             chain_store,
             self.epoch_manager.as_ref(),
         )?;
@@ -121,7 +123,7 @@ impl ChunkValidator {
         let runtime_adapter = self.runtime_adapter.clone();
         rayon::spawn(move || {
             match validate_chunk_state_witness(
-                state_witness,
+                state_witness_inner,
                 pre_validation_result,
                 epoch_manager.as_ref(),
                 runtime_adapter.as_ref(),
@@ -427,7 +429,7 @@ impl Client {
     pub fn process_chunk_state_witness(&mut self, witness: ChunkStateWitness) -> Result<(), Error> {
         // TODO(#10265): If the previous block does not exist, we should
         // queue this (similar to orphans) to retry later.
-        self.chunk_validator.start_validating_chunk(witness.inner, self.chain.chain_store())
+        self.chunk_validator.start_validating_chunk(witness, self.chain.chain_store())
     }
 
     /// Collect state transition data necessary to produce state witness for
