@@ -516,7 +516,7 @@ impl Client {
         let prev_chunk = self.chain.get_chunk(&prev_chunk_header.chunk_hash())?;
         let (main_state_transition, implicit_transitions, applied_receipts_hash) =
             self.collect_state_transition_data(&chunk_header, prev_chunk_header)?;
-        let witness = ChunkStateWitnessInner {
+        let witness_inner = ChunkStateWitnessInner {
             chunk_header: chunk_header.clone(),
             main_state_transition,
             // TODO(#9292): Iterate through the chain to derive this.
@@ -531,6 +531,12 @@ impl Client {
             // TODO(#9292): Derive this during chunk production, during
             // prepare_transactions or the like.
             new_transactions_validation_state: PartialState::default(),
+        };
+        let signer = self.validator_signer.ok_or(Error::NotAValidator)?;
+        let witness = ChunkStateWitness {
+            inner: witness_inner,
+            account_id: signer.validator_id().clone(),
+            signature: signer.sign_chunk_state_witness(&witness_inner),
         };
         tracing::debug!(
             target: "chunk_validation",
