@@ -282,11 +282,15 @@ impl TestEnv {
                     NetworkRequests::ChunkStateWitness(accounts, chunk_state_witness),
                 ) = msg
                 {
-                    let chunk_state_witness = chunk_state_witness.inner;
-                    let mut post_state_roots =
-                        HashSet::from([chunk_state_witness.main_state_transition.post_state_root]);
+                    let chunk_state_witness_inner = &chunk_state_witness.inner;
+                    let mut post_state_roots = HashSet::from([chunk_state_witness_inner
+                        .main_state_transition
+                        .post_state_root]);
                     post_state_roots.extend(
-                        chunk_state_witness.implicit_transitions.iter().map(|t| t.post_state_root),
+                        chunk_state_witness_inner
+                            .implicit_transitions
+                            .iter()
+                            .map(|t| t.post_state_root),
                     );
                     found_differing_post_state_root_due_to_state_transitions |=
                         post_state_roots.len() >= 2;
