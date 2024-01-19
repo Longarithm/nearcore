@@ -83,6 +83,8 @@ impl ChunkValidator {
         state_witness: ChunkStateWitness,
         chain_store: &ChainStore,
     ) -> Result<(), Error> {
+        self.epoch_manager.verify_chunk_state_witness(&state_witness)?;
+
         let state_witness_inner = state_witness.inner;
         let chunk_header = state_witness_inner.chunk_header.clone();
         let Some(my_signer) = self.my_signer.as_ref() else {
@@ -101,7 +103,6 @@ impl ChunkValidator {
         if !chunk_validator_assignments.contains(my_signer.validator_id()) {
             return Err(Error::NotAChunkValidator);
         }
-        self.epoch_manager.verify_chunk_state_witness(&state_witness)?;
 
         let pre_validation_result = pre_validate_chunk_state_witness(
             &state_witness_inner,
@@ -536,11 +537,7 @@ impl Client {
         };
         let signer = self.validator_signer.as_ref().ok_or(Error::NotAValidator)?;
         let signature = signer.sign_chunk_state_witness(&witness_inner);
-        let witness = ChunkStateWitness {
-            inner: witness_inner,
-            account_id: signer.validator_id().clone(),
-            signature,
-        };
+        let witness = ChunkStateWitness { inner: witness_inner, signature };
         tracing::debug!(
             target: "chunk_validation",
             "Sending chunk state witness for chunk {:?} to chunk validators {:?}",

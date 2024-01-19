@@ -15,7 +15,6 @@ use near_primitives_core::types::{AccountId, Balance};
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct ChunkStateWitness {
     pub inner: ChunkStateWitnessInner,
-    pub account_id: AccountId,
     pub signature: Signature,
 }
 
