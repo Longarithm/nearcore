@@ -302,7 +302,7 @@ impl TestEnv {
                             .lookup_mut(&mut self.clients, &account)
                             .process_chunk_state_witness(
                                 chunk_state_witness.clone(),
-                                PeerId(Arc::new(sender_public_key)),
+                                PeerId::new(sender_public_key),
                             )
                             .unwrap();
                     }
