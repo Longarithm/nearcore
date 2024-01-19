@@ -15,7 +15,8 @@ use near_network::types::{NetworkRequests, PeerManagerMessageRequest};
 use near_primitives::challenge::PartialState;
 use near_primitives::checked_feature;
 use near_primitives::chunk_validation::{
-    ChunkEndorsement, ChunkStateTransition, ChunkStateWitness, StoredChunkStateTransitionData,
+    ChunkEndorsement, ChunkStateTransition, ChunkStateWitness, ChunkStateWitnessInner,
+    StoredChunkStateTransitionData,
 };
 use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::merkle::merklize;
@@ -79,7 +80,7 @@ impl ChunkValidator {
     /// happens in a separate thread.
     pub fn start_validating_chunk(
         &self,
-        state_witness: ChunkStateWitness,
+        state_witness: ChunkStateWitnessInner,
         chain_store: &ChainStore,
     ) -> Result<(), Error> {
         let chunk_header = state_witness.chunk_header.clone();
@@ -152,7 +153,7 @@ impl ChunkValidator {
 /// We do this before handing off the computationally intensive part to a
 /// validation thread.
 fn pre_validate_chunk_state_witness(
-    state_witness: &ChunkStateWitness,
+    state_witness: &ChunkStateWitnessInner,
     store: &ChainStore,
     epoch_manager: &dyn EpochManagerAdapter,
 ) -> Result<PreValidationOutput, Error> {
@@ -303,7 +304,7 @@ struct PreValidationOutput {
 }
 
 fn validate_chunk_state_witness(
-    state_witness: ChunkStateWitness,
+    state_witness: ChunkStateWitnessInner,
     pre_validation_output: PreValidationOutput,
     epoch_manager: &dyn EpochManagerAdapter,
     runtime_adapter: &dyn RuntimeAdapter,
@@ -515,7 +516,7 @@ impl Client {
         let prev_chunk = self.chain.get_chunk(&prev_chunk_header.chunk_hash())?;
         let (main_state_transition, implicit_transitions, applied_receipts_hash) =
             self.collect_state_transition_data(&chunk_header, prev_chunk_header)?;
-        let witness = ChunkStateWitness {
+        let witness = ChunkStateWitnessInner {
             chunk_header: chunk_header.clone(),
             main_state_transition,
             // TODO(#9292): Iterate through the chain to derive this.

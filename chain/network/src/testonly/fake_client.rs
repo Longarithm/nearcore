@@ -28,7 +28,7 @@ pub enum Event {
     Chunk(Vec<PartialEncodedChunkPart>),
     ChunkEndorsement(ChunkEndorsement),
     ChunkRequest(ChunkHash),
-    ChunkStateWitness(ChunkStateWitness),
+    ChunkStateWitness(ChunkStateWitnes),
     Transaction(SignedTransaction),
 }
 

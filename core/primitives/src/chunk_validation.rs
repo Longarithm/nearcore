@@ -11,10 +11,16 @@ use near_crypto::{PublicKey, Signature};
 use near_primitives_core::hash::CryptoHash;
 use near_primitives_core::types::{AccountId, Balance};
 
+pub struct ChunkStateWitness {
+    inner: ChunkStateWitnessInner,
+    pub account_id: AccountId,
+    pub signature: Signature,
+}
+
 /// The state witness for a chunk; proves the state transition that the
 /// chunk attests to.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub struct ChunkStateWitness {
+pub struct ChunkStateWitnessInner {
     /// The chunk header that this witness is for. While this is not needed
     /// to apply the state transition, it is needed for a chunk validator to
     /// produce a chunk endorsement while knowing what they are endorsing.
