@@ -11,7 +11,7 @@ use near_chain::validate::validate_chunk_with_chunk_extra_and_receipts_root;
 use near_chain::{Chain, ChainStore, ChainStoreAccess};
 use near_chain_primitives::Error;
 use near_epoch_manager::EpochManagerAdapter;
-use near_network::types::{NetworkRequests, PeerManagerMessageRequest};
+use near_network::types::{NetworkRequests, PeerManagerMessageRequest, ReasonForBan};
 use near_primitives::challenge::PartialState;
 use near_primitives::checked_feature;
 use near_primitives::chunk_validation::{
@@ -20,6 +20,7 @@ use near_primitives::chunk_validation::{
 };
 use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::merkle::merklize;
+use near_primitives::network::PeerId;
 use near_primitives::sharding::{ChunkHash, ShardChunk, ShardChunkHeader};
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{AccountId, EpochId};
@@ -82,6 +83,7 @@ impl ChunkValidator {
         &self,
         state_witness: ChunkStateWitness,
         chain_store: &ChainStore,
+        peer_id: PeerId,
     ) -> Result<(), Error> {
         self.epoch_manager.verify_chunk_state_witness(&state_witness)?;
 
@@ -144,6 +146,12 @@ impl ChunkValidator {
                     }
                 }
                 Err(err) => {
+                    self.network_sender.send(PeerManagerMessageRequest::NetworkRequests(
+                        NetworkRequests::BanPeer {
+                            peer_id,
+                            ban_reason: ReasonForBan::BadChunkStateWitness,
+                        },
+                    ));
                     tracing::error!("Failed to validate chunk: {:?}", err);
                 }
             }
@@ -427,10 +435,29 @@ fn apply_result_to_chunk_extra(
 impl Client {
     /// Responds to a network request to verify a `ChunkStateWitness`, which is
     /// sent by chunk producers after they produce a chunk.
-    pub fn process_chunk_state_witness(&mut self, witness: ChunkStateWitness) -> Result<(), Error> {
+    pub fn process_chunk_state_witness(
+        &mut self,
+        witness: ChunkStateWitness,
+        peer_id: PeerId,
+    ) -> Result<(), Error> {
         // TODO(#10265): If the previous block does not exist, we should
         // queue this (similar to orphans) to retry later.
-        self.chunk_validator.start_validating_chunk(witness, self.chain.chain_store())
+        match self.chunk_validator.start_validating_chunk(
+            witness,
+            self.chain.chain_store(),
+            peer_id.clone(),
+        ) {
+            result @ Ok(()) | Err(Error::NotAValidator) => result,
+            Err(err) => {
+                self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(
+                    NetworkRequests::BanPeer {
+                        peer_id,
+                        ban_reason: ReasonForBan::BadChunkStateWitness,
+                    },
+                ));
+                Err(err)
+            }
+        }
     }
 
     /// Collect state transition data necessary to produce state witness for
@@ -483,9 +510,6 @@ impl Client {
                 post_state_root: *self.chain.get_chunk_extra(block_hash, &shard_uid)?.state_root(),
             });
         }
-
-        // TODO(#10265): If the previous block does not exist, we should
-        // queue this (similar to orphans) to retry later.
 
         Ok((main_transition, implicit_transitions, receipts_hash))
     }
