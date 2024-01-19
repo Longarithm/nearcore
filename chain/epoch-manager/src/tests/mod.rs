@@ -2679,7 +2679,6 @@ fn test_chunk_header(h: &[CryptoHash], signer: &dyn ValidatorSigner) -> ShardChu
 }
 
 #[test]
-#[cfg(feature = "nightly")]
 fn test_verify_chunk_endorsements() {
     use near_chain_primitives::Error;
     use near_crypto::Signature;
@@ -2713,7 +2712,7 @@ fn test_verify_chunk_endorsements() {
     assert_eq!(signer.public_key(), validator.public_key().clone());
 
     // make chunk header
-    let chunk_header = test_chunk_header(&h, &signer);
+    let chunk_header = test_chunk_header(&h, signer.as_ref());
 
     // check chunk endorsement validity
     let mut chunk_endorsement = ChunkEndorsement::new(chunk_header.chunk_hash(), signer.clone());
@@ -2768,7 +2767,7 @@ fn test_verify_chunk_state_witness() {
     assert_eq!(signer.public_key(), validator.public_key().clone());
 
     // build a chunk state witness
-    let chunk_header = test_chunk_header(&h, &signer);
+    let chunk_header = test_chunk_header(&h, signer.as_ref());
     let witness_inner = ChunkStateWitnessInner {
         chunk_header,
         main_state_transition: ChunkStateTransition {
