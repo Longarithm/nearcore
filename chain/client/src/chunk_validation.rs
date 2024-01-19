@@ -448,7 +448,7 @@ impl Client {
             peer_id.clone(),
         ) {
             Err(err) => {
-                if err != Error::NotAValidator {
+                if !matches!(err, Error::NotAValidator) {
                     self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(
                         NetworkRequests::BanPeer {
                             peer_id,
