@@ -11,6 +11,7 @@ use near_crypto::{PublicKey, Signature};
 use near_primitives_core::hash::CryptoHash;
 use near_primitives_core::types::{AccountId, Balance};
 
+/// Signable
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct ChunkStateWitness {
     pub inner: ChunkStateWitnessInner,
