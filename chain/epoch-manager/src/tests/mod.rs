@@ -2760,40 +2760,39 @@ fn test_verify_chunk_state_witness() {
     let epoch_manager = epoch_manager.into_handle();
     let epoch_id = epoch_manager.get_epoch_id(&h[1]).unwrap();
 
-    // verify if the test signer has same public key as the chunk validator
+    // Verify if the test signer has same public key as the chunk validator.
     let (validator, _) =
         epoch_manager.get_validator_by_account_id(&epoch_id, &h[0], &account_id).unwrap();
     let signer = Arc::new(create_test_signer("test1"));
     assert_eq!(signer.public_key(), validator.public_key().clone());
 
-    // build a chunk state witness
+    // Build a chunk state witness with arbitrary data.
     let chunk_header = test_chunk_header(&h, signer.as_ref());
-    let witness_inner = ChunkStateWitnessInner {
+    let witness_inner = ChunkStateWitnessInner::new(
         chunk_header,
-        main_state_transition: ChunkStateTransition {
-            block_hash: Default::default(),
+        ChunkStateTransition {
+            block_hash: h[0],
             base_state: Default::default(),
-            post_state_root: Default::default(),
+            post_state_root: h[3],
         },
-        source_receipt_proofs: Default::default(),
-        applied_receipts_hash: Default::default(),
-        transactions: vec![],
-        implicit_transitions: vec![],
-        new_transactions: vec![],
-        new_transactions_validation_state: Default::default(),
-    };
+        Default::default(),
+        h[4],
+        vec![],
+        vec![],
+        vec![],
+        Default::default(),
+    );
     let signature = signer.sign_chunk_state_witness(&witness_inner);
 
-    // check chunk state witness validity
+    // Check chunk state witness validity.
     let mut chunk_state_witness = ChunkStateWitness { inner: witness_inner, signature };
-    chunk_state_witness.signature = Signature::default();
     assert!(epoch_manager.verify_chunk_state_witness(&chunk_state_witness).unwrap());
 
-    // check invalid chunk state witness signature
+    // Check invalid chunk state witness signature.
     chunk_state_witness.signature = Signature::default();
     assert!(!epoch_manager.verify_chunk_state_witness(&chunk_state_witness).unwrap());
 
-    // check chunk state witness invalidity when signer is not chunk validator
+    // Check chunk state witness invalidity when signer is not a chunk validator.
     let bad_signer = Arc::new(create_test_signer("test2"));
     chunk_state_witness.signature = bad_signer.sign_chunk_state_witness(&chunk_state_witness.inner);
     assert!(!epoch_manager.verify_chunk_state_witness(&chunk_state_witness).unwrap());
