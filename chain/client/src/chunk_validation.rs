@@ -518,19 +518,19 @@ impl Client {
 
     /// Distributes the chunk state witness to chunk validators that are
     /// selected to validate this chunk.
-    pub fn send_chunk_state_witness_to_chunk_validators(
+    pub fn produce_chunk_state_witness(
         &mut self,
         epoch_id: &EpochId,
         prev_chunk_header: ShardChunkHeader,
         chunk: &ShardChunk,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<(Vec<AccountId>, ChunkStateWitness)>, Error> {
         let protocol_version = self.epoch_manager.get_epoch_protocol_version(epoch_id)?;
         if !checked_feature!("stable", ChunkValidation, protocol_version) {
-            return Ok(());
+            return Ok(None);
         }
         // First chunk after genesis doesn't have to be endorsed.
         if prev_chunk_header.prev_block_hash() == &CryptoHash::default() {
-            return Ok(());
+            return Ok(None);
         }
 
         let chunk_header = chunk.cloned_header();
@@ -563,17 +563,7 @@ impl Client {
         );
         let signer = self.validator_signer.as_ref().ok_or(Error::NotAValidator)?;
         let signature = signer.sign_chunk_state_witness(&witness_inner);
-        let witness = ChunkStateWitness { inner: witness_inner, signature };
-        tracing::debug!(
-            target: "chunk_validation",
-            "Sending chunk state witness for chunk {:?} to chunk validators {:?}",
-            chunk_header.chunk_hash(),
-            chunk_validators,
-        );
-        self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(
-            NetworkRequests::ChunkStateWitness(chunk_validators, witness),
-        ));
-        Ok(())
+        Ok(Some((chunk_validators, ChunkStateWitness { inner: witness_inner, signature })))
     }
 
     /// Function to process an incoming chunk endorsement from chunk validators.

@@ -1705,12 +1705,22 @@ impl Client {
                             validator_id.clone(),
                         )
                         .expect("Failed to process produced chunk");
-                    if let Err(err) = self.send_chunk_state_witness_to_chunk_validators(
-                        &epoch_id,
-                        last_header,
-                        &shard_chunk,
-                    ) {
-                        tracing::error!(target: "client", ?err, "Failed to send chunk state witness to chunk validators");
+                    match self.produce_chunk_state_witness(&epoch_id, last_header, &shard_chunk) {
+                        Ok(Some((chunk_validators, state_witness))) => {
+                            tracing::debug!(
+                                target: "chunk_validation",
+                                "Sending chunk state witness for chunk {:?} to chunk validators {:?}",
+                                shard_chunk.chunk_hash(),
+                                chunk_validators,
+                            );
+                            self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(
+                                NetworkRequests::ChunkStateWitness(chunk_validators, state_witness),
+                            ));
+                        }
+                        Ok(None) => {}
+                        Err(err) => {
+                            tracing::error!(target: "client", ?err, "Failed to send chunk state witness to chunk validators");
+                        }
                     }
                 }
                 Ok(None) => {}

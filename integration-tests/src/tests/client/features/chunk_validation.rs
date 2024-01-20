@@ -128,6 +128,7 @@ fn run_chunk_validation_test(seed: u64, prob_missing_chunk: f64) {
     let mut rng: StdRng = SeedableRng::seed_from_u64(seed);
     let mut expected_chunks = HashMap::new();
     let mut found_differing_post_state_root_due_to_state_transitions = false;
+    let cause_ban_in_the_end = prob_missing_chunk == 0;
     for round in 0..blocks_to_produce {
         let heads = env
             .clients
@@ -181,6 +182,18 @@ fn run_chunk_validation_test(seed: u64, prob_missing_chunk: f64) {
             assert_eq!(blocks_processed, vec![*block.hash()]);
         }
 
+        if round == blocks_to_produce - 2 && cause_ban_in_the_end {
+            let client = &env.clients[0];
+            let epoch_manager = &client.epoch_manager;
+            let parent_hash = &tip.last_block_hash;
+            let epoch_id = epoch_manager.get_epoch_id_from_prev_block(parent_hash).unwrap();
+            let height = tip.height + 1;
+            let chunk_producer = epoch_manager.get_chunk_producer(&epoch_id, height, 0).unwrap();
+            let client = env.client(&chunk_producer);
+            // how to take chunk hash?!
+            //let chunk = client.chain.get_chunk()
+            //.produce_chunk_state_witness()
+        }
         env.process_partial_encoded_chunks();
         for j in 0..env.clients.len() {
             env.process_shards_manager_responses_and_finish_processing_blocks(j);
