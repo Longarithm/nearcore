@@ -2786,6 +2786,7 @@ fn test_verify_chunk_state_witness() {
 
     // check chunk state witness validity
     let mut chunk_state_witness = ChunkStateWitness { inner: witness_inner, signature };
+    chunk_state_witness.signature = Signature::default();
     assert!(epoch_manager.verify_chunk_state_witness(&chunk_state_witness).unwrap());
 
     // check invalid chunk state witness signature
