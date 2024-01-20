@@ -550,11 +550,11 @@ impl Client {
             main_state_transition,
             // TODO(#9292): Iterate through the chain to derive this.
             HashMap::new(),
-            prev_chunk.transactions().to_vec(),
             // (Could also be derived from iterating through the receipts, but
             // that defeats the purpose of this check being a debugging
             // mechanism.)
             applied_receipts_hash,
+            prev_chunk.transactions().to_vec(),
             implicit_transitions,
             chunk.transactions().to_vec(),
             // TODO(#9292): Derive this during chunk production, during
