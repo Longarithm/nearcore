@@ -560,7 +560,7 @@ impl Client {
             // TODO(#9292): Derive this during chunk production, during
             // prepare_transactions or the like.
             PartialState::default(),
-        };
+        );
         let signer = self.validator_signer.as_ref().ok_or(Error::NotAValidator)?;
         let signature = signer.sign_chunk_state_witness(&witness_inner);
         let witness = ChunkStateWitness { inner: witness_inner, signature };
