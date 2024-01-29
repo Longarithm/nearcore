@@ -13,7 +13,7 @@ use near_chain::validate::validate_chunk_with_chunk_extra_and_receipts_root;
 use near_chain::{Block, BlockHeader, Chain, ChainStoreAccess};
 use near_chain_primitives::Error;
 use near_epoch_manager::EpochManagerAdapter;
-use near_network::types::{NetworkRequests, PeerManagerMessageRequest, ReasonForBan};
+use near_network::types::{NetworkRequests, PeerManagerMessageRequest};
 use near_pool::TransactionGroupIteratorWrapper;
 use near_primitives::block_body::ChunkEndorsementSignatures;
 use near_primitives::challenge::PartialState;
@@ -90,7 +90,7 @@ impl ChunkValidator {
         &self,
         state_witness: ChunkStateWitness,
         chain: &Chain,
-        peer_id: PeerId,
+        #[allow(unused)] peer_id: PeerId,
     ) -> Result<(), Error> {
         if !self.epoch_manager.verify_chunk_state_witness_signature(&state_witness)? {
             return Err(Error::InvalidChunkStateWitness("Invalid signature".to_string()));
