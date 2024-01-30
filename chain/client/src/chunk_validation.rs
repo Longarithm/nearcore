@@ -1,5 +1,7 @@
+use crate::{metrics, Client};
 use itertools::Itertools;
-use near_async::messaging::{CanSend, Sender};
+use near_async::messaging::{CanSend, IntoSender, Sender};
+use near_cache::SyncLruCache;
 use near_chain::chain::{
     apply_new_chunk, apply_old_chunk, NewChunkData, NewChunkResult, OldChunkData, OldChunkResult,
     ShardContext, StorageContext,
@@ -36,8 +38,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::{metrics, Client};
-
 // This is the number of unique chunks for which we would track the chunk endorsements.
 // Ideally, we should not be processing more than num_shards chunks at a time.
 const NUM_CHUNK_ENDORSEMENTS_CACHE_COUNT: usize = 100;
@@ -64,7 +64,7 @@ pub struct ChunkValidator {
     /// We store the validated chunk endorsements received from chunk validators
     /// This is keyed on chunk_hash and account_id of validator to avoid duplicates.
     /// Chunk endorsements would later be used as a part of block production.
-    chunk_endorsements: lru::LruCache<ChunkHash, HashMap<AccountId, ChunkEndorsement>>,
+    chunk_endorsements: Arc<SyncLruCache<ChunkHash, HashMap<AccountId, ChunkEndorsement>>>,
 }
 
 impl ChunkValidator {
@@ -79,7 +79,7 @@ impl ChunkValidator {
             epoch_manager,
             network_sender,
             runtime_adapter,
-            chunk_endorsements: lru::LruCache::new(NUM_CHUNK_ENDORSEMENTS_CACHE_COUNT),
+            chunk_endorsements: Arc::new(SyncLruCache::new(NUM_CHUNK_ENDORSEMENTS_CACHE_COUNT)),
         }
     }
 
@@ -126,6 +126,7 @@ impl ChunkValidator {
         let signer = my_signer.clone();
         let epoch_manager = self.epoch_manager.clone();
         let runtime_adapter = self.runtime_adapter.clone();
+        let my_chunk_endorsements = self.chunk_endorsements.clone();
         rayon::spawn(move || {
             match validate_chunk_state_witness(
                 state_witness_inner,
@@ -139,6 +140,7 @@ impl ChunkValidator {
                         epoch_manager.as_ref(),
                         signer.as_ref(),
                         &network_sender,
+                        my_chunk_endorsements,
                     );
                 }
                 Err(err) => {
@@ -179,7 +181,7 @@ impl ChunkValidator {
         // We can safely rely on the the following details
         //    1. The chunk endorsements are from valid chunk_validator for this chunk.
         //    2. The chunk endorsements signatures are valid.
-        let Some(chunk_endorsements) = self.chunk_endorsements.peek(&chunk_header.chunk_hash())
+        let Some(chunk_endorsements) = self.chunk_endorsements.get(&chunk_header.chunk_hash())
         else {
             // Early return if no chunk_enforsements found in our cache.
             return Ok(None);
@@ -603,6 +605,7 @@ fn send_chunk_endorsement_to_block_producers(
     epoch_manager: &dyn EpochManagerAdapter,
     signer: &dyn ValidatorSigner,
     network_sender: &Sender<PeerManagerMessageRequest>,
+    my_chunk_endorsements: Arc<SyncLruCache<ChunkHash, HashMap<AccountId, ChunkEndorsement>>>,
 ) {
     let epoch_id =
         epoch_manager.get_epoch_id_from_prev_block(chunk_header.prev_block_hash()).unwrap();
@@ -615,18 +618,26 @@ fn send_chunk_endorsement_to_block_producers(
         .collect_vec();
     assert!(!block_producers.is_empty());
 
+    let chunk_hash = chunk_header.chunk_hash();
     tracing::debug!(
         target: "chunk_validation",
-        chunk_hash=?chunk_header.chunk_hash(),
+        chunk_hash=?chunk_hash,
         ?block_producers,
         "Chunk validated successfully, sending endorsement",
     );
 
     let endorsement = ChunkEndorsement::new(chunk_header.chunk_hash(), signer);
     for block_producer in block_producers {
-        network_sender.send(PeerManagerMessageRequest::NetworkRequests(
-            NetworkRequests::ChunkEndorsement(block_producer, endorsement.clone()),
-        ));
+        if signer.validator_id() == &block_producer {
+            let mut my_chunk_endorsements = my_chunk_endorsements.lock();
+            my_chunk_endorsements.get_or_insert(chunk_hash.clone(), || HashMap::new());
+            let chunk_endorsements = my_chunk_endorsements.get_mut(&chunk_hash).unwrap();
+            chunk_endorsements.insert(block_producer.clone(), endorsement.clone());
+        } else {
+            network_sender.send(PeerManagerMessageRequest::NetworkRequests(
+                NetworkRequests::ChunkEndorsement(block_producer, endorsement.clone()),
+            ));
+        }
     }
 }
 
@@ -667,6 +678,7 @@ impl Client {
                 self.epoch_manager.as_ref(),
                 signer.as_ref(),
                 &self.chunk_validator.network_sender,
+                self.chunk_validator.chunk_endorsements.clone(),
             );
             return Ok(());
         }
@@ -776,13 +788,27 @@ impl Client {
         if let Some(my_signer) = self.validator_signer.clone() {
             let block_producer =
                 self.epoch_manager.get_block_producer(&epoch_id, chunk_header.height_created())?;
-            if my_signer.validator_id() == &block_producer {
+            let validator_id = my_signer.validator_id();
+            if validator_id == &block_producer {
                 // Send a copy of the chunk endorsement to ourselves.
                 // Mainly useful in tests where we don't have a good way to handle network messages and there's
                 // only a single client.
                 let endorsement =
                     ChunkEndorsement::new(chunk_header.chunk_hash(), my_signer.as_ref());
                 self.process_chunk_endorsement(endorsement)?;
+            }
+
+            if chunk_validators.contains(validator_id) {
+                // Endorse the chunk automatically, bypassing sending state witness
+                // to ourselves.
+                // Network can't send messages to ourselves.
+                send_chunk_endorsement_to_block_producers(
+                    &chunk_header,
+                    self.epoch_manager.as_ref(),
+                    my_signer.as_ref(),
+                    &self.network_adapter.clone().into_sender(),
+                    self.chunk_validator.chunk_endorsements.clone(),
+                );
             }
         };
 
@@ -1016,11 +1042,9 @@ impl Client {
         // Maybe add check to ensure we don't accept endorsements from chunks already included in some block?
         // Maybe add check to ensure we don't accept endorsements from chunks that have too old height_created?
         tracing::debug!(target: "chunk_validation", ?endorsement, "Received and saved chunk endorsement.");
-        self.chunk_validator
-            .chunk_endorsements
-            .get_or_insert(chunk_hash.clone(), || HashMap::new());
-        let chunk_endorsements =
-            self.chunk_validator.chunk_endorsements.get_mut(chunk_hash).unwrap();
+        let mut all_chunk_endorsements = self.chunk_validator.chunk_endorsements.lock();
+        all_chunk_endorsements.get_or_insert(chunk_hash.clone(), || HashMap::new());
+        let chunk_endorsements = all_chunk_endorsements.get_mut(chunk_hash).unwrap();
         chunk_endorsements.insert(account_id.clone(), endorsement);
 
         Ok(())
