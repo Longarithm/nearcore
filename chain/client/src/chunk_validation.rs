@@ -638,6 +638,15 @@ impl Client {
         witness: ChunkStateWitness,
         peer_id: PeerId,
     ) -> Result<(), Error> {
+        tracing::debug!(
+            target: "chunk_validation",
+            "Process chunk state witness chunk_hash={:?} prev_block_hash={} shard_id={} height_created={}",
+            witness.inner.chunk_header.chunk_hash(),
+            witness.inner.chunk_header.prev_block_hash(),
+            witness.inner.chunk_header.shard_id(),
+            witness.inner.chunk_header.height_created(),
+        );
+
         // TODO(#10502): Handle production of state witness for first chunk after genesis.
         // Properly handle case for chunk right after genesis.
         // Context: We are currently unable to handle production of the state witness for the
@@ -779,8 +788,10 @@ impl Client {
 
         tracing::debug!(
             target: "chunk_validation",
-            "Sending chunk state witness for chunk {:?} to chunk validators {:?}",
+            "Sending chunk state witness for chunk {:?} shard_id={} height_created={} to chunk validators {:?}",
             chunk.chunk_hash(),
+            chunk.shard_id(),
+            chunk.height_created(),
             chunk_validators,
         );
         self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(
