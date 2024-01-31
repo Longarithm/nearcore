@@ -786,7 +786,9 @@ def create_and_upload_genesis_file_from_empty_genesis(
 ):
     node0 = validator_node_and_stakes[0][0]
     node0.machine.run(
-        'rm -rf /home/ubuntu/.near-tmp && mkdir /home/ubuntu/.near-tmp && /home/ubuntu/neard --home /home/ubuntu/.near-tmp init --chain-id {}'
+        'rm -rf /home/ubuntu/.near-tmp '
+        '&& mkdir /home/ubuntu/.near-tmp '
+        '&& /home/ubuntu/neard --home /home/ubuntu/.near-tmp init --chain-id {}'
         .format(chain_id))
     genesis_config = download_and_read_json(
         node0, "/home/ubuntu/.near-tmp/genesis.json")
@@ -918,7 +920,7 @@ def create_and_upload_genesis_file_from_empty_genesis(
         total_supply += int(account.get('locked', 0))
         total_supply += int(account.get('amount', 0))
     genesis_config['total_supply'] = str(total_supply)
-    genesis_config['protocol_version'] = 57
+    genesis_config['protocol_version'] = 80
     genesis_config['epoch_length'] = int(epoch_length)
     genesis_config['num_block_producer_seats'] = int(num_seats)
     genesis_config['protocol_reward_rate'] = [1, 10]
@@ -929,9 +931,16 @@ def create_and_upload_genesis_file_from_empty_genesis(
     # The default value of this parameter is 90.
     genesis_config['block_producer_kickout_threshold'] = 10
 
-    genesis_config['shard_layout'] = {'V0': {'num_shards': 4, 'version': 0}}
+    genesis_config['shard_layout'] = {'V1':
+        {
+            'boundary_accounts': ["aurora", "aurora-0", "kkuuue2akv_1630967379.near", "tge-lockup.sweat"],
+            'shards_split_map': None,
+            'to_parent_shard_map': None,
+            'version': 2
+        }
+    }
     genesis_config['simple_nightshade_shard_layout'] = {}
-    genesis_config['num_block_producer_seats_per_shard'] = [int(num_seats)] * 4
+    genesis_config['num_block_producer_seats_per_shard'] = [int(num_seats)] * 5
 
     genesis_config['records'] = records
     for node in [node for (node, _) in validator_node_and_stakes] + rpc_nodes:
@@ -1091,6 +1100,7 @@ def neard_start_script(node, upgrade_schedule=None, epoch_height=None):
         sudo mv /home/ubuntu/near.upgrade.log /home/ubuntu/near.upgrade.log.1 2>/dev/null
         sudo rm -rf /home/ubuntu/.near/data
         tmux new -s near -d bash
+        sudo rm -rf /home/ubuntu/neard.log
         tmux send-keys -t near 'RUST_BACKTRACE=full RUST_LOG=debug,actix_web=info {neard_binary} run 2>&1 | tee -a {neard_binary}.log' C-m
     '''.format(neard_binary=shlex.quote(neard_binary))
 
