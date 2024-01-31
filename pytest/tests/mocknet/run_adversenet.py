@@ -170,9 +170,9 @@ if __name__ == '__main__':
         Bad validators: {bad_validators} each with stake {bad_validator_stake} NEAR\n\
         RPC nodes: {rpcs}\n')
 
-    answer = input("Enter y to continue: ")
-    if answer != "y":
-        exit(0)
+    # answer = input("Enter y to continue: ")
+    # if answer != "y":
+    #     exit(0)
 
     mocknet.stop_nodes(all_nodes)
     time.sleep(10)

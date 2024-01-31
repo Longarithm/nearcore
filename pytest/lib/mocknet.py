@@ -454,9 +454,6 @@ def accounts_from_nodes(nodes):
 def kill_proccess_script(pid):
     return f'''
         sudo kill {pid}
-        while kill -0 {pid}; do
-            sleep 1
-        done
     '''
 
 
@@ -481,8 +478,11 @@ def stop_node(node):
     pids = get_near_pid(m).split()
 
     for pid in pids:
+        print(f'{node.instance_name} {pid} 1')
         m.run('bash', input=kill_proccess_script(pid))
+        print(f'{node.instance_name} {pid} 2')
         m.run('sudo -u ubuntu -i', input=TMUX_STOP_SCRIPT)
+        print(f'{node.instance_name} {pid} 3')
 
 
 def upload_and_extract(node, src_filename, dst_filename):
@@ -1038,6 +1038,13 @@ def update_config_file(
         json.dump(config_json, f, indent=2)
 
 
+def upload_config(node, config_json, overrider):
+    copied_config = json.loads(json.dumps(config_json))
+    if overrider:
+        overrider(node, copied_config)
+    upload_json(node, '/home/ubuntu/.near/config.json', copied_config)
+
+
 def create_and_upload_config_file_from_default(nodes, chain_id, overrider=None):
     nodes[0].machine.run(
         'rm -rf /home/ubuntu/.near-tmp && mkdir /home/ubuntu/.near-tmp && /home/ubuntu/neard --home /home/ubuntu/.near-tmp init --chain-id {}'
@@ -1057,11 +1064,8 @@ def create_and_upload_config_file_from_default(nodes, chain_id, overrider=None):
     if 'telemetry' in config_json:
         config_json['telemetry']['endpoints'] = []
 
-    for node in nodes:
-        copied_config = json.loads(json.dumps(config_json))
-        if overrider:
-            overrider(node, copied_config)
-        upload_json(node, '/home/ubuntu/.near/config.json', copied_config)
+    pmap(lambda node: upload_config(node, config_json, overrider), nodes)
+
 
 
 def update_existing_config_file(nodes, overrider=None):
