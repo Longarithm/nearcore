@@ -1046,14 +1046,22 @@ def create_and_upload_config_file_from_default(nodes, chain_id, overrider=None):
         nodes[0],
         '/home/ubuntu/.near-tmp/config.json',
     )
-    config_json['tracked_shards'] = [0, 1, 2, 3]
+    config_json['tracked_shards'] = [0]
     config_json['archive'] = True
     config_json['archival_peer_connections_lower_bound'] = 1
     node_addresses = [get_node_addr(node, 24567) for node in nodes]
+    config_json['consensus']['min_block_production_delay'] = {"secs": 1, "nanos": 0}
+    config_json['consensus']['max_block_production_delay'] = {"secs": 3, "nanos": 0}
+    config_json['consensus']['max_block_wait_delay'] = {"secs": 6, "nanos": 0}
     config_json['network']['boot_nodes'] = ','.join(node_addresses)
     config_json['network']['skip_sync_wait'] = False
     config_json['rpc']['addr'] = '0.0.0.0:3030'
     config_json['rpc']['enable_debug_rpc'] = True
+    config_json['store']['trie_cache'] = {
+        "default_max_bytes": 50000000,
+        "per_shard_max_bytes": {},
+        "shard_cache_deletions_queue_capacity": 100000
+    }
     if 'telemetry' in config_json:
         config_json['telemetry']['endpoints'] = []
 
