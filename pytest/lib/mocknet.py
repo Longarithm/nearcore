@@ -454,9 +454,6 @@ def accounts_from_nodes(nodes):
 def kill_proccess_script(pid):
     return f'''
         sudo kill {pid}
-        while kill -0 {pid}; do
-            sleep 1
-        done
     '''
 
 
@@ -943,8 +940,8 @@ def create_and_upload_genesis_file_from_empty_genesis(
     genesis_config['num_block_producer_seats_per_shard'] = [int(num_seats)] * 5
 
     genesis_config['records'] = records
-    for node in [node for (node, _) in validator_node_and_stakes] + rpc_nodes:
-        upload_json(node, '/home/ubuntu/.near/genesis.json', genesis_config)
+    pmap(lambda node: upload_json(node, '/home/ubuntu/.near/genesis.json', genesis_config),
+         [node for (node, _) in validator_node_and_stakes] + rpc_nodes)
 
 
 def download_and_read_json(node, filename):
@@ -1038,6 +1035,13 @@ def update_config_file(
         json.dump(config_json, f, indent=2)
 
 
+def upload_config(node, config_json, overrider):
+    copied_config = json.loads(json.dumps(config_json))
+    if overrider:
+        overrider(node, copied_config)
+    upload_json(node, '/home/ubuntu/.near/config.json', copied_config)
+
+
 def create_and_upload_config_file_from_default(nodes, chain_id, overrider=None):
     nodes[0].machine.run(
         'rm -rf /home/ubuntu/.near-tmp && mkdir /home/ubuntu/.near-tmp && /home/ubuntu/neard --home /home/ubuntu/.near-tmp init --chain-id {}'
@@ -1065,11 +1069,7 @@ def create_and_upload_config_file_from_default(nodes, chain_id, overrider=None):
     if 'telemetry' in config_json:
         config_json['telemetry']['endpoints'] = []
 
-    for node in nodes:
-        copied_config = json.loads(json.dumps(config_json))
-        if overrider:
-            overrider(node, copied_config)
-        upload_json(node, '/home/ubuntu/.near/config.json', copied_config)
+    pmap(lambda node: upload_config(node, config_json, overrider), nodes)
 
 
 def update_existing_config_file(nodes, overrider=None):
