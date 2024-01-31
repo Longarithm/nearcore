@@ -638,6 +638,14 @@ impl Client {
         witness: ChunkStateWitness,
         peer_id: PeerId,
     ) -> Result<(), Error> {
+        tracing::debug!(
+            target: "chunk_validation",
+            "Received chunk state witness chunk_hash={:?} shard_id={} prev_block_hash={} height_created={}",
+            witness.inner.chunk_header.chunk_hash(),
+            witness.inner.chunk_header.shard_id(),
+            witness.inner.chunk_header.prev_block_hash(),
+            witness.inner.chunk_header.height_created(),
+        );
         // TODO(#10502): Handle production of state witness for first chunk after genesis.
         // Properly handle case for chunk right after genesis.
         // Context: We are currently unable to handle production of the state witness for the
