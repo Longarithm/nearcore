@@ -942,8 +942,9 @@ def create_and_upload_genesis_file_from_empty_genesis(
     genesis_config['num_block_producer_seats_per_shard'] = [int(num_seats)] * 5
 
     genesis_config['records'] = records
-    for node in [node for (node, _) in validator_node_and_stakes] + rpc_nodes:
-        upload_json(node, '/home/ubuntu/.near/genesis.json', genesis_config)
+    pmap(lambda node: upload_json(node, '/home/ubuntu/.near/genesis.json', genesis_config),
+        [node for (node, _) in validator_node_and_stakes] + rpc_nodes)
+
 
 
 def download_and_read_json(node, filename):
