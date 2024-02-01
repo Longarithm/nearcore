@@ -441,6 +441,7 @@ impl Doomslug {
     /// Adds new approval to the history.
     fn update_history(&mut self, entry: ApprovalHistoryEntry) {
         while self.history.len() >= MAX_HISTORY_SIZE {
+            tracing::debug!(target: "doomslug", "pop");
             self.history.pop_front();
         }
         self.history.push_back(entry);
@@ -464,10 +465,12 @@ impl Doomslug {
     #[must_use]
     pub fn process_timer(&mut self, cur_time: Instant) -> Vec<Approval> {
         let mut ret = vec![];
-        for _ in 0..MAX_TIMER_ITERS {
+        for iter in 0..MAX_TIMER_ITERS {
+            tracing::debug!(target: "doomslug", iter, "iteration");
             let skip_delay = self
                 .timer
                 .get_delay(self.timer.height.saturating_sub(self.largest_final_height.get()));
+            tracing::debug!(target: "doomslug", "skip_delay={:?}", skip_delay);
 
             // The `endorsement_delay` is time to send approval to the block producer at `timer.height`,
             // while the `skip_delay` is the time before sending the approval to BP of `timer_height + 1`,
@@ -475,16 +478,19 @@ impl Doomslug {
             debug_assert!(skip_delay >= 2 * self.timer.endorsement_delay);
 
             let tip_height = self.tip.height;
+            tracing::debug!(target: "doomslug", tip_height, "STEP1 | {} {:?} {:?} {:?}", self.endorsement_pending, cur_time, self.timer.last_endorsement_sent, self.timer.endorsement_delay);
 
             if self.endorsement_pending
                 && cur_time >= self.timer.last_endorsement_sent + self.timer.endorsement_delay
             {
+                tracing::debug!(target: "doomslug", "largest_target_height = {}", self.largest_target_height.get());
                 if tip_height >= self.largest_target_height.get() {
                     self.largest_target_height.set(tip_height + 1);
 
                     if let Some(approval) = self.create_approval(tip_height + 1) {
                         ret.push(approval);
                     }
+                    tracing::debug!(target: "doomslug", "update_history");
                     self.update_history(ApprovalHistoryEntry {
                         parent_height: tip_height,
                         target_height: tip_height + 1,
@@ -502,15 +508,19 @@ impl Doomslug {
                 self.endorsement_pending = false;
             }
 
+            tracing::debug!(target: "doomslug", "STEP2 | {:?} {:?} {:?}", cur_time, self.timer.started, skip_delay);
+
             if cur_time >= self.timer.started + skip_delay {
                 debug_assert!(!self.endorsement_pending);
 
                 self.largest_target_height
                     .set(std::cmp::max(self.timer.height + 1, self.largest_target_height.get()));
+                tracing::debug!(target: "doomslug", "largest_target_height = {}", self.largest_target_height.get());
 
                 if let Some(approval) = self.create_approval(self.timer.height + 1) {
                     ret.push(approval);
                 }
+                tracing::debug!(target: "doomslug", "update_history");
                 self.update_history(ApprovalHistoryEntry {
                     parent_height: tip_height,
                     target_height: self.timer.height + 1,
@@ -532,6 +542,7 @@ impl Doomslug {
 
     fn create_approval(&self, target_height: BlockHeight) -> Option<Approval> {
         self.signer.as_ref().map(|signer| {
+            tracing::debug!(target: "doomslug", "create_approval | {} {} {}", self.tip.block_hash, self.tip.height, target_height);
             Approval::new(self.tip.block_hash, self.tip.height, target_height, &**signer)
         })
     }

@@ -1474,6 +1474,11 @@ impl Client {
         parent_hash: &CryptoHash,
         approval: Approval,
     ) -> Result<(), Error> {
+        debug!(target: "client",
+                approval_inner = ?approval.inner,
+                account_id = ?approval.account_id,
+                target_height = approval.target_height,
+                "READY TO SEND APPROVAL");
         let next_epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(parent_hash)?;
         let next_block_producer =
             self.epoch_manager.get_block_producer(&next_epoch_id, approval.target_height)?;

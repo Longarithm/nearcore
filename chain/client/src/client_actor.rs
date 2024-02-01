@@ -1249,6 +1249,11 @@ impl ClientActor {
         match chain_store_update.commit() {
             Ok(_) => {
                 let head = unwrap_or_return!(self.client.chain.head());
+                println!(
+                    "{} {}",
+                    self.client.is_validator(&head.epoch_id, &head.last_block_hash),
+                    self.client.is_validator(&head.next_epoch_id, &head.last_block_hash)
+                );
                 if self.client.is_validator(&head.epoch_id, &head.last_block_hash)
                     || self.client.is_validator(&head.next_epoch_id, &head.last_block_hash)
                 {
