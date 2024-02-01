@@ -176,6 +176,8 @@ if __name__ == '__main__':
 
     mocknet.stop_nodes(all_nodes)
     time.sleep(10)
+    # exit(0)
+
     validator_nodes = [n for n in all_nodes if get_role(n) != Role.Rpc]
     rpc_nodes = [n for n in all_nodes if get_role(n) == Role.Rpc]
     if args.binary_url:
