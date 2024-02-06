@@ -237,6 +237,7 @@ fn test_banning_chunk_producer_when_seeing_invalid_chunk_base(
                     )
                     .unwrap();
                 if &chunk_producer == &bad_chunk_producer {
+                    debug!(target: "test", "Bad CP {} for {} {}", chunk_producer, block.header().prev_height().unwrap() + 1, shard_id);
                     invalid_chunks_in_this_block.insert(shard_id);
                     if !epochs_seen_invalid_chunk.contains(&epoch_id) {
                         epochs_seen_invalid_chunk.insert(epoch_id.clone());
