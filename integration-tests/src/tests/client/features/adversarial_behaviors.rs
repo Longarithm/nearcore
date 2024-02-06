@@ -347,7 +347,7 @@ fn test_banning_chunk_producer_when_seeing_invalid_chunk_base(
 #[test]
 #[cfg(feature = "test_features")]
 fn test_banning_chunk_producer_when_seeing_invalid_chunk() {
-    init_integration_logger();
+    // init_integration_logger();
     let mut test = AdversarialBehaviorTestData::new();
     test.env.clients[7].produce_invalid_chunks = true;
     test_banning_chunk_producer_when_seeing_invalid_chunk_base(test);
@@ -356,7 +356,7 @@ fn test_banning_chunk_producer_when_seeing_invalid_chunk() {
 #[test]
 #[cfg(feature = "test_features")]
 fn test_banning_chunk_producer_when_seeing_invalid_tx_in_chunk() {
-    init_integration_logger();
+    // init_integration_logger();
     let mut test = AdversarialBehaviorTestData::new();
     test.env.clients[7].produce_invalid_tx_in_chunks = true;
     test_banning_chunk_producer_when_seeing_invalid_chunk_base(test);
