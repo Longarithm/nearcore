@@ -252,7 +252,7 @@ fn test_banning_chunk_producer_when_seeing_invalid_chunk_base(
                             // won't send chunk endorsements for this chunk, which means that it won't be
                             // included in the block at all. The only exception is the first few blocks,
                             // which still use the old protocol. In this test the block with height 2 is skipped.
-                            this_block_should_be_skipped = false; // height < 3;
+                            this_block_should_be_skipped = height < 3;
                         } else {
                             // In the old protocol, chunks are first included in the block and then the block
                             // is validated. This means that this block, which includes an invalid chunk,
