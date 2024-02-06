@@ -8,7 +8,7 @@ use near_network::{
     shards_manager::ShardsManagerRequestFromNetwork,
     types::{NetworkRequests, PeerManagerMessageRequest},
 };
-use near_o11y::testonly::{init_integration_logger, init_test_logger};
+use near_o11y::testonly::init_test_logger;
 use near_primitives::{
     shard_layout::ShardLayout,
     types::{AccountId, EpochId, ShardId},
