@@ -90,7 +90,7 @@ const HEAD_STALL_MULTIPLIER: u32 = 4;
 
 pub struct ClientActor {
     /// Adversarial controls
-    pub adv: crate::adversarial1::Controls,
+    pub adv: crate::adversarial::Controls,
 
     // Address of this ClientActor. Can be used to send messages to self.
     my_address: Addr<ClientActor>,
@@ -162,7 +162,7 @@ impl ClientActor {
         telemetry_actor: Addr<TelemetryActor>,
         ctx: &Context<ClientActor>,
         shutdown_signal: Option<broadcast::Sender<()>>,
-        adv: crate::adversarial1::Controls,
+        adv: crate::adversarial::Controls,
         config_updater: Option<ConfigUpdater>,
     ) -> Result<Self, Error> {
         let state_parts_arbiter = Arbiter::new();
@@ -2074,7 +2074,7 @@ pub fn start_client(
     telemetry_actor: Addr<TelemetryActor>,
     snapshot_callbacks: Option<SnapshotCallbacks>,
     sender: Option<broadcast::Sender<()>>,
-    adv: crate::adversarial1::Controls,
+    adv: crate::adversarial::Controls,
     config_updater: Option<ConfigUpdater>,
 ) -> (Addr<ClientActor>, ArbiterHandle, ReshardingHandle) {
     let client_arbiter = Arbiter::new();

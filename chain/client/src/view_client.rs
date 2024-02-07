@@ -89,7 +89,7 @@ pub struct ViewClientRequestManager {
 
 /// View client provides currently committed (to the storage) view of the current chain and state.
 pub struct ViewClientActor {
-    pub adv: crate::adversarial1::Controls,
+    pub adv: crate::adversarial::Controls,
 
     /// Validator account (if present).
     validator_account_id: Option<AccountId>,
@@ -128,7 +128,7 @@ impl ViewClientActor {
         network_adapter: PeerManagerAdapter,
         config: ClientConfig,
         request_manager: Arc<RwLock<ViewClientRequestManager>>,
-        adv: crate::adversarial1::Controls,
+        adv: crate::adversarial::Controls,
     ) -> Result<Self, Error> {
         // TODO: should we create shared ChainStore that is passed to both Client and ViewClient?
         let chain = Chain::new_for_view_client(
@@ -1596,7 +1596,7 @@ pub fn start_view_client(
     runtime: Arc<dyn RuntimeAdapter>,
     network_adapter: PeerManagerAdapter,
     config: ClientConfig,
-    adv: crate::adversarial1::Controls,
+    adv: crate::adversarial::Controls,
 ) -> Addr<ViewClientActor> {
     let request_manager = Arc::new(RwLock::new(ViewClientRequestManager::new()));
     SyncArbiter::start(config.view_client_threads, move || {
