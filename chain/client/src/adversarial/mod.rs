@@ -1,1 +1,3 @@
-pub mod client_actor;
+mod client_actor;
+
+pub use client_actor::adv::Controls;
