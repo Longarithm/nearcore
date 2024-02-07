@@ -21,7 +21,7 @@ pub use crate::view_client::{start_view_client, ViewClientActor};
 pub use near_client_primitives::debug::DebugStatus;
 
 pub mod adapter;
-mod adversarial;
+pub mod adversarial;
 mod chunk_inclusion_tracker;
 mod client;
 mod client_actor;
