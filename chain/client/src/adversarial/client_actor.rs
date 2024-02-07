@@ -1,5 +1,5 @@
 #[cfg(feature = "test_features")]
-mod adv {
+pub(crate) mod adv {
     use std::sync::atomic::Ordering;
 
     #[derive(Default)]
@@ -40,7 +40,7 @@ mod adv {
 }
 
 #[cfg(not(feature = "test_features"))]
-mod adv {
+pub(crate) mod adv {
     #[derive(Default, Clone)]
     pub struct Controls;
 
@@ -58,5 +58,3 @@ mod adv {
         }
     }
 }
-
-pub use adv::Controls;

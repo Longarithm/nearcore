@@ -137,7 +137,7 @@ pub fn setup(
         state_sync_enabled,
     );
 
-    let adv = crate::adversarial::Controls::default();
+    let adv = crate::adversarial1::Controls::default();
 
     let view_client_addr = start_view_client(
         Some(signer.validator_id().clone()),
@@ -264,7 +264,7 @@ pub fn setup_only_view(
         state_sync_enabled,
     );
 
-    let adv = crate::adversarial::Controls::default();
+    let adv = crate::adversarial1::Controls::default();
 
     start_view_client(
         Some(signer.validator_id().clone()),

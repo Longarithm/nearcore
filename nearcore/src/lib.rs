@@ -307,7 +307,7 @@ pub fn start_with_config_and_synchronization(
     let network_adapter = Arc::new(LateBoundSender::default());
     let shards_manager_adapter = Arc::new(LateBoundSender::default());
     let client_adapter_for_shards_manager = Arc::new(LateBoundSender::default());
-    let adv = near_client::adversarial::Controls::new(config.client_config.archive);
+    let adv = near_client::adversarial1::Controls::new(config.client_config.archive);
 
     let view_client = start_view_client(
         config.validator_signer.as_ref().map(|signer| signer.validator_id().clone()),
