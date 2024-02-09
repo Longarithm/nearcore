@@ -115,6 +115,11 @@ pub enum AdvProduceBlocksMode {
 }
 
 pub struct Client {
+    /// Adversarial controls
+    /// TODO
+    #[cfg(feature = "test_features")]
+    pub adv: crate::adversarial::ClientControls,
+
     /// Adversarial controls - should be enabled only to test disruptive
     /// behaviour on chain.
     #[cfg(feature = "test_features")]
