@@ -1077,15 +1077,20 @@ def create_and_upload_config_file_from_default(nodes, chain_id, overrider=None):
     pmap(lambda node: upload_config(node, config_json, overrider), nodes)
 
 
-def update_existing_config_file(nodes, overrider=None):
-    for node in nodes:
-        config_json = download_and_read_json(
-            nodes[0],
-            '/home/ubuntu/.near/config.json',
-        )
-        overrider(node, config_json)
-        upload_json(node, '/home/ubuntu/.near/config.json', config_json)
+def update_existing_config_file(node, overrider=None):
+    config_json = download_and_read_json(
+        node,
+        '/home/ubuntu/.near/config.json',
+    )
+    overrider(node, config_json)
+    upload_json(node, '/home/ubuntu/.near/config.json', config_json)
 
+
+def update_existing_config_files(nodes, overrider=None):
+    pmap(
+        lambda node: start_node(node, overrider=overrider),
+        nodes,
+    )
 
 def start_nodes(nodes, upgrade_schedule=None):
     pmap(
@@ -1111,7 +1116,6 @@ def neard_start_script(node, upgrade_schedule=None, epoch_height=None):
     return '''
         sudo mv /home/ubuntu/near.log /home/ubuntu/near.log.1 2>/dev/null
         sudo mv /home/ubuntu/near.upgrade.log /home/ubuntu/near.upgrade.log.1 2>/dev/null
-        sudo rm -rf /home/ubuntu/.near/data
         tmux new -s near -d bash
         sudo rm -rf /home/ubuntu/neard.log
         tmux send-keys -t near 'RUST_BACKTRACE=full RUST_LOG=debug,actix_web=info {neard_binary} run 2>&1 | tee -a {neard_binary}.log' C-m
