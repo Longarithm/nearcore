@@ -944,8 +944,6 @@ def create_and_upload_genesis_file_from_empty_genesis(
     genesis_config['block_producer_kickout_threshold'] = 50
     genesis_config['chunk_producer_kickout_threshold'] = 50
 
-    genesis_config['num_block_producer_seats_per_shard'] = [int(num_seats)] * 4
-
     genesis_config['records'] = records
     pmap(lambda node: upload_json(node, '/home/ubuntu/.near/genesis.json', genesis_config),
          [node for (node, _) in validator_node_and_stakes] + rpc_nodes)
