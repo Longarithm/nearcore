@@ -916,7 +916,7 @@ def create_and_upload_genesis_file_from_empty_genesis(
         total_supply += int(account.get('locked', 0))
         total_supply += int(account.get('amount', 0))
     genesis_config['total_supply'] = str(total_supply)
-    genesis_config['protocol_version'] = 57
+    genesis_config['protocol_version'] = 81
     genesis_config['epoch_length'] = int(epoch_length)
     genesis_config['num_block_producer_seats'] = int(num_seats)
     genesis_config['protocol_reward_rate'] = [1, 10]
@@ -927,8 +927,23 @@ def create_and_upload_genesis_file_from_empty_genesis(
     # The default value of this parameter is 90.
     genesis_config['block_producer_kickout_threshold'] = 10
 
-    genesis_config['shard_layout'] = {'V0': {'num_shards': 4, 'version': 0}}
+    genesis_config['shard_layout'] = {'V1':
+        {
+            'boundary_accounts': ["aurora", "aurora-0", "kkuuue2akv_1630967379.near", "tge-lockup.sweat"],
+            'shards_split_map': None,
+            'to_parent_shard_map': None,
+            'version': 2
+        }
+    }
     genesis_config['simple_nightshade_shard_layout'] = {}
+    genesis_config['num_block_producer_seats_per_shard'] = [int(num_seats)] * 5
+    genesis_config['online_min_threshold'] = [
+        1,
+        2
+    ]
+    genesis_config['block_producer_kickout_threshold'] = 50
+    genesis_config['chunk_producer_kickout_threshold'] = 50
+
     genesis_config['num_block_producer_seats_per_shard'] = [int(num_seats)] * 4
 
     genesis_config['records'] = records
@@ -1042,14 +1057,22 @@ def create_and_upload_config_file_from_default(nodes, chain_id, overrider=None):
         nodes[0],
         '/home/ubuntu/.near-tmp/config.json',
     )
-    config_json['tracked_shards'] = [0, 1, 2, 3]
+    config_json['tracked_shards'] = [0]
     config_json['archive'] = True
     config_json['archival_peer_connections_lower_bound'] = 1
     node_addresses = [get_node_addr(node, 24567) for node in nodes]
+    config_json['consensus']['min_block_production_delay'] = {"secs": 1, "nanos": 0}
+    config_json['consensus']['max_block_production_delay'] = {"secs": 3, "nanos": 0}
+    config_json['consensus']['max_block_wait_delay'] = {"secs": 6, "nanos": 0}
     config_json['network']['boot_nodes'] = ','.join(node_addresses)
     config_json['network']['skip_sync_wait'] = False
     config_json['rpc']['addr'] = '0.0.0.0:3030'
     config_json['rpc']['enable_debug_rpc'] = True
+    config_json['store']['trie_cache'] = {
+        "default_max_bytes": 50000000,
+        "per_shard_max_bytes": {},
+        "shard_cache_deletions_queue_capacity": 100000
+    }
     if 'telemetry' in config_json:
         config_json['telemetry']['endpoints'] = []
 
