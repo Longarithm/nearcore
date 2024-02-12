@@ -1064,6 +1064,7 @@ def create_and_upload_config_file_from_default(nodes, chain_id, overrider=None):
     config_json['consensus']['min_block_production_delay'] = {"secs": 1, "nanos": 0}
     config_json['consensus']['max_block_production_delay'] = {"secs": 3, "nanos": 0}
     config_json['consensus']['max_block_wait_delay'] = {"secs": 6, "nanos": 0}
+    config_json['consensus']['state_sync_timeout'] = {"secs": 5, "nanos": 0}
     config_json['network']['boot_nodes'] = ','.join(node_addresses)
     config_json['network']['skip_sync_wait'] = False
     config_json['rpc']['addr'] = '0.0.0.0:3030'
