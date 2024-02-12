@@ -83,7 +83,7 @@ def check_slow_blocks(initial_metrics, final_metrics):
 
 def override_config(node, config):
     # Add config here depending on the specific node build.
-    config["tracked_shards"] = []
+    # config["tracked_shards"] = []
     pass
     """
     if "bad" in node.instance_name:
