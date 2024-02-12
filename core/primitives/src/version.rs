@@ -14,6 +14,7 @@ use crate::upgrade_schedule::{get_protocol_version_internal, ProtocolUpgradeVoti
 
 /// near_primitives_core re-exports
 pub use near_primitives_core::checked_feature;
+use near_primitives_core::types::BlockHeight;
 pub use near_primitives_core::types::ProtocolVersion;
 pub use near_primitives_core::version::ProtocolFeature;
 pub use near_primitives_core::version::PEER_MIN_ALLOWED_PROTOCOL_VERSION;
@@ -72,4 +73,19 @@ pub fn get_protocol_version(next_epoch_protocol_version: ProtocolVersion) -> Pro
         PROTOCOL_VERSION,
         *PROTOCOL_UPGRADE_SCHEDULE,
     )
+}
+
+pub fn get_protocol_version_with_height(
+    next_epoch_protocol_version: ProtocolVersion,
+    height: BlockHeight,
+) -> ProtocolVersion {
+    if next_epoch_protocol_version >= PROTOCOL_VERSION {
+        PROTOCOL_VERSION
+    } else if height < 500 {
+        // Don't announce support for the latest protocol version yet.
+        next_epoch_protocol_version
+    } else {
+        // The time has passed, announce the latest supported protocol version.
+        PROTOCOL_VERSION
+    }
 }

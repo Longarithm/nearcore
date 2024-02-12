@@ -6,7 +6,9 @@ use crate::types::validator_stake::{ValidatorStake, ValidatorStakeIter, Validato
 use crate::types::{AccountId, Balance, BlockHeight, EpochId, MerkleHash, NumBlocks};
 use crate::utils::{from_timestamp, to_timestamp};
 use crate::validator_signer::ValidatorSigner;
-use crate::version::{get_protocol_version, ProtocolVersion, PROTOCOL_VERSION};
+use crate::version::{
+    get_protocol_version, get_protocol_version_with_height, ProtocolVersion, PROTOCOL_VERSION,
+};
 use borsh::{BorshDeserialize, BorshSerialize};
 use chrono::{DateTime, Utc};
 use near_crypto::{KeyType, PublicKey, Signature};
@@ -567,7 +569,11 @@ impl BlockHeader {
                 prev_height,
                 epoch_sync_data_hash,
                 approvals,
-                latest_protocol_version: get_protocol_version(next_epoch_protocol_version),
+                latest_protocol_version: get_protocol_version_with_height(
+                    next_epoch_protocol_version,
+                    prev_height,
+                ),
+                // latest_protocol_version: get_protocol_version(next_epoch_protocol_version),
             };
             let (hash, signature) = signer.sign_block_header_parts(
                 prev_hash,
