@@ -81,7 +81,7 @@ pub fn get_protocol_version_with_height(
 ) -> ProtocolVersion {
     if next_epoch_protocol_version >= PROTOCOL_VERSION {
         PROTOCOL_VERSION
-    } else if height < 500 {
+    } else if height < 300 {
         // Don't announce support for the latest protocol version yet.
         next_epoch_protocol_version
     } else {
