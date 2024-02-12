@@ -570,7 +570,7 @@ impl StoreUpdate {
     ///
     /// Panics if `self`’s and `other`’s storage are incompatible.
     pub fn merge(&mut self, other: StoreUpdate) {
-        assert!(same_db(&self.storage, &other.storage));
+        assert!(core::ptr::addr_eq(Arc::as_ptr(&self.storage), Arc::as_ptr(&other.storage)));
         self.transaction.merge(other.transaction)
     }
 
@@ -621,13 +621,6 @@ impl StoreUpdate {
         }
         self.storage.write(self.transaction)
     }
-}
-
-fn same_db(lhs: &Arc<dyn Database>, rhs: &Arc<dyn Database>) -> bool {
-    // Note: avoid comparing wide pointers here to work-around
-    // https://github.com/rust-lang/rust/issues/69757
-    let addr = |arc| Arc::as_ptr(arc) as *const u8;
-    return addr(lhs) == addr(rhs);
 }
 
 impl fmt::Debug for StoreUpdate {
@@ -701,6 +694,14 @@ pub fn get_received_data(
     data_id: CryptoHash,
 ) -> Result<Option<ReceivedData>, StorageError> {
     get(trie, &TrieKey::ReceivedData { receiver_id: receiver_id.clone(), data_id })
+}
+
+pub fn has_received_data(
+    trie: &dyn TrieAccess,
+    receiver_id: &AccountId,
+    data_id: CryptoHash,
+) -> Result<bool, StorageError> {
+    trie.contains_key(&TrieKey::ReceivedData { receiver_id: receiver_id.clone(), data_id })
 }
 
 pub fn set_postponed_receipt(state_update: &mut TrieUpdate, receipt: &Receipt) {

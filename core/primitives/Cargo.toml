@@ -22,6 +22,7 @@ derive_more.workspace = true
 easy-ext.workspace = true
 enum-map.workspace = true
 hex.workspace = true
+itertools.workspace = true
 num-rational.workspace = true
 once_cell.workspace = true
 primitive-types.workspace = true
@@ -73,6 +74,11 @@ nightly_protocol = [
   "near-primitives-core/nightly_protocol",
   "near-vm-runner/nightly_protocol",
 ]
+
+statelessnet_protocol = [
+  "near-primitives-core/statelessnet_protocol",
+]
+
 new_epoch_sync = []
 
 

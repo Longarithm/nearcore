@@ -2,7 +2,7 @@ use crate::block::BlockValidityError::{
     InvalidChallengeRoot, InvalidChunkHeaderRoot, InvalidChunkMask, InvalidReceiptRoot,
     InvalidStateRoot, InvalidTransactionRoot,
 };
-use crate::block_body::{BlockBody, BlockBodyV1};
+use crate::block_body::{BlockBody, BlockBodyV1, ChunkEndorsementSignatures};
 pub use crate::block_header::*;
 use crate::challenge::{Challenges, ChallengesResult};
 use crate::checked_feature;
@@ -173,7 +173,7 @@ impl Block {
                 vrf_value: *body.vrf_value(),
                 vrf_proof: *body.vrf_proof(),
             }))
-        } else if !checked_feature!("stable", ChunkValidation, this_epoch_protocol_version) {
+        } else if !checked_feature!("stable", StatelessValidationV0, this_epoch_protocol_version) {
             // BlockV3 should only have BlockBodyV1
             match body {
                 BlockBody::V1(body) => Block::BlockV3(Arc::new(BlockV3 { header, body })),
@@ -250,7 +250,7 @@ impl Block {
         height: BlockHeight,
         block_ordinal: NumBlocks,
         chunks: Vec<ShardChunkHeader>,
-        chunk_endorsements: Vec<Vec<Option<Box<Signature>>>>,
+        chunk_endorsements: Vec<ChunkEndorsementSignatures>,
         epoch_id: EpochId,
         next_epoch_id: EpochId,
         epoch_sync_data_hash: Option<CryptoHash>,
@@ -583,7 +583,7 @@ impl Block {
     }
 
     #[inline]
-    pub fn chunk_endorsements(&self) -> &[Vec<Option<Box<Signature>>>] {
+    pub fn chunk_endorsements(&self) -> &[ChunkEndorsementSignatures] {
         match self {
             Block::BlockV1(_) | Block::BlockV2(_) | Block::BlockV3(_) => &[],
             Block::BlockV4(block) => block.body.chunk_endorsements(),

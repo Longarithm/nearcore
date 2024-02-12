@@ -1,14 +1,19 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::adapter::ProcessTxResponse;
+use crate::stateless_validation::processing_tracker::{
+    ProcessingDoneTracker, ProcessingDoneWaiter,
+};
 use crate::Client;
 use near_async::messaging::CanSend;
+use near_async::time::Clock;
 use near_chain::test_utils::ValidatorSchedule;
 use near_chain::{ChainGenesis, Provenance};
+use near_chain_configs::GenesisConfig;
 use near_chunks::client::ShardsManagerResponse;
-use near_chunks::test_utils::MockClientAdapterForShardsManager;
+use near_chunks::test_utils::{MockClientAdapterForShardsManager, SynchronousShardsManagerAdapter};
 use near_crypto::{InMemorySigner, KeyType, Signer};
 use near_network::shards_manager::ShardsManagerRequestFromNetwork;
 use near_network::test_utils::MockPeerManagerAdapter;
@@ -19,11 +24,12 @@ use near_o11y::testonly::TracingCapture;
 use near_parameters::RuntimeConfig;
 use near_primitives::action::delegate::{DelegateAction, NonDelegateAction, SignedDelegateAction};
 use near_primitives::block::Block;
-use near_primitives::chunk_validation::ChunkEndorsement;
 use near_primitives::epoch_manager::RngSeed;
 use near_primitives::errors::InvalidTxError;
 use near_primitives::hash::CryptoHash;
+use near_primitives::network::PeerId;
 use near_primitives::sharding::PartialEncodedChunk;
+use near_primitives::stateless_validation::ChunkStateWitness;
 use near_primitives::test_utils::create_test_signer;
 use near_primitives::transaction::{Action, FunctionCallAction, SignedTransaction};
 use near_primitives::types::{AccountId, Balance, BlockHeight, EpochId, NumSeats};
@@ -34,20 +40,19 @@ use near_primitives::views::{
 };
 use once_cell::sync::OnceCell;
 
-use super::setup::{setup_client_with_runtime, ShardsManagerAdapterForTest};
+use super::setup::setup_client_with_runtime;
 use super::test_env_builder::TestEnvBuilder;
 use super::TEST_SEED;
-
-const CHUNK_ENDORSEMENTS_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// An environment for writing integration tests with multiple clients.
 /// This environment can simulate near nodes without network and it can be configured to use different runtimes.
 pub struct TestEnv {
+    pub clock: Clock,
     pub chain_genesis: ChainGenesis,
     pub validators: Vec<AccountId>,
     pub network_adapters: Vec<Arc<MockPeerManagerAdapter>>,
     pub client_adapters: Vec<Arc<MockClientAdapterForShardsManager>>,
-    pub shards_manager_adapters: Vec<ShardsManagerAdapterForTest>,
+    pub shards_manager_adapters: Vec<SynchronousShardsManagerAdapter>,
     pub clients: Vec<Client>,
     pub(crate) account_indices: AccountIndices,
     pub(crate) paused_blocks: Arc<Mutex<HashMap<CryptoHash, Arc<OnceCell<()>>>>>,
@@ -58,9 +63,19 @@ pub struct TestEnv {
     pub(crate) save_trie_changes: bool,
 }
 
+pub struct StateWitnessPropagationOutput {
+    /// Whether some propagated state witness includes two different post state
+    /// roots.
+    pub found_differing_post_state_root_due_to_state_transitions: bool,
+}
+
 impl TestEnv {
-    pub fn builder(chain_genesis: ChainGenesis) -> TestEnvBuilder {
-        TestEnvBuilder::new(chain_genesis)
+    pub fn default_builder() -> TestEnvBuilder {
+        TestEnvBuilder::new(GenesisConfig::test())
+    }
+
+    pub fn builder(genesis_config: &GenesisConfig) -> TestEnvBuilder {
+        TestEnvBuilder::new(genesis_config.clone())
     }
 
     /// Process a given block in the client with index `id`.
@@ -116,7 +131,7 @@ impl TestEnv {
         self.account_indices.lookup_mut(&mut self.clients, account_id)
     }
 
-    pub fn shards_manager(&self, account: &AccountId) -> &ShardsManagerAdapterForTest {
+    pub fn shards_manager(&self, account: &AccountId) -> &SynchronousShardsManagerAdapter {
         self.account_indices.lookup(&self.shards_manager_adapters, account)
     }
 
@@ -183,6 +198,7 @@ impl TestEnv {
         {
             let target_id = self.account_indices.index(&target.account_id.unwrap());
             let response = self.get_partial_encoded_chunk_response(target_id, request);
+            tracing::info!("Got response for PartialEncodedChunkRequest: {:?}", response);
             if let Some(response) = response {
                 self.shards_manager_adapters[id].send(
                     ShardsManagerRequestFromNetwork::ProcessPartialEncodedChunkResponse {
@@ -243,7 +259,8 @@ impl TestEnv {
                     chunk_producer,
                 } => {
                     self.clients[id]
-                        .on_chunk_header_ready_for_inclusion(chunk_header, chunk_producer);
+                        .chunk_inclusion_tracker
+                        .mark_chunk_header_ready_for_inclusion(chunk_header, chunk_producer);
                 }
             }
             any_processed = true;
@@ -263,63 +280,97 @@ impl TestEnv {
         }
     }
 
-    pub fn propagate_chunk_state_witnesses(&mut self) {
-        for idx in 0..self.clients.len() {
-            let _span =
-                tracing::debug_span!(target: "test", "propagate_chunk_state_witnesses", client=idx)
-                    .entered();
+    fn found_differing_post_state_root_due_to_state_transitions(
+        chunk_state_witness: &ChunkStateWitness,
+    ) -> bool {
+        let chunk_state_witness_inner = &chunk_state_witness.inner;
+        let mut post_state_roots =
+            HashSet::from([chunk_state_witness_inner.main_state_transition.post_state_root]);
+        post_state_roots.extend(
+            chunk_state_witness_inner.implicit_transitions.iter().map(|t| t.post_state_root),
+        );
+        post_state_roots.len() >= 2
+    }
 
-            self.network_adapters[idx].handle_filtered(|msg| {
-                if let PeerManagerMessageRequest::NetworkRequests(
-                    NetworkRequests::ChunkStateWitness(accounts, chunk_state_witness),
-                ) = msg
-                {
-                    for account in accounts {
-                        self.account_indices
-                            .lookup_mut(&mut self.clients, &account)
-                            .process_chunk_state_witness(chunk_state_witness.clone())
-                            .unwrap();
+    /// Processes all state witnesses sent over the network. The function waits for the processing to finish,
+    /// so chunk endorsements are available immediately after this function returns.
+    pub fn propagate_chunk_state_witnesses(
+        &mut self,
+        allow_errors: bool,
+    ) -> StateWitnessPropagationOutput {
+        let mut output = StateWitnessPropagationOutput {
+            found_differing_post_state_root_due_to_state_transitions: false,
+        };
+        let mut witness_processing_done_waiters: Vec<ProcessingDoneWaiter> = Vec::new();
+
+        let network_adapters = self.network_adapters.clone();
+        for network_adapter in network_adapters {
+            network_adapter.handle_filtered(|request| match request {
+                PeerManagerMessageRequest::NetworkRequests(NetworkRequests::ChunkStateWitness(
+                    account_ids,
+                    state_witness,
+                )) => {
+                    // Process chunk state witness for each client.
+                    for account_id in account_ids.iter() {
+                        let processing_done_tracker = ProcessingDoneTracker::new();
+                        witness_processing_done_waiters.push(processing_done_tracker.make_waiter());
+
+                        let processing_result =
+                            self.client(account_id).process_chunk_state_witness(
+                                state_witness.clone(),
+                                PeerId::random(),
+                                Some(processing_done_tracker),
+                            );
+                        if !allow_errors {
+                            processing_result.unwrap();
+                        }
                     }
+
+                    // Update output.
+                    output.found_differing_post_state_root_due_to_state_transitions |=
+                        Self::found_differing_post_state_root_due_to_state_transitions(
+                            &state_witness,
+                        );
+
                     None
-                } else {
-                    Some(msg)
                 }
+                _ => Some(request),
+            });
+        }
+
+        // Wait for all state witnesses to be processed before returning.
+        for processing_done_waiter in witness_processing_done_waiters {
+            processing_done_waiter.wait();
+        }
+
+        output
+    }
+
+    pub fn propagate_chunk_endorsements(&mut self, allow_errors: bool) {
+        // Clone the Vec to satisfy the borrow checker.
+        let network_adapters = self.network_adapters.clone();
+        for network_adapter in network_adapters {
+            network_adapter.handle_filtered(|request| match request {
+                PeerManagerMessageRequest::NetworkRequests(NetworkRequests::ChunkEndorsement(
+                    account_id,
+                    endorsement,
+                )) => {
+                    let processing_result =
+                        self.client(&account_id).process_chunk_endorsement(endorsement);
+                    if !allow_errors {
+                        processing_result.unwrap();
+                    }
+
+                    None
+                }
+                _ => Some(request),
             });
         }
     }
 
-    /// Collects all chunk endorsements from network adapters until
-    /// at least `count` endorsements are collected, or, if it doesn't happen,
-    /// when `CHUNK_ENDORSEMENTS_TIMEOUT` is reached.
-    pub fn take_chunk_endorsements(&mut self, count: usize) -> Vec<ChunkEndorsement> {
-        let _span = tracing::debug_span!(target: "test", "get_all_chunk_endorsements").entered();
-        let timer = Instant::now();
-        let mut approvals = Vec::new();
-        loop {
-            tracing::debug!(target: "test", "collected endorsements: {}", approvals.len());
-            for idx in 0..self.clients.len() {
-                self.network_adapters[idx].handle_filtered(|msg| {
-                    if let PeerManagerMessageRequest::NetworkRequests(
-                        NetworkRequests::ChunkEndorsement(_, endorsement),
-                    ) = msg
-                    {
-                        approvals.push(endorsement);
-                        None
-                    } else {
-                        Some(msg)
-                    }
-                });
-            }
-
-            if approvals.len() >= count {
-                break;
-            }
-            if timer.elapsed() > CHUNK_ENDORSEMENTS_TIMEOUT {
-                break;
-            }
-            std::thread::sleep(Duration::from_micros(100));
-        }
-        approvals
+    pub fn propagate_chunk_state_witnesses_and_endorsements(&mut self, allow_errors: bool) {
+        self.propagate_chunk_state_witnesses(allow_errors);
+        self.propagate_chunk_endorsements(allow_errors);
     }
 
     pub fn send_money(&mut self, id: usize) -> ProcessTxResponse {
