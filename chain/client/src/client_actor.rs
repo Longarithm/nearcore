@@ -168,6 +168,7 @@ impl ClientActor {
         let state_parts_arbiter = Arbiter::new();
         let self_addr = ctx.address();
         let self_addr_clone = self_addr;
+        info!(target: "client", "SyncJobsActor");
         let sync_jobs_actor_addr = SyncJobsActor::start_in_arbiter(
             &state_parts_arbiter.handle(),
             move |ctx: &mut Context<SyncJobsActor>| -> SyncJobsActor {
@@ -2096,6 +2097,7 @@ pub fn start_client(
         snapshot_callbacks,
     )
     .unwrap();
+    info!(target: "client", "CA");
     let resharding_handle = client.chain.resharding_handle.clone();
     let client_addr = ClientActor::start_in_arbiter(&client_arbiter_handle, move |ctx| {
         ClientActor::new(

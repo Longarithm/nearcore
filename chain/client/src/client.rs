@@ -267,6 +267,7 @@ impl Client {
             chain_config.clone(),
             snapshot_callbacks,
         )?;
+        info!(target: "client", "FlatStorageCreator");
         // Create flat storage or initiate migration to flat storage.
         let flat_storage_creator = FlatStorageCreator::new(
             epoch_manager.clone(),
@@ -278,6 +279,7 @@ impl Client {
             ShardedTransactionPool::new(rng_seed, config.transaction_pool_size_limit);
         let sync_status = SyncStatus::AwaitingPeers;
         let genesis_block = chain.genesis_block();
+        info!(target: "client", "EpochSync");
         let epoch_sync = EpochSync::new(
             network_adapter.clone(),
             genesis_block.header().epoch_id().clone(),
@@ -293,6 +295,7 @@ impl Client {
             EPOCH_SYNC_REQUEST_TIMEOUT,
             EPOCH_SYNC_PEER_TIMEOUT,
         );
+        info!(target: "client", "HeaderSync");
         let header_sync = HeaderSync::new(
             network_adapter.clone(),
             config.header_sync_initial_timeout,
@@ -300,6 +303,7 @@ impl Client {
             config.header_sync_stall_ban_timeout,
             config.header_sync_expected_height_per_second,
         );
+        info!(target: "client", "BlockSync");
         let block_sync = BlockSync::new(
             network_adapter.clone(),
             config.block_fetch_horizon,
@@ -311,6 +315,7 @@ impl Client {
             let epoch_id = chain.chain_store().head().expect("Cannot get chain head.").epoch_id;
             let shard_layout =
                 epoch_manager.get_shard_layout(&epoch_id).expect("Cannot get shard layout.");
+            info!(target: "client", "state_sync_adapter.write");
             match state_sync_adapter.write() {
                 Ok(mut state_sync_adapter) => {
                     for shard_uid in shard_layout.shard_uids() {
@@ -319,8 +324,10 @@ impl Client {
                 }
                 Err(_) => panic!("Cannot acquire write lock on sync adapter. Lock poisoned."),
             }
+            info!(target: "client", "state_sync_adapter.write ok");
         }
 
+        info!(target: "client", "StateSync");
         let state_sync = StateSync::new(
             network_adapter.clone(),
             config.state_sync_timeout,
@@ -332,6 +339,7 @@ impl Client {
         let data_parts = epoch_manager.num_data_parts();
         let parity_parts = epoch_manager.num_total_parts() - data_parts;
 
+        info!(target: "client", "Doomslug");
         let doomslug = Doomslug::new(
             chain.chain_store().largest_target_height()?,
             config.min_block_production_delay,
@@ -350,6 +358,7 @@ impl Client {
             runtime_adapter.clone(),
             chunk_endorsement_tracker.clone(),
         );
+        info!(target: "client", "Client");
         Ok(Self {
             #[cfg(feature = "test_features")]
             adv_produce_blocks: None,

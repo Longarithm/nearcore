@@ -522,6 +522,8 @@ impl Chain {
         metrics::CHUNK_TAIL_HEIGHT.set(chain_store.chunk_tail()? as i64);
         metrics::FORK_TAIL_HEIGHT.set(chain_store.fork_tail()? as i64);
 
+        info!(target: "client", "metrics");
+
         // Even though the channel is unbounded, the channel size is practically bounded by the size
         // of blocks_in_processing, which is set to 5 now.
         let (sc, rc) = unbounded();

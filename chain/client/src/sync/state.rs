@@ -174,6 +174,7 @@ impl StateSync {
                 num_concurrent_requests,
                 num_concurrent_requests_during_catchup,
             }) => {
+                info!(target: "client", "ExternalStorage");
                 let external = match location {
                     ExternalStorageLocation::S3 { bucket, region, .. } => {
                         let bucket = create_bucket_readonly(&bucket, &region, timeout);
