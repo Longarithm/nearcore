@@ -6,7 +6,7 @@ use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::state::FlatStateValue;
 use near_primitives::types::BlockHeight;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::flat::delta::{BlockWithChangesInfo, CachedFlatStateChanges};
 use crate::flat::BlockInfo;
@@ -248,10 +248,12 @@ impl FlatStorage {
         let metrics = FlatStorageMetrics::new(shard_id);
         metrics.set_flat_head_height(flat_head.height);
 
+        info!(target: "client", shard_id, "get_all_deltas_metadata");
         let deltas_metadata = store_helper::get_all_deltas_metadata(&store, shard_uid)
             .unwrap_or_else(|_| {
                 panic!("Cannot read flat state deltas metadata for shard {shard_id} from storage")
             });
+        info!(target: "client", "get_all_deltas_metadata len={}", deltas_metadata.len());
         let mut deltas = HashMap::new();
         for delta_metadata in deltas_metadata {
             let block_hash = delta_metadata.block.hash;
