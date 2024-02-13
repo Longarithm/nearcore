@@ -442,10 +442,12 @@ impl FlatStorageCreator {
         // Create flat storage for all shards.
         // TODO(nikurt): Choose which shards need to open the flat storage.
         for shard_id in shard_ids {
+            info!(target: "client", shard_id, "FlatStorageCreator");
             // The node applies transactions from the shards it cares about this and the next epoch.
             let shard_uid = epoch_manager.shard_id_to_uid(shard_id, &chain_head.epoch_id)?;
             let status = flat_storage_manager.get_flat_storage_status(shard_uid);
 
+            info!(target: "client", shard_id, ?status, "FlatStorageCreator");
             match status {
                 FlatStorageStatus::Ready(_) => {
                     flat_storage_manager.create_flat_storage_for_shard(shard_uid).unwrap();
@@ -466,6 +468,7 @@ impl FlatStorageCreator {
             }
         }
 
+        info!(target: "client", creation_needed, "FlatStorageCreator");
         let flat_storage_creator = if creation_needed {
             Some(Self {
                 shard_creators,

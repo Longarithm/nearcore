@@ -275,6 +275,7 @@ impl Client {
             chain.chain_store(),
             chain_config.background_migration_threads,
         )?;
+        info!(target: "client", "sharded_tx_pool");
         let sharded_tx_pool =
             ShardedTransactionPool::new(rng_seed, config.transaction_pool_size_limit);
         let sync_status = SyncStatus::AwaitingPeers;
