@@ -1193,6 +1193,7 @@ pub fn create_testnet_configs_from_seeds(
         }
         config.archive = archive;
         config.state_sync_enabled = false;
+        config.state_sync = None;
         config.tracked_shards = tracked_shards.clone();
         config.consensus.min_num_peers =
             std::cmp::min(num_validator_seats as usize - 1, config.consensus.min_num_peers);
