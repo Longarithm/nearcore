@@ -44,18 +44,26 @@ pub(crate) fn print_epoch_info_range(
     let block_hash = tip.last_block_hash;
     let block_info = epoch_manager.get_block_info(&block_hash).unwrap();
     let mut epoch_first_block = block_info.epoch_first_block().clone();
+    let mut last_timestamp = 0;
     // go 3 times back to ensure all data is processed
     for _ in 0..3 {
-        let prev_block =
-            chain_store.get_block_header(&epoch_first_block).unwrap().prev_hash().clone();
-        let block_info = epoch_manager.get_block_info(&prev_block).unwrap();
+        let block_header = chain_store.get_block_header(&epoch_first_block).unwrap().clone();
+        let prev_block_header = chain_store.get_previous_header(&block_header).unwrap();
+        last_timestamp = prev_block_header.raw_timestamp(); // ns
+        let prev_block_hash = prev_block_header.hash();
+        let block_info = epoch_manager.get_block_info(prev_block_hash).unwrap();
         epoch_first_block = block_info.epoch_first_block().clone();
     }
+
+    let mut epoch_path = output.clone();
+    epoch_path.push("epoch.csv");
+    let mut epoch_csv = std::fs::File::create(epoch_path).unwrap();
+    writeln!(&mut epoch_csv, "epoch_height,epoch_id,epoch_first_block,epoch_duration").unwrap();
 
     let mut reward_path = output.clone();
     reward_path.push("reward.csv");
     let mut reward_csv = std::fs::File::create(reward_path).unwrap();
-    writeln!(&mut reward_csv, "epoch_height,epoch_id,epoch_first_block,account_id,reward").unwrap();
+    writeln!(&mut reward_csv, "epoch_height,account_id,reward").unwrap();
 
     let mut stake_path = output.clone();
     stake_path.push("stake.csv");
@@ -63,17 +71,22 @@ pub(crate) fn print_epoch_info_range(
     writeln!(&mut stake_csv, "epoch_height,account_id,stake,blocks_produced,blocks_expected,chunks_produced,chunks_expected").unwrap();
 
     for _ in 0..iters {
-        // process
+        let block_header = chain_store.get_block_header(&epoch_first_block).unwrap().clone();
+        let prev_block_header = chain_store.get_previous_header(&block_header).unwrap();
+        let epoch_duration = last_timestamp - prev_block_header.raw_timestamp();
         let epoch_id = epoch_manager.get_epoch_id(&epoch_first_block).unwrap();
         let epoch_id_as_hash = epoch_id.0.clone();
         let epoch_info = epoch_manager.get_epoch_info(&epoch_id).unwrap();
         let epoch_height = epoch_info.epoch_height();
+        let s = format!("{epoch_height},{epoch_id_as_hash},{epoch_first_block},{epoch_duration}");
+        writeln!(&mut epoch_csv, "{}", s).unwrap();
+        last_timestamp = prev_block_header.raw_timestamp(); // ns
+
+        // process
         let epoch_summary =
             epoch_manager.get_validator_info(ValidatorInfoIdentifier::EpochId(epoch_id)).unwrap();
         for (account_id, reward) in epoch_info.validator_reward().iter() {
-            let s = format!(
-                "{epoch_height},{epoch_id_as_hash},{epoch_first_block},{account_id},{reward}"
-            );
+            let s = format!("{epoch_height},{account_id},{reward}");
             writeln!(&mut reward_csv, "{}", s).unwrap();
         }
 
@@ -89,9 +102,8 @@ pub(crate) fn print_epoch_info_range(
         }
 
         // next
-        let prev_block =
-            chain_store.get_block_header(&epoch_first_block).unwrap().prev_hash().clone();
-        let block_info = epoch_manager.get_block_info(&prev_block).unwrap();
+        let prev_block_hash = prev_block_header.hash();
+        let block_info = epoch_manager.get_block_info(prev_block_hash).unwrap();
         epoch_first_block = block_info.epoch_first_block().clone();
     }
 }
