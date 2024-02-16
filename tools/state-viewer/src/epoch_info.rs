@@ -7,8 +7,11 @@ use near_primitives::account::id::AccountId;
 use near_primitives::epoch_manager::epoch_info::EpochInfo;
 use near_primitives::epoch_manager::AGGREGATOR_KEY;
 use near_primitives::hash::CryptoHash;
-use near_primitives::types::{BlockHeight, EpochHeight, EpochId, ProtocolVersion, ShardId};
+use near_primitives::types::{
+    BlockHeight, EpochHeight, EpochId, ProtocolVersion, ShardId, ValidatorInfoIdentifier,
+};
 use near_store::{DBCol, Store};
+use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -32,8 +35,8 @@ pub(crate) enum EpochSelection {
 }
 
 pub(crate) fn print_epoch_info_range(
-    _iters: u32,
-    _output: PathBuf,
+    iters: u32,
+    output: PathBuf,
     chain_store: &ChainStore,
     epoch_manager: &EpochManager,
 ) {
@@ -43,6 +46,49 @@ pub(crate) fn print_epoch_info_range(
     let mut epoch_first_block = block_info.epoch_first_block().clone();
     // go 3 times back to ensure all data is processed
     for _ in 0..3 {
+        let prev_block =
+            chain_store.get_block_header(&epoch_first_block).unwrap().prev_hash().clone();
+        let block_info = epoch_manager.get_block_info(&prev_block).unwrap();
+        epoch_first_block = block_info.epoch_first_block().clone();
+    }
+
+    let mut reward_path = output.clone();
+    reward_path.push("reward.csv");
+    let mut reward_csv = std::fs::File::create(reward_path).unwrap();
+    writeln!(&mut reward_csv, "epoch_height,epoch_id,epoch_first_block,account_id,reward").unwrap();
+
+    let mut stake_path = output.clone();
+    stake_path.push("stake.csv");
+    let mut stake_csv = std::fs::File::create(stake_path).unwrap();
+    writeln!(&mut stake_csv, "epoch_height,account_id,stake,blocks_produced,blocks_expected,chunks_produced,chunks_expected").unwrap();
+
+    for _ in 0..iters {
+        // process
+        let epoch_id = epoch_manager.get_epoch_id(&epoch_first_block).unwrap();
+        let epoch_id_as_hash = epoch_id.0.clone();
+        let epoch_info = epoch_manager.get_epoch_info(&epoch_id).unwrap();
+        let epoch_height = epoch_info.epoch_height();
+        let epoch_summary =
+            epoch_manager.get_validator_info(ValidatorInfoIdentifier::EpochId(epoch_id)).unwrap();
+        for (account_id, reward) in epoch_info.validator_reward().iter() {
+            let s = format!(
+                "{epoch_height},{epoch_id_as_hash},{epoch_first_block},{account_id},{reward}"
+            );
+            writeln!(&mut reward_csv, "{}", s).unwrap();
+        }
+
+        for validator_info in epoch_summary.current_validators {
+            let account_id = validator_info.account_id;
+            let stake = validator_info.stake;
+            let blocks_produced = validator_info.num_produced_blocks;
+            let blocks_expected = validator_info.num_expected_blocks;
+            let chunks_produced = validator_info.num_produced_chunks;
+            let chunks_expected = validator_info.num_expected_chunks;
+            let s = format!("{epoch_height},{account_id},{stake},{blocks_produced},{blocks_expected},{chunks_produced},{chunks_expected}");
+            writeln!(&mut stake_csv, "{}", s).unwrap();
+        }
+
+        // next
         let prev_block =
             chain_store.get_block_header(&epoch_first_block).unwrap().prev_hash().clone();
         let block_info = epoch_manager.get_block_info(&prev_block).unwrap();
