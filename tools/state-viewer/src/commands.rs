@@ -858,6 +858,22 @@ pub(crate) fn print_epoch_info(
     );
 }
 
+pub(crate) fn print_epoch_info_range(
+    iters: u32,
+    output: PathBuf,
+    near_config: NearConfig,
+    store: Store,
+) {
+    let genesis_height = near_config.genesis.config.genesis_height;
+    let mut chain_store =
+        ChainStore::new(store.clone(), genesis_height, near_config.client_config.save_trie_changes);
+    let epoch_manager =
+        EpochManager::new_from_genesis_config(store.clone(), &near_config.genesis.config)
+            .expect("Failed to start Epoch Manager");
+
+    epoch_info::print_epoch_info_range(iters, output, &mut chain_store, &epoch_manager);
+}
+
 fn get_trie(store: Store, hash: CryptoHash, shard_id: u32, shard_version: u32) -> Trie {
     let shard_uid = ShardUId { version: shard_version, shard_id };
     let trie_config: TrieConfig = Default::default();

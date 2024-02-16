@@ -63,6 +63,8 @@ pub enum StateViewerSubCommand {
     /// Print `EpochInfo` of an epoch given by `--epoch_id` or by `--epoch_height`.
     #[clap(alias = "epoch_info")]
     EpochInfo(EpochInfoCmd),
+    #[clap(alias = "epoch_info_range")]
+    EpochInfoRange(EpochInfoRangeCmd),
     /// Looks up a certain partial chunk.
     #[clap(alias = "partial_chunks")]
     PartialChunks(PartialChunksCmd),
@@ -135,6 +137,7 @@ impl StateViewerSubCommand {
             StateViewerSubCommand::DumpStateRedis(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::DumpTx(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::EpochInfo(cmd) => cmd.run(near_config, store),
+            StateViewerSubCommand::EpochInfoRange(cmd) => cmd.run(near_config, store),
             StateViewerSubCommand::PartialChunks(cmd) => cmd.run(near_config, store),
             StateViewerSubCommand::Receipts(cmd) => cmd.run(near_config, store),
             StateViewerSubCommand::Replay(cmd) => cmd.run(near_config, store),
@@ -454,6 +457,20 @@ impl EpochInfoCmd {
             near_config,
             store,
         );
+    }
+}
+
+#[derive(clap::Args)]
+pub struct EpochInfoRangeCmd {
+    #[clap(long)]
+    iters: u32,
+    #[clap(long, value_parser)]
+    output: PathBuf,
+}
+
+impl EpochInfoRangeCmd {
+    pub fn run(self, near_config: NearConfig, store: Store) {
+        print_epoch_info_range(self.iters, self.output, near_config, store);
     }
 }
 

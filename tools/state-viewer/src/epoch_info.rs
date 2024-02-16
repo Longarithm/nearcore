@@ -2,13 +2,14 @@ use borsh::BorshDeserialize;
 use core::ops::Range;
 use itertools::Itertools;
 use near_chain::{ChainStore, ChainStoreAccess};
-use near_epoch_manager::{EpochManagerAdapter, EpochManagerHandle};
+use near_epoch_manager::{EpochManager, EpochManagerAdapter, EpochManagerHandle};
 use near_primitives::account::id::AccountId;
 use near_primitives::epoch_manager::epoch_info::EpochInfo;
 use near_primitives::epoch_manager::AGGREGATOR_KEY;
 use near_primitives::hash::CryptoHash;
 use near_primitives::types::{BlockHeight, EpochHeight, EpochId, ProtocolVersion, ShardId};
 use near_store::{DBCol, Store};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -28,6 +29,25 @@ pub(crate) enum EpochSelection {
     BlockHeight { block_height: BlockHeight },
     /// Fetch all epochs with the given protocol version.
     ProtocolVersion { protocol_version: ProtocolVersion },
+}
+
+pub(crate) fn print_epoch_info_range(
+    _iters: u32,
+    _output: PathBuf,
+    chain_store: &ChainStore,
+    epoch_manager: &EpochManager,
+) {
+    let tip = chain_store.head().unwrap();
+    let block_hash = tip.last_block_hash;
+    let block_info = epoch_manager.get_block_info(&block_hash).unwrap();
+    let mut epoch_first_block = block_info.epoch_first_block().clone();
+    // go 3 times back to ensure all data is processed
+    for _ in 0..3 {
+        let prev_block =
+            chain_store.get_block_header(&epoch_first_block).unwrap().prev_hash().clone();
+        let block_info = epoch_manager.get_block_info(&prev_block).unwrap();
+        epoch_first_block = block_info.epoch_first_block().clone();
+    }
 }
 
 pub(crate) fn print_epoch_info(
