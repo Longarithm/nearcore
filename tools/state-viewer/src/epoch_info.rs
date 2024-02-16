@@ -45,6 +45,7 @@ pub(crate) fn print_epoch_info_range(
     let block_info = epoch_manager.get_block_info(&block_hash).unwrap();
     let mut epoch_first_block = block_info.epoch_first_block().clone();
     let mut last_timestamp = 0;
+    let mut total_supply = 0;
     // go 3 times back to ensure all data is processed
     for _ in 0..3 {
         let block_header = chain_store.get_block_header(&epoch_first_block).unwrap().clone();
@@ -52,13 +53,15 @@ pub(crate) fn print_epoch_info_range(
         last_timestamp = prev_block_header.raw_timestamp(); // ns
         let prev_block_hash = prev_block_header.hash();
         let block_info = epoch_manager.get_block_info(prev_block_hash).unwrap();
+        total_supply = block_info.total_supply().clone();
         epoch_first_block = block_info.epoch_first_block().clone();
     }
 
     let mut epoch_path = output.clone();
     epoch_path.push("epoch.csv");
     let mut epoch_csv = std::fs::File::create(epoch_path).unwrap();
-    writeln!(&mut epoch_csv, "epoch_height,epoch_id,epoch_first_block,epoch_duration").unwrap();
+    writeln!(&mut epoch_csv, "epoch_height,epoch_id,epoch_first_block,epoch_duration,total_supply")
+        .unwrap();
 
     let mut reward_path = output.clone();
     reward_path.push("reward.csv");
@@ -78,7 +81,9 @@ pub(crate) fn print_epoch_info_range(
         let epoch_id_as_hash = epoch_id.0.clone();
         let epoch_info = epoch_manager.get_epoch_info(&epoch_id).unwrap();
         let epoch_height = epoch_info.epoch_height();
-        let s = format!("{epoch_height},{epoch_id_as_hash},{epoch_first_block},{epoch_duration}");
+        let s = format!(
+            "{epoch_height},{epoch_id_as_hash},{epoch_first_block},{epoch_duration},{total_supply}"
+        );
         writeln!(&mut epoch_csv, "{}", s).unwrap();
         last_timestamp = prev_block_header.raw_timestamp(); // ns
 
@@ -104,6 +109,7 @@ pub(crate) fn print_epoch_info_range(
         // next
         let prev_block_hash = prev_block_header.hash();
         let block_info = epoch_manager.get_block_info(prev_block_hash).unwrap();
+        total_supply = block_info.total_supply().clone();
         epoch_first_block = block_info.epoch_first_block().clone();
     }
 }
