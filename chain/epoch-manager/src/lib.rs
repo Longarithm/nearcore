@@ -932,6 +932,11 @@ impl EpochManager {
     ) -> Result<Arc<ChunkValidatorAssignments>, EpochError> {
         let cache_key = (epoch_id.clone(), shard_id, height);
         if let Some(chunk_validators) = self.chunk_validators_cache.get(&cache_key) {
+            tracing::debug!(
+                target: "stateless_validation",
+                "inner_chunk_validator_assignments {:?}",
+                chunk_validators
+            );
             return Ok(chunk_validators);
         }
 
@@ -945,6 +950,12 @@ impl EpochManager {
                 })
                 .collect();
             let cache_key = (epoch_id.clone(), shard_id as ShardId, height);
+            tracing::debug!(
+                target: "stateless_validation",
+                "inner_chunk_validator_assignments | {} | {:?}",
+                shard_id,
+                chunk_validators
+            );
             self.chunk_validators_cache
                 .put(cache_key, Arc::new(ChunkValidatorAssignments::new(chunk_validators)));
         }

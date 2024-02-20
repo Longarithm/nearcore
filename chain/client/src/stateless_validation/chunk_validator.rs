@@ -103,6 +103,13 @@ impl ChunkValidator {
             chunk_header.shard_id(),
             chunk_header.height_created(),
         )?;
+        tracing::debug!(
+            target: "stateless_validation",
+            "get_chunk_validator_assignments | {} {} | {:?}",
+            chunk_header.shard_id(),
+            chunk_header.height_created(),
+            chunk_validator_assignments
+        );
         if !chunk_validator_assignments.contains(my_signer.validator_id()) {
             return Err(Error::NotAChunkValidator);
         }
