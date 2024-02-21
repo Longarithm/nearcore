@@ -9,7 +9,7 @@
     "@types/react-dom": "^18.2.18",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-query": "^4.0.0",
+    "react-query": "^3.39.3",
     "react-router": "^6.21.0",
     "react-router-dom": "^6.21.1",
     "react-scripts": "^5.0.1",
@@ -36,6 +36,7 @@
     ]
   },
   "devDependencies": {
+    "@types/react-query": "^1.2.9",
     "@typescript-eslint/eslint-plugin": "^5.52.0",
     "@typescript-eslint/parser": "^5.52.0",
     "eslint": "^8.34.0",
