@@ -114,7 +114,7 @@ pub(crate) fn print_epoch_info_range(
             let chunks_produced = validator_info.num_produced_chunks;
             let chunks_expected = validator_info.num_expected_chunks;
             let s = format!("{epoch_height},{account_id},{stake},{blocks_produced},{blocks_expected},{chunks_produced},{chunks_expected}");
-            writeln!(&mut kickout_chunks_csv, "{}", s).unwrap();
+            writeln!(&mut stake_csv, "{}", s).unwrap();
         }
 
         for validator_info in epoch_summary.prev_epoch_kickout {
