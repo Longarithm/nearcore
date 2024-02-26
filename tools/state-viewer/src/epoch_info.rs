@@ -121,11 +121,11 @@ pub(crate) fn print_epoch_info_range(
             let account_id = validator_info.account_id;
             match validator_info.reason {
                 ValidatorKickoutReason::NotEnoughBlocks { produced, expected } => {
-                    let s = format!("{epoch_height},{account_id},{stake},{produced},{expected}");
+                    let s = format!("{epoch_height},{account_id},{produced},{expected}");
                     writeln!(&mut kickout_blocks_csv, "{}", s).unwrap();
                 }
                 ValidatorKickoutReason::NotEnoughChunks { produced, expected } => {
-                    let s = format!("{epoch_height},{account_id},{stake},{produced},{expected}");
+                    let s = format!("{epoch_height},{account_id},{produced},{expected}");
                     writeln!(&mut kickout_chunks_csv, "{}", s).unwrap();
                 }
                 _ => {}
