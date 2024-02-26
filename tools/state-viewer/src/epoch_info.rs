@@ -9,6 +9,7 @@ use near_primitives::epoch_manager::AGGREGATOR_KEY;
 use near_primitives::hash::CryptoHash;
 use near_primitives::types::{
     BlockHeight, EpochHeight, EpochId, ProtocolVersion, ShardId, ValidatorInfoIdentifier,
+    ValidatorKickoutReason,
 };
 use near_store::{DBCol, Store};
 use std::io::Write;
@@ -73,6 +74,16 @@ pub(crate) fn print_epoch_info_range(
     let mut stake_csv = std::fs::File::create(stake_path).unwrap();
     writeln!(&mut stake_csv, "epoch_height,account_id,stake,blocks_produced,blocks_expected,chunks_produced,chunks_expected").unwrap();
 
+    let mut kickout_blocks_path = output.clone();
+    kickout_blocks_path.push("kickout_blocks.csv");
+    let mut kickout_blocks_csv = std::fs::File::create(kickout_blocks_path).unwrap();
+    writeln!(&mut kickout_blocks_csv, "epoch_height,account_id,produced,expected").unwrap();
+
+    let mut kickout_chunks_path = output.clone();
+    kickout_chunks_path.push("kickout_chunks.csv");
+    let mut kickout_chunks_csv = std::fs::File::create(kickout_chunks_path).unwrap();
+    writeln!(&mut kickout_chunks_csv, "epoch_height,account_id,produced,expected").unwrap();
+
     for _ in 0..iters {
         let block_header = chain_store.get_block_header(&epoch_first_block).unwrap().clone();
         let prev_block_header = chain_store.get_previous_header(&block_header).unwrap();
@@ -103,7 +114,22 @@ pub(crate) fn print_epoch_info_range(
             let chunks_produced = validator_info.num_produced_chunks;
             let chunks_expected = validator_info.num_expected_chunks;
             let s = format!("{epoch_height},{account_id},{stake},{blocks_produced},{blocks_expected},{chunks_produced},{chunks_expected}");
-            writeln!(&mut stake_csv, "{}", s).unwrap();
+            writeln!(&mut kickout_chunks_csv, "{}", s).unwrap();
+        }
+
+        for validator_info in epoch_summary.prev_epoch_kickout {
+            let account_id = validator_info.account_id;
+            match validator_info.reason {
+                ValidatorKickoutReason::NotEnoughBlocks { produced, expected } => {
+                    let s = format!("{epoch_height},{account_id},{stake},{produced},{expected}");
+                    writeln!(&mut kickout_blocks_csv, "{}", s).unwrap();
+                }
+                ValidatorKickoutReason::NotEnoughChunks { produced, expected } => {
+                    let s = format!("{epoch_height},{account_id},{stake},{produced},{expected}");
+                    writeln!(&mut kickout_chunks_csv, "{}", s).unwrap();
+                }
+                _ => {}
+            }
         }
 
         // next
