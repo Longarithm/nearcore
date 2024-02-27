@@ -100,6 +100,7 @@ def doit(seq=[]):
                                       "nanos": 0
                                   },
                                   "consensus": {
+                                      "block_fetch_horizon": 100,
                                       "state_sync_timeout": {
                                           "secs": 2,
                                           "nanos": 0
@@ -112,6 +113,7 @@ def doit(seq=[]):
                                       "nanos": 0
                                   },
                                   "consensus": {
+                                      "block_fetch_horizon": 100,
                                       "state_sync_timeout": {
                                           "secs": 2,
                                           "nanos": 0
@@ -125,6 +127,7 @@ def doit(seq=[]):
                                       "nanos": 0
                                   },
                                   "consensus": {
+                                      "block_fetch_horizon": 100,
                                       "state_sync_timeout": {
                                           "secs": 2,
                                           "nanos": 0
