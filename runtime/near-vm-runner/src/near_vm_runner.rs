@@ -660,8 +660,12 @@ impl<'a> finite_wasm::wasmparser::VisitOperator<'a> for GasCostCfg {
 use once_cell::sync::Lazy;
 
 pub static VMRUNNER_TIME: Lazy<IntCounter> = Lazy::new(|| {
+    try_create_int_counter("near_vm_runner_time", "Total time used for contract execution").unwrap()
+});
+
+pub static VMRUNNER_WITH_INIT_TIME: Lazy<IntCounter> = Lazy::new(|| {
     try_create_int_counter(
-        "near_vm_runner_time",
+        "near_vm_runner_with_init_time",
         "Total time used for contract execution",
     )
     .unwrap()
@@ -683,6 +687,8 @@ impl crate::runner::VM for NearVM {
             self.config.limit_config.max_memory_pages,
         )
         .expect("Cannot create memory for a contract call");
+
+        let init_start = Instant::now();
 
         // FIXME: this mostly duplicates the `run_module` method.
         // Note that we don't clone the actual backing memory, just increase the RC.
@@ -720,6 +726,8 @@ impl crate::runner::VM for NearVM {
         };
         let elapsed = start.elapsed().as_nanos() as u64;
         VMRUNNER_TIME.inc_by(elapsed);
+        let elapsed = init_start.elapsed().as_nanos() as u64;
+        VMRUNNER_WITH_INIT_TIME.inc_by(elapsed);
         res
     }
 
