@@ -269,7 +269,7 @@ impl<'a> ChainUpdate<'a> {
                         result.shard_uid,
                         result.trie_changes.state_changes(),
                     )?;
-                    flat_storage_manager.update_flat_storage_for_shard(*shard_uid, block)?;
+                    flat_storage_manager.update_flat_storage_for_shard(result.shard_uid, block)?;
                     self.chain_store_update.merge(store_update);
 
                     self.chain_store_update.save_chunk_extra(
@@ -395,8 +395,6 @@ impl<'a> ChainUpdate<'a> {
                 }
             }
             ShardUpdateResult::Resharding(ReshardingResult { shard_uid, results }) => {
-                self.chain_store_update
-                    .remove_state_changes_for_resharding(*block.hash(), shard_uid.shard_id());
                 self.process_resharding_results(
                     block,
                     &shard_uid,
