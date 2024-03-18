@@ -62,10 +62,10 @@ cd {PYTHON_DIR}
 ./venv/bin/pip install -r requirements.txt
 '''
 
-ONE_NEAR = 10 ** 24
-MIN_STAKE = 64 * (10 ** 3)
-STAKE_STEP = 15 * (10 ** 3)
-OTHER_STAKE = 10 ** 6
+ONE_NEAR = 10**24
+MIN_STAKE = 64 * (10**3)
+STAKE_STEP = 15 * (10**3)
+OTHER_STAKE = 10**6
 MAINNET_STAKES = [
     43566361, 20091202, 19783811, 18990335, 18196731, 12284685, 10770734,
     10769428, 9858038, 9704977, 8871933, 8296476, 7731153, 7499051, 7322703,
@@ -78,13 +78,13 @@ MAINNET_STAKES = [
 ]
 
 ACCOUNTS = {
-    TREASURY_ACCOUNT: (10 ** 7) * ONE_NEAR,
-    MASTER_ACCOUNT: (10 ** 7) * ONE_NEAR,
-    SKYWARD_ACCOUNT: (10 ** 6) * ONE_NEAR,
-    TOKEN1_ACCOUNT: (10 ** 6) * ONE_NEAR,
-    TOKEN2_ACCOUNT: (10 ** 6) * ONE_NEAR,
-    TOKEN2_OWNER_ACCOUNT: (10 ** 6) * ONE_NEAR,
-    ACCOUNT1_ACCOUNT: (10 ** 6) * ONE_NEAR,
+    TREASURY_ACCOUNT: (10**7) * ONE_NEAR,
+    MASTER_ACCOUNT: (10**7) * ONE_NEAR,
+    SKYWARD_ACCOUNT: (10**6) * ONE_NEAR,
+    TOKEN1_ACCOUNT: (10**6) * ONE_NEAR,
+    TOKEN2_ACCOUNT: (10**6) * ONE_NEAR,
+    TOKEN2_OWNER_ACCOUNT: (10**6) * ONE_NEAR,
+    ACCOUNT1_ACCOUNT: (10**6) * ONE_NEAR,
 }
 
 
@@ -167,13 +167,13 @@ def setup_python_environments(nodes, wasm_contract):
 
 
 def start_load_test_helper_script(
-        script,
-        node_account_id,
-        rpc_nodes,
-        num_nodes,
-        max_tps,
-        test_timeout,
-        contract_deploy_time,
+    script,
+    node_account_id,
+    rpc_nodes,
+    num_nodes,
+    max_tps,
+    test_timeout,
+    contract_deploy_time,
 ):
     s = '''
         cd {dir}
@@ -202,13 +202,13 @@ def start_load_test_helper_script(
 
 
 def start_load_test_helper(
-        script,
-        node,
-        rpc_nodes,
-        num_nodes,
-        max_tps,
-        test_timeout,
-        contract_deploy_time,
+    script,
+    node,
+    rpc_nodes,
+    num_nodes,
+    max_tps,
+    test_timeout,
+    contract_deploy_time,
 ):
     logger.info(f'Starting load_test_helper on {node.instance_name}')
     rpc_node_ips = ','.join([rpc_node.ip for rpc_node in rpc_nodes])
@@ -227,12 +227,12 @@ def start_load_test_helper(
 
 
 def start_load_test_helpers(
-        script,
-        validator_nodes,
-        rpc_nodes,
-        max_tps,
-        test_timeout,
-        contract_deploy_time,
+    script,
+    validator_nodes,
+    rpc_nodes,
+    max_tps,
+    test_timeout,
+    contract_deploy_time,
 ):
     pmap(
         lambda node: start_load_test_helper(
@@ -283,10 +283,10 @@ def get_chunk_txn(index, chunks, archival_node, result):
 # Measure bps and tps by directly checking block timestamps and number of transactions
 # in each block.
 def chain_measure_bps_and_tps(
-        archival_node,
-        start_time,
-        end_time,
-        duration=None,
+    archival_node,
+    start_time,
+    end_time,
+    duration=None,
 ):
     latest_block_hash = archival_node.get_latest_block().hash
     curr_block = archival_node.get_block(latest_block_hash)['result']
@@ -524,16 +524,16 @@ def neard_amend_genesis_path(node):
 # We assume that the nodes already have the .near directory with the files
 # node_key.json, validator_key.json and config.json.
 def create_and_upload_genesis(
-        validator_nodes,
-        chain_id,
-        rpc_nodes=None,
-        epoch_length=20000,
-        node_pks=None,
-        increasing_stakes=0.0,
-        num_seats=100,
-        single_shard=False,
-        all_node_pks=None,
-        node_ips=None,
+    validator_nodes,
+    chain_id,
+    rpc_nodes=None,
+    epoch_length=20000,
+    node_pks=None,
+    increasing_stakes=0.0,
+    num_seats=100,
+    single_shard=False,
+    all_node_pks=None,
+    node_ips=None,
 ):
     logger.info('Uploading genesis and config files')
     assert chain_id
@@ -580,9 +580,9 @@ def extra_genesis_records(validator_keys, rpc_node_names, node_pks,
                           seen_accounts, num_seats, increasing_stakes):
     records = []
 
-    VALIDATOR_BALANCE = (10 ** 2) * ONE_NEAR
-    RPC_BALANCE = (10 ** 1) * ONE_NEAR
-    LOAD_TESTER_BALANCE = (10 ** 4) * ONE_NEAR
+    VALIDATOR_BALANCE = (10**2) * ONE_NEAR
+    RPC_BALANCE = (10**1) * ONE_NEAR
+    LOAD_TESTER_BALANCE = (10**4) * ONE_NEAR
 
     for account_id, balance in ACCOUNTS.items():
         if account_id not in seen_accounts:
@@ -755,7 +755,7 @@ def neard_amend_genesis(neard, validator_keys, genesis_filename_in,
         '--num-seats',
         str(int(num_seats)),
         '--transaction-validity-period',
-        str(10 ** 9),
+        str(10**9),
         '--protocol-version',
         '49',
         '--protocol-reward-rate',
@@ -778,11 +778,11 @@ def neard_amend_genesis(neard, validator_keys, genesis_filename_in,
 
 
 def create_and_upload_genesis_file_from_empty_genesis(
-        validator_node_and_stakes,
-        rpc_nodes,
-        chain_id=None,
-        epoch_length=None,
-        num_seats=None,
+    validator_node_and_stakes,
+    rpc_nodes,
+    chain_id=None,
+    epoch_length=None,
+    num_seats=None,
 ):
     node0 = validator_node_and_stakes[0][0]
     node0.machine.run(
@@ -792,21 +792,21 @@ def create_and_upload_genesis_file_from_empty_genesis(
         node0, "/home/ubuntu/.near-tmp/genesis.json")
     records = []
 
-    VALIDATOR_BALANCE = (10 ** 2) * ONE_NEAR
-    RPC_BALANCE = (10 ** 1) * ONE_NEAR
+    VALIDATOR_BALANCE = (10**2) * ONE_NEAR
+    RPC_BALANCE = (10**1) * ONE_NEAR
     TREASURY_ACCOUNT = 'test.near'
-    TREASURY_BALANCE = (10 ** 7) * ONE_NEAR
-    LOAD_TESTER_BALANCE = (10 ** 8) * ONE_NEAR
+    TREASURY_BALANCE = (10**7) * ONE_NEAR
+    LOAD_TESTER_BALANCE = (10**8) * ONE_NEAR
 
-    SKYWARD_CONTRACT_BALANCE = (10 ** 6) * ONE_NEAR
-    TOKEN1_BALANCE = (10 ** 6) * ONE_NEAR
-    TOKEN2_BALANCE = (10 ** 6) * ONE_NEAR
-    TOKEN2_OWNER_BALANCE = (10 ** 6) * ONE_NEAR
-    ACCOUNT1_BALANCE = (10 ** 6) * ONE_NEAR
+    SKYWARD_CONTRACT_BALANCE = (10**6) * ONE_NEAR
+    TOKEN1_BALANCE = (10**6) * ONE_NEAR
+    TOKEN2_BALANCE = (10**6) * ONE_NEAR
+    TOKEN2_OWNER_BALANCE = (10**6) * ONE_NEAR
+    ACCOUNT1_BALANCE = (10**6) * ONE_NEAR
 
     genesis_config['chain_id'] = chain_id
 
-    master_balance = 10 ** 7
+    master_balance = 10**7
     assert master_balance > 0
     accounts = {
         TREASURY_ACCOUNT: TREASURY_BALANCE,
@@ -918,18 +918,28 @@ def create_and_upload_genesis_file_from_empty_genesis(
     genesis_config['total_supply'] = str(total_supply)
     genesis_config['protocol_version'] = 83
     genesis_config['epoch_length'] = int(epoch_length)
-    genesis_config['num_block_producer_seats'] = int(num_seats)
+    genesis_config['num_block_producer_seats'] = 1  # int(num_seats)
+    genesis_config['num_chunk_only_producer_seats'] = 0  # int(num_seats)
     genesis_config['protocol_reward_rate'] = [1, 10]
+    
     # Loadtest helper signs all transactions using the same block.
     # Extend validity period to allow the same hash to be used for the whole duration of the test.
-    genesis_config['transaction_validity_period'] = 10 ** 9
+    genesis_config['transaction_validity_period'] = 10**9
     # Protocol upgrades require downtime, therefore make it harder to kickout validators.
     # The default value of this parameter is 90.
     genesis_config['block_producer_kickout_threshold'] = 10
 
+    # genesis_config['shard_layout'] = {'V1':
+    #     {
+    #         'boundary_accounts': ["aurora", "aurora-0", "kkuuue2akv_1630967379.near", "tge-lockup.sweat"],
+    #         'shards_split_map': None,
+    #         'to_parent_shard_map': None,
+    #         'version': 2
+    #     }
+    # }
     genesis_config['shard_layout'] = {'V1':
         {
-            'boundary_accounts': ["aurora", "aurora-0", "kkuuue2akv_1630967379.near", "tge-lockup.sweat"],
+            'boundary_accounts': [],
             'shards_split_map': None,
             'to_parent_shard_map': None,
             'version': 2
@@ -1015,10 +1025,10 @@ def init_validator_key(node):
 
 
 def update_config_file(
-        config_filename_in,
-        config_filename_out,
-        all_node_pks,
-        node_ips,
+    config_filename_in,
+    config_filename_out,
+    all_node_pks,
+    node_ips,
 ):
     with open(config_filename_in) as f:
         config_json = json.load(f)
@@ -1175,23 +1185,23 @@ def reset_data(node, retries=0):
 
 
 def start_genesis_updater_script(
-        script,
-        genesis_filename_in,
-        records_filename_in,
-        config_filename_in,
-        out_dir,
-        chain_id,
-        validator_keys,
-        rpc_nodes,
-        done_filename,
-        epoch_length,
-        node_pks,
-        increasing_stakes,
-        num_seats,
-        single_shard,
-        all_node_pks,
-        node_ips,
-        neard,
+    script,
+    genesis_filename_in,
+    records_filename_in,
+    config_filename_in,
+    out_dir,
+    chain_id,
+    validator_keys,
+    rpc_nodes,
+    done_filename,
+    epoch_length,
+    node_pks,
+    increasing_stakes,
+    num_seats,
+    single_shard,
+    all_node_pks,
+    node_ips,
+    neard,
 ):
     validators = ','.join(
         [f'{account_id}={key}' for (account_id, key) in validator_keys.items()])
@@ -1312,11 +1322,11 @@ def wait_all_nodes_up(all_nodes):
 
 
 def create_upgrade_schedule(
-        rpc_nodes,
-        validator_nodes,
-        progressive_upgrade,
-        increasing_stakes,
-        num_block_producer_seats,
+    rpc_nodes,
+    validator_nodes,
+    progressive_upgrade,
+    increasing_stakes,
+    num_block_producer_seats,
 ):
     schedule = {}
     if progressive_upgrade:
@@ -1326,7 +1336,7 @@ def create_upgrade_schedule(
             prev_stake = None
             for i, node in enumerate(validator_nodes):
                 if (i * 5 < num_block_producer_seats * 3 and
-                        i < len(MAINNET_STAKES)):
+                    i < len(MAINNET_STAKES)):
                     staked = MAINNET_STAKES[i] * ONE_NEAR
                 elif prev_stake is None:
                     prev_stake = MIN_STAKE - STAKE_STEP
@@ -1491,7 +1501,7 @@ def stake_available_amount(node_account, last_staking):
                 logger.info(
                     f'Amount of {node_account.key.account_id} is {stake_amount}'
                 )
-                if stake_amount > (10 ** 3) * ONE_NEAR:
+                if stake_amount > (10**3) * ONE_NEAR:
                     logger.info(
                         f'Staking {stake_amount} for {node_account.key.account_id}'
                     )
