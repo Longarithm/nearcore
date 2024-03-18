@@ -918,8 +918,10 @@ def create_and_upload_genesis_file_from_empty_genesis(
     genesis_config['total_supply'] = str(total_supply)
     genesis_config['protocol_version'] = 83
     genesis_config['epoch_length'] = int(epoch_length)
-    genesis_config['num_block_producer_seats'] = int(num_seats)
+    genesis_config['num_block_producer_seats'] = 1  # int(num_seats)
+    genesis_config['num_chunk_only_producer_seats'] = 0  # int(num_seats)
     genesis_config['protocol_reward_rate'] = [1, 10]
+
     # Loadtest helper signs all transactions using the same block.
     # Extend validity period to allow the same hash to be used for the whole duration of the test.
     genesis_config['transaction_validity_period'] = 10**9
@@ -927,9 +929,17 @@ def create_and_upload_genesis_file_from_empty_genesis(
     # The default value of this parameter is 90.
     genesis_config['block_producer_kickout_threshold'] = 10
 
+    # genesis_config['shard_layout'] = {'V1':
+    #     {
+    #         'boundary_accounts': ["aurora", "aurora-0", "kkuuue2akv_1630967379.near", "tge-lockup.sweat"],
+    #         'shards_split_map': None,
+    #         'to_parent_shard_map': None,
+    #         'version': 2
+    #     }
+    # }
     genesis_config['shard_layout'] = {'V1':
         {
-            'boundary_accounts': ["aurora", "aurora-0", "kkuuue2akv_1630967379.near", "tge-lockup.sweat"],
+            'boundary_accounts': [],
             'shards_split_map': None,
             'to_parent_shard_map': None,
             'version': 2
