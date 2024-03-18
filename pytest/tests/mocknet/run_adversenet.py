@@ -83,6 +83,7 @@ def check_slow_blocks(initial_metrics, final_metrics):
 
 def override_config(node, config):
     # Add config here depending on the specific node build.
+    config["consensus"]["min_num_peers"] = 0
     pass
     # config["tracked_shards"] = []
     """
