@@ -946,7 +946,7 @@ def create_and_upload_genesis_file_from_empty_genesis(
         }
     }
     genesis_config['simple_nightshade_shard_layout'] = {}
-    genesis_config['num_block_producer_seats_per_shard'] = [int(num_seats)] * 5
+    genesis_config['num_block_producer_seats_per_shard'] = [int(num_seats)] * 1
     genesis_config['online_min_threshold'] = [
         1,
         2
