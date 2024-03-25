@@ -92,6 +92,7 @@ impl TriePrefetcher {
     ) -> Result<(), PrefetchError> {
         for receipt in receipts.iter() {
             if let ReceiptEnum::Action(action_receipt) = &receipt.receipt {
+                println!("---------------");
                 let account_id = receipt.receiver_id.clone();
 
                 // general-purpose account prefetching
@@ -107,6 +108,18 @@ impl TriePrefetcher {
                     for action in &action_receipt.actions {
                         if let Action::FunctionCall(fn_call) = action {
                             println!("{},{}", account_id, fn_call.method_name);
+                            if account_id == "claim.sweat"
+                                && fn_call.method_name == "record_batch_for_hold"
+                            {
+                                if let Ok(json) =
+                                    serde_json::de::from_slice::<serde_json::Value>(&fn_call.args)
+                                {
+                                    if json.is_object() {
+                                        println!("{}", json);
+                                    }
+                                }
+                            }
+
                             if fn_call.method_name == "record_batch" {
                                 self.prefetch_sweat_record_batch(
                                     account_id.clone(),
