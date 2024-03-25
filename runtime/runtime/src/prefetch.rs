@@ -101,11 +101,12 @@ impl TriePrefetcher {
                 }
 
                 // SWEAT specific argument prefetcher
-                if self.prefetch_api.sweat_prefetch_receivers.contains(&account_id)
-                    && self.prefetch_api.sweat_prefetch_senders.contains(&receipt.predecessor_id)
+                // if self.prefetch_api.sweat_prefetch_receivers.contains(&account_id)
+                //     && self.prefetch_api.sweat_prefetch_senders.contains(&receipt.predecessor_id)
                 {
                     for action in &action_receipt.actions {
                         if let Action::FunctionCall(fn_call) = action {
+                            println!("{},{}", account_id, fn_call.method_name);
                             if fn_call.method_name == "record_batch" {
                                 self.prefetch_sweat_record_batch(
                                     account_id.clone(),
