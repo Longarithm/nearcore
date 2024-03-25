@@ -115,6 +115,34 @@ impl TriePrefetcher {
                                     serde_json::de::from_slice::<serde_json::Value>(&fn_call.args)
                                 {
                                     if json.is_object() {
+                                        if let Some(list) = json.get("amounts") {
+                                            if let Some(list) = list.as_array() {
+                                                for tuple in list.iter() {
+                                                    if let Some(tuple) = tuple.as_array() {
+                                                        if let Some(user_account) =
+                                                            tuple.first().and_then(|a| a.as_str())
+                                                        {
+                                                            println!("{}", user_account);
+                                                            let mut key = vec![0, 64, 0, 0, 0];
+                                                            key.extend(user_account.as_bytes());
+                                                            println!("{:?}", key);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        println!("{}", json);
+                                    }
+                                }
+                            }
+
+                            if account_id == "earn.kaiching"
+                                && fn_call.method_name == "ft_on_transfer"
+                            {
+                                if let Ok(json) =
+                                    serde_json::de::from_slice::<serde_json::Value>(&fn_call.args)
+                                {
+                                    if json.is_object() {
                                         println!("{}", json);
                                     }
                                 }
