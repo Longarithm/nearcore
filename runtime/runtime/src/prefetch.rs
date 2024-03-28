@@ -149,50 +149,61 @@ impl TriePrefetcher {
                                 if let Ok(json) =
                                     serde_json::de::from_slice::<serde_json::Value>(&fn_call.args)
                                 {
-                                    if let Some(json) = get_inner_json(&json, "msg") {
-                                        if let Some(list) = get_inner_json(&json, "rewards") {
-                                            if let Some(list) = list.as_array() {
-                                                for tuple in list.iter() {
-                                                    if let Some(tuple) = tuple.as_array() {
-                                                        let mut user_account_key = Vec::new();
-                                                        user_account_key.extend([1, 109]);
-                                                        let user_account_serialize_result = tuple
-                                                            .get(0)
-                                                            .and_then(|a| a.as_str())
-                                                            .and_then(|a| {
-                                                                AccountId::from_str(a).ok()
-                                                            })
-                                                            .and_then(|a| {
-                                                                borsh::BorshSerialize::serialize(
-                                                                    &a,
-                                                                    &mut user_account_key,
-                                                                )
-                                                                .ok()
-                                                            });
-                                                        let reward_id =
-                                                            tuple.get(2).and_then(|a| a.as_str());
-                                                        if user_account_serialize_result.is_some() {
-                                                            if let Some(reward_id) = reward_id {
-                                                                let user_account_key_hash =
-                                                                    hash(&user_account_key);
-                                                                let mut reward_key =
-                                                                    vec![0, 24, 0, 0, 0];
-                                                                reward_key
-                                                                    .extend(reward_id.as_bytes());
-                                                                println!(
-                                                                    "{:?}",
-                                                                    user_account_key_hash.0
-                                                                );
-                                                                println!("{:?}", reward_key);
+                                    if let Some(msg) = get_inner_json(&json, "msg") {
+                                        if let Some(json) = msg.as_str().and_then(|s| {
+                                            serde_json::de::from_slice::<serde_json::Value>(
+                                                s.as_bytes(),
+                                            )
+                                            .ok()
+                                        }) {
+                                            if let Some(list) = get_inner_json(&json, "rewards") {
+                                                if let Some(list) = list.as_array() {
+                                                    for tuple in list.iter() {
+                                                        if let Some(tuple) = tuple.as_array() {
+                                                            let mut user_account_key = Vec::new();
+                                                            user_account_key.extend([1, 109]);
+                                                            let user_account_serialize_result = tuple
+                                                                .get(0)
+                                                                .and_then(|a| a.as_str())
+                                                                .and_then(|a| {
+                                                                    AccountId::from_str(a).ok()
+                                                                })
+                                                                .and_then(|a| {
+                                                                    borsh::BorshSerialize::serialize(
+                                                                        &a,
+                                                                        &mut user_account_key,
+                                                                    )
+                                                                        .ok()
+                                                                });
+                                                            let reward_id = tuple
+                                                                .get(2)
+                                                                .and_then(|a| a.as_str());
+                                                            if user_account_serialize_result
+                                                                .is_some()
+                                                            {
+                                                                if let Some(reward_id) = reward_id {
+                                                                    let user_account_key_hash =
+                                                                        hash(&user_account_key);
+                                                                    let mut reward_key =
+                                                                        vec![0, 24, 0, 0, 0];
+                                                                    reward_key.extend(
+                                                                        reward_id.as_bytes(),
+                                                                    );
+                                                                    println!(
+                                                                        "{:?}",
+                                                                        user_account_key_hash.0
+                                                                    );
+                                                                    println!("{:?}", reward_key);
+                                                                }
                                                             }
                                                         }
+                                                        println!("{}", tuple);
                                                     }
-                                                    println!("{}", tuple);
                                                 }
+                                                println!("{}", list);
                                             }
-                                            println!("{}", list);
                                         }
-                                        println!("{}", json);
+                                        println!("{}", msg);
                                     }
                                     println!("{}", json);
                                 }
