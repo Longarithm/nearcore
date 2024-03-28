@@ -133,13 +133,17 @@ impl TriePrefetcher {
                                                     {
                                                         let mut key = vec![0, 64, 0, 0, 0];
                                                         key.extend(user_account.as_bytes());
-                                                        println!("{:?}", key);
+                                                        let trie_key = TrieKey::ContractData {
+                                                            account_id: account_id.clone(),
+                                                            key,
+                                                        };
+                                                        near_o11y::io_trace!(count: "prefetch");
+                                                        self.prefetch_trie_key(trie_key)?;
                                                     }
                                                 }
                                             }
                                         }
                                     }
-                                    println!("{}", json);
                                 }
                             }
 
@@ -184,28 +188,38 @@ impl TriePrefetcher {
                                                                 if let Some(reward_id) = reward_id {
                                                                     let user_account_key_hash =
                                                                         hash(&user_account_key);
+                                                                    let trie_key = TrieKey::ContractData {
+                                                                        account_id: account_id.clone(),
+                                                                        key: user_account_key_hash.0.to_vec(),
+                                                                    };
+                                                                    near_o11y::io_trace!(count: "prefetch");
+                                                                    self.prefetch_trie_key(
+                                                                        trie_key,
+                                                                    )?;
+
                                                                     let mut reward_key =
                                                                         vec![0, 24, 0, 0, 0];
                                                                     reward_key.extend(
                                                                         reward_id.as_bytes(),
                                                                     );
-                                                                    println!(
-                                                                        "{:?}",
-                                                                        user_account_key_hash.0
-                                                                    );
-                                                                    println!("{:?}", reward_key);
+                                                                    let trie_key =
+                                                                        TrieKey::ContractData {
+                                                                            account_id: account_id
+                                                                                .clone(),
+                                                                            key: reward_key,
+                                                                        };
+                                                                    near_o11y::io_trace!(count: "prefetch");
+                                                                    self.prefetch_trie_key(
+                                                                        trie_key,
+                                                                    )?;
                                                                 }
                                                             }
                                                         }
-                                                        println!("{}", tuple);
                                                     }
                                                 }
-                                                println!("{}", list);
                                             }
                                         }
-                                        println!("{}", msg);
                                     }
-                                    println!("{}", json);
                                 }
                             }
 

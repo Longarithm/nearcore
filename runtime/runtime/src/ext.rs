@@ -122,7 +122,6 @@ impl<'a> External for RuntimeExt<'a> {
         mode: StorageGetMode,
     ) -> ExtResult<Option<Box<dyn ValuePtr + 'b>>> {
         let storage_key = self.create_storage_key(key);
-        println!("GET {:?}", storage_key);
         let mode = match mode {
             StorageGetMode::FlatStorage => KeyLookupMode::FlatStorage,
             StorageGetMode::Trie => KeyLookupMode::Trie,
