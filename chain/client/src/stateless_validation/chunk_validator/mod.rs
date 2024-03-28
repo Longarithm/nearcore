@@ -559,7 +559,6 @@ pub(crate) fn validate_chunk_state_witness(
             // This is an early check, it's not for correctness, only for better
             // error reporting in case of an invalid state witness due to a bug.
             // Only the final state root check against the chunk header is required.
-            println!("ERROR: {:?}", state_witness);
             return Err(Error::InvalidChunkStateWitness(format!(
                 "Post state root {:?} for implicit transition at block {:?}, does not match expected state root {:?}",
                 chunk_extra.state_root(), block_hash, transition.post_state_root
