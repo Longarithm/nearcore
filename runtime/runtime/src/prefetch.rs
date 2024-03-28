@@ -187,9 +187,12 @@ impl TriePrefetcher {
                                                             }
                                                         }
                                                     }
+                                                    println!("{}", tuple);
                                                 }
                                             }
+                                            println!("{}", list);
                                         }
+                                        println!("{}", json);
                                     }
                                     println!("{}", json);
                                 }
