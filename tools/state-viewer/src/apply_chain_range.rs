@@ -364,8 +364,7 @@ pub fn apply_chain_range(
     use_flat_storage: bool,
 ) {
     assert!(use_flat_storage);
-    assert!(end_height.is_none());
-    // let end_height = end_height.unwrap_or_else(|| chain_store.head().unwrap().height);
+    // assert!(end_height.is_none());
     assert!(start_height.is_none());
     // let start_height = start_height.unwrap_or_else(|| chain_store.tail().unwrap());
 
@@ -391,6 +390,7 @@ pub fn apply_chain_range(
     assert!(sequential);
 
     let mut chain_store = ChainStore::new(store.clone(), genesis.config.genesis_height, false);
+    let end_height = end_height.unwrap_or_else(|| chain_store.head().unwrap().height);
     let final_head = chain_store.final_head().unwrap();
     let shard_layout = epoch_manager.get_shard_layout(&final_head.epoch_id).unwrap();
     let shard_uid = ShardUId::from_shard_id_and_layout(shard_id, &shard_layout);
@@ -412,6 +412,9 @@ pub fn apply_chain_range(
         }
         let block_hash = chain_store.get_next_block_hash(&block_hash).unwrap();
         height = chain_store.get_block_height(&block_hash).unwrap();
+        if height > end_height {
+            break;
+        }
         println!("applying {height}");
         apply_block_from_range(
             height,
