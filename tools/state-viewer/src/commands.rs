@@ -25,14 +25,14 @@ use near_epoch_manager::{EpochManager, EpochManagerAdapter};
 use near_primitives::account::id::AccountId;
 use near_primitives::block::{Block, BlockHeader};
 use near_primitives::hash::CryptoHash;
-use near_primitives::shard_layout::ShardUId;
+use near_primitives::shard_layout::{account_id_to_shard_id, ShardUId};
 use near_primitives::shard_layout::{ShardLayout, ShardVersion};
 use near_primitives::sharding::ChunkHash;
 use near_primitives::state::FlatStateValue;
 use near_primitives::state_record::state_record_to_account_id;
 use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::col::NON_DELAYED_RECEIPT_COLUMNS;
-use near_primitives::trie_key::TrieKey;
+use near_primitives::trie_key::{trie_key_parsers, TrieKey};
 use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
 use near_primitives_core::types::Gas;
 use near_store::flat::{store_helper, BlockInfo, FlatStorageChunkView, FlatStorageStatus};
@@ -1377,10 +1377,13 @@ impl MoveFlatHeadBackCmd {
             let block_hash =
                 chain_store.get_block_hash_by_height(height.clone()).expect("Block does not exist");
             let header = chain_store.get_block_header(&block_hash).unwrap();
+            let epoch_id = header.epoch_id();
             let prev_hash = header.prev_hash();
             let prev_header = chain_store.get_block_header(&prev_hash).unwrap();
             let prev_height = prev_header.height();
             let prev_prev_hash = prev_header.prev_hash().clone();
+            let shard_layout = epoch_manager.get_shard_layout(&epoch_id).unwrap();
+            let shard_uid = epoch_manager.shard_id_to_uid(shard_id, epoch_id).unwrap();
 
             let (_, apply_result) = apply_block(
                 block_hash,
@@ -1405,7 +1408,47 @@ impl MoveFlatHeadBackCmd {
                     .get_optimized_ref(&key.to_vec(), KeyLookupMode::Trie)
                     .unwrap()
                     .map(|value_ref| FlatStateValue::Ref(value_ref.into_value_ref()));
+                // let value = ...;
+                // if prev_value != value ...
                 old_delta.insert(key.to_vec(), prev_value);
+            }
+
+            let mut old_delta_2 = FlatStateChanges::default();
+            for item in store.iter_prefix(DBCol::StateChanges, &block_hash.0) {
+                let (key, value) = item.unwrap();
+                let maybe_trie_key = &key[32..];
+                let maybe_account_id =
+                    trie_key_parsers::parse_account_id_from_raw_key(maybe_trie_key).unwrap();
+                let maybe_trie_key = match maybe_account_id {
+                    Some(account_id) => {
+                        let account_shard_id = account_id_to_shard_id(&account_id, &shard_layout);
+                        if shard_id == account_shard_id {
+                            Some(maybe_trie_key)
+                        } else {
+                            None
+                        }
+                    }
+                    None => {
+                        assert!(maybe_trie_key.len() >= 8);
+                        let (trie_key, shard_uid_raw) =
+                            maybe_trie_key.split_at(maybe_trie_key.len() - 8);
+                        if shard_uid.to_bytes() == shard_uid_raw {
+                            Some(trie_key)
+                        } else {
+                            None
+                        }
+                    }
+                };
+
+                if let Some(trie_key) = maybe_trie_key {
+                    let prev_value = prev_trie
+                        .get_optimized_ref(trie_key, KeyLookupMode::Trie)
+                        .unwrap()
+                        .map(|value_ref| FlatStateValue::Ref(value_ref.into_value_ref()));
+                    // let value = ...;
+                    // if prev_value != value ...
+                    old_delta_2.insert(trie_key.to_vec(), prev_value);
+                }
             }
 
             let mut store_update = store.store_update();
