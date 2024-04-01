@@ -681,11 +681,14 @@ impl EpochManager {
         let epoch_summary = self.collect_blocks_info(block_info, last_block_hash)?;
         let epoch_info = self.get_epoch_info(block_info.epoch_id())?;
         let epoch_protocol_version = epoch_info.protocol_version();
+        println!("1");
         let validator_stake =
             epoch_info.validators_iter().map(|r| r.account_and_stake()).collect::<HashMap<_, _>>();
         let next_epoch_id = self.get_next_epoch_id_from_info(block_info)?;
+        println!("2");
         let next_epoch_info = self.get_epoch_info(&next_epoch_id)?;
         self.save_epoch_validator_info(store_update, block_info.epoch_id(), &epoch_summary)?;
+        println!("3");
 
         let EpochSummary {
             all_proposals,
@@ -695,6 +698,7 @@ impl EpochManager {
             ..
         } = epoch_summary;
 
+        println!("4");
         let (validator_reward, minted_amount) = {
             let last_epoch_last_block_hash =
                 *self.get_block_info(block_info.epoch_first_block())?.prev_hash();
@@ -720,6 +724,8 @@ impl EpochManager {
                 epoch_duration,
             )
         };
+        println!("5");
+
         let next_next_epoch_config = self.config.for_protocol_version(next_version);
         let next_next_epoch_info = match proposals_to_epoch_info(
             &next_next_epoch_config,
@@ -747,6 +753,7 @@ impl EpochManager {
             }
             Err(err) => return Err(err),
         };
+        println!("6");
         let next_next_epoch_id = EpochId(*last_block_hash);
         debug!(target: "epoch_manager", "next next epoch height: {}, id: {:?}, protocol version: {} shard layout: {:?} config: {:?}",
                next_next_epoch_info.epoch_height(),
