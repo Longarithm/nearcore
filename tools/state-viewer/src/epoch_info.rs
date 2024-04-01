@@ -247,23 +247,26 @@ fn display_epoch_info(
         let mut store_update = chain_store.store().store_update();
         let mut em = epoch_manager.write();
         let last_block_hash = chain_store.head().unwrap().last_block_hash;
-        let last_block = chain_store.get_block(&last_block_hash).unwrap();
-        let block_header_info =
-            BlockHeaderInfo::new(last_block.header(), last_block.header().height());
-        println!("PV1 = {}", block_header_info.latest_protocol_version);
-        let block_info = BlockInfo::new(
-            block_header_info.hash,
-            block_header_info.height,
-            block_header_info.last_finalized_height,
-            block_header_info.last_finalized_block_hash,
-            block_header_info.prev_hash,
-            block_header_info.proposals,
-            block_header_info.chunk_mask,
-            block_header_info.slashed_validators,
-            block_header_info.total_supply,
-            block_header_info.latest_protocol_version,
-            block_header_info.timestamp_nanosec,
-        );
+        // let last_block = chain_store.get_block(&last_block_hash).unwrap();
+        // let block_header_info =
+        //     BlockHeaderInfo::new(last_block.header(), last_block.header().height());
+        // println!("PV1 = {}", block_header_info.latest_protocol_version);
+        let block_info = em.get_block_info(&last_block_hash).unwrap();
+        // let mut block_info = BlockInfo::new(
+        //     block_header_info.hash,
+        //     block_header_info.height,
+        //     block_header_info.last_finalized_height,
+        //     block_header_info.last_finalized_block_hash,
+        //     block_header_info.prev_hash,
+        //     block_header_info.proposals,
+        //     block_header_info.chunk_mask,
+        //     block_header_info.slashed_validators,
+        //     block_header_info.total_supply,
+        //     block_header_info.latest_protocol_version,
+        //     block_header_info.timestamp_nanosec,
+        // );
+        // *block_info.epoch_id_mut() = epoch_first_header.epoch_id().clone();
+        // *block_info.epoch_first_block_mut() = *epoch_first_header.hash();
         // let block_info: BlockInfo = last_block.header().into();
         // let mut block_info = BlockInfo::default();
         // *block_info.timestamp_nanosec_mut() = Utc::now_utc().unix_timestamp_nanos() as u64;
