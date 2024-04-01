@@ -138,6 +138,7 @@ impl RewardCalculator {
                 // Apply min between 1. and computed uptime.
                 uptime_numer =
                     if uptime_numer > uptime_denum { uptime_denum } else { uptime_numer };
+                println!("{} {} {}", epoch_validator_reward, uptime_numer, stake);
                 (U256::from(epoch_validator_reward) * uptime_numer * U256::from(stake)
                     / uptime_denum
                     / U256::from(total_stake))
