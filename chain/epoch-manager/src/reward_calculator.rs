@@ -61,6 +61,7 @@ impl RewardCalculator {
         };
         let epoch_total_reward: u128 =
             if checked_feature!("stable", RectifyInflation, protocol_version) {
+                println!("{} {} {}", max_inflation_rate.numer(), total_supply, epoch_duration);
                 (U256::from(*max_inflation_rate.numer() as u64)
                     * U256::from(total_supply)
                     * U256::from(epoch_duration)
@@ -85,6 +86,7 @@ impl RewardCalculator {
             return (res, 0);
         }
         let epoch_validator_reward = epoch_total_reward - epoch_protocol_treasury;
+        println!("{}", epoch_validator_reward);
         let mut epoch_actual_reward = epoch_protocol_treasury;
         let total_stake: Balance = validator_stake.values().sum();
         for (account_id, stats) in validator_block_chunk_stats {
