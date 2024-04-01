@@ -145,9 +145,9 @@ impl RewardCalculator {
                     if uptime_numer > uptime_denum { uptime_denum } else { uptime_numer };
                 println!("{} {} {}", epoch_validator_reward, uptime_numer, stake);
                 // 1303530277894885217220048460336356 5149480000 19417599724822422137067484572677335
-                (U512::from(epoch_validator_reward) * uptime_numer * U256::from(stake)
-                    / uptime_denum
-                    / U256::from(total_stake))
+                (U512::from(epoch_validator_reward) * U512::from(uptime_numer) * U512::from(stake)
+                    / U512::from(uptime_denum)
+                    / U512::from(total_stake))
                 .as_u128()
             };
             res.insert(account_id, reward);
