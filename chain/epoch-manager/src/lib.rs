@@ -671,7 +671,7 @@ impl EpochManager {
     }
 
     /// Finalizes epoch (T), where given last block hash is given, and returns next next epoch id (T + 2).
-    fn finalize_epoch(
+    pub fn finalize_epoch(
         &mut self,
         store_update: &mut StoreUpdate,
         block_info: &BlockInfo,

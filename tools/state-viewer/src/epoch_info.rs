@@ -2,8 +2,9 @@ use borsh::BorshDeserialize;
 use core::ops::Range;
 use itertools::Itertools;
 use near_chain::{ChainStore, ChainStoreAccess, Error};
-use near_epoch_manager::{EpochManagerAdapter, EpochManagerHandle};
+use near_epoch_manager::{EpochManagerAdapter, EpochManagerHandle, RngSeed};
 use near_primitives::account::id::AccountId;
+use near_primitives::epoch_manager::block_info::BlockInfo;
 use near_primitives::epoch_manager::epoch_info::EpochInfo;
 use near_primitives::epoch_manager::AGGREGATOR_KEY;
 use near_primitives::hash::CryptoHash;
@@ -240,6 +241,13 @@ fn display_epoch_info(
     chain_store: &ChainStore,
     epoch_manager: &EpochManagerHandle,
 ) -> anyhow::Result<()> {
+    {
+        let mut store_update = chain_store.store().store_update();
+        let mut em = epoch_manager.write();
+        let block_info = BlockInfo::default();
+        let rng_seed = RngSeed::default();
+        em.finalize_epoch(&mut store_update, &block_info, block_info.hash(), rng_seed)?;
+    }
     if epoch_info.epoch_height() >= *head_epoch_height {
         println!("Epoch information for this epoch is not yet available, skipping.");
         return Ok(());
