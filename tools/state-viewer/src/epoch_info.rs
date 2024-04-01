@@ -250,6 +250,7 @@ fn display_epoch_info(
         let last_block = chain_store.get_block(&last_block_hash).unwrap();
         let block_header_info =
             BlockHeaderInfo::new(last_block.header(), last_block.header().height());
+        println!("PV1 = {}", block_header_info.latest_protocol_version);
         let block_info = BlockInfo::new(
             block_header_info.hash,
             block_header_info.height,
