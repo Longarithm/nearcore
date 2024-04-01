@@ -245,8 +245,11 @@ fn display_epoch_info(
     {
         let mut store_update = chain_store.store().store_update();
         let mut em = epoch_manager.write();
-        let mut block_info = BlockInfo::default();
-        *block_info.timestamp_nanosec_mut() = Utc::now_utc().unix_timestamp_nanos() as u64;
+        let last_block_hash = chain_store.head().unwrap().last_block_hash;
+        let last_block = chain_store.get_block(&last_block_hash).unwrap();
+        let block_info: BlockInfo = last_block.header().into();
+        // let mut block_info = BlockInfo::default();
+        // *block_info.timestamp_nanosec_mut() = Utc::now_utc().unix_timestamp_nanos() as u64;
         let rng_seed = RngSeed::default();
         em.finalize_epoch(&mut store_update, &block_info, block_info.hash(), rng_seed)?;
     }
