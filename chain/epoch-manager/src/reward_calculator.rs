@@ -63,6 +63,7 @@ impl RewardCalculator {
         let epoch_total_reward: u128 =
             if checked_feature!("stable", RectifyInflation, protocol_version) {
                 println!("{} {} {}", max_inflation_rate.numer(), total_supply, epoch_duration);
+                // 1 9116371772723226897873639540019796624 100205875925555
                 (U256::from(*max_inflation_rate.numer() as u64)
                     * U256::from(total_supply)
                     * U256::from(epoch_duration)
@@ -91,6 +92,7 @@ impl RewardCalculator {
         let mut epoch_actual_reward = epoch_protocol_treasury;
         let total_stake: Balance = validator_stake.values().sum();
         for (account_id, stats) in validator_block_chunk_stats {
+            println!("{:?} {:?}", stats.block_stats, stats.chunk_stats);
             // Uptime is an average of block produced / expected and chunk produced / expected.
             let (average_produced_numer, average_produced_denom) =
                 if stats.block_stats.expected == 0 && stats.chunk_stats.expected == 0 {
@@ -142,6 +144,7 @@ impl RewardCalculator {
                 uptime_numer =
                     if uptime_numer > uptime_denum { uptime_denum } else { uptime_numer };
                 println!("{} {} {}", epoch_validator_reward, uptime_numer, stake);
+                // 1303530277894885217220048460336356 5149480000 19417599724822422137067484572677335
                 (U256::from(epoch_validator_reward) * uptime_numer * U256::from(stake)
                     / uptime_denum
                     / U256::from(total_stake))
