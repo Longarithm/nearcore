@@ -1,6 +1,7 @@
 use borsh::BorshDeserialize;
 use core::ops::Range;
 use itertools::Itertools;
+use near_async::time::Utc;
 use near_chain::{ChainStore, ChainStoreAccess, Error};
 use near_epoch_manager::{EpochManagerAdapter, EpochManagerHandle, RngSeed};
 use near_primitives::account::id::AccountId;
@@ -244,7 +245,8 @@ fn display_epoch_info(
     {
         let mut store_update = chain_store.store().store_update();
         let mut em = epoch_manager.write();
-        let block_info = BlockInfo::default();
+        let mut block_info = BlockInfo::default();
+        *block_info.timestamp_nanosec_mut() = Utc::now_utc().unix_timestamp_nanos() as u64;
         let rng_seed = RngSeed::default();
         em.finalize_epoch(&mut store_update, &block_info, block_info.hash(), rng_seed)?;
     }

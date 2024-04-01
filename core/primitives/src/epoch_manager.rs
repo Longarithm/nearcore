@@ -456,6 +456,14 @@ pub mod block_info {
         }
 
         #[inline]
+        pub fn timestamp_nanosec_mut(&mut self) -> &mut u64 {
+            match self {
+                Self::V1(v1) => &mut v1.timestamp_nanosec,
+                Self::V2(v2) => &mut v2.timestamp_nanosec,
+            }
+        }
+
+        #[inline]
         pub fn total_supply(&self) -> &Balance {
             match self {
                 Self::V1(v1) => &v1.total_supply,
