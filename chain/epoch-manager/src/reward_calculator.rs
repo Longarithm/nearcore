@@ -54,6 +54,7 @@ impl RewardCalculator {
             && protocol_version >= ENABLE_INFLATION_PROTOCOL_VERSION;
         let max_inflation_rate =
             if use_hardcoded_value { Rational32::new_raw(1, 20) } else { self.max_inflation_rate };
+        println!("{} {} {}", protocol_version, use_hardcoded_value, max_inflation_rate);
         let protocol_reward_rate = if use_hardcoded_value {
             Rational32::new_raw(1, 10)
         } else {
