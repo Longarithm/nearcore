@@ -28,12 +28,14 @@ use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::{account_id_to_shard_id, ShardUId};
 use near_primitives::shard_layout::{ShardLayout, ShardVersion};
 use near_primitives::sharding::ChunkHash;
-use near_primitives::state::FlatStateValue;
+use near_primitives::state::{FlatStateValue, ValueRef};
 use near_primitives::state_record::state_record_to_account_id;
 use near_primitives::state_record::StateRecord;
+use near_primitives::trie_key;
 use near_primitives::trie_key::col::NON_DELAYED_RECEIPT_COLUMNS;
 use near_primitives::trie_key::{col, trie_key_parsers, TrieKey};
 use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
+use near_primitives_core::hash::hash;
 use near_primitives_core::types::Gas;
 use near_store::flat::{store_helper, BlockInfo, FlatStorageChunkView, FlatStorageStatus};
 use near_store::flat::{FlatStateChanges, FlatStorageManager};
@@ -45,8 +47,8 @@ use near_store::{
 use nearcore::{NearConfig, NightshadeRuntime};
 use node_runtime::adapter::ViewRuntimeAdapter;
 use serde_json::json;
-use std::collections::BinaryHeap;
 use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashSet};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -1405,9 +1407,9 @@ impl MoveFlatHeadBackCmd {
             let mut old_delta = FlatStateChanges::default();
             for state_change in apply_result.trie_changes.state_changes() {
                 let key = state_change.trie_key.clone();
-                if key.to_vec()[0] == col::DELAYED_RECEIPT_OR_INDICES {
-                    println!("{:?}", key.to_vec());
-                }
+                // if key.to_vec()[0] == col::DELAYED_RECEIPT_OR_INDICES {
+                //     println!("{:?}", key.to_vec());
+                // }
                 let prev_value = prev_trie
                     .get_optimized_ref(&key.to_vec(), KeyLookupMode::Trie)
                     .unwrap()
@@ -1422,7 +1424,7 @@ impl MoveFlatHeadBackCmd {
 
             let mut old_delta_2 = FlatStateChanges::default();
             for item in store.iter_prefix(DBCol::StateChanges, &block_hash.0) {
-                let (key, value) = item.unwrap();
+                let (key, _) = item.unwrap();
                 let maybe_trie_key = &key[32..];
                 let maybe_account_id =
                     trie_key_parsers::parse_account_id_from_raw_key(maybe_trie_key).unwrap();
@@ -1448,9 +1450,6 @@ impl MoveFlatHeadBackCmd {
                 };
 
                 if let Some(trie_key) = maybe_trie_key {
-                    if trie_key[0] == col::DELAYED_RECEIPT_OR_INDICES {
-                        println!("{:?}", trie_key);
-                    }
                     let prev_value = prev_trie
                         .get_optimized_ref(trie_key, KeyLookupMode::Trie)
                         .unwrap()
@@ -1465,8 +1464,39 @@ impl MoveFlatHeadBackCmd {
                 }
             }
 
-            assert_eq!(old_delta, old_delta_2);
+            let mut prev_iter = prev_trie.iter().unwrap();
+            prev_iter.seek_prefix([col::DELAYED_RECEIPT_OR_INDICES]).unwrap();
+            let prev_delayed_values: HashMap<Vec<u8>, FlatStateValue> =
+                HashMap::from_iter(prev_iter.map(|it| {
+                    let (key, value) = it.unwrap();
+                    (key, FlatStateValue::Ref(ValueRef::new(&value)))
+                }));
+
+            let mut iter = store_helper::iter_flat_state_entries(
+                shard_uid,
+                &store,
+                Some(&[col::DELAYED_RECEIPT_OR_INDICES]),
+                Some(&[col::DELAYED_RECEIPT_OR_INDICES + 1]),
+            );
+            let delayed_values: HashMap<Vec<u8>, FlatStateValue> =
+                HashMap::from_iter(iter.map(|it| {
+                    let (key, value) = it.unwrap();
+                    (key, FlatStateValue::Ref(value.to_value_ref()))
+                }));
+
+            let mut delayed_keys: HashSet<_> =
+                prev_delayed_values.keys().chain(delayed_values.keys()).collect();
+            for key in delayed_keys {
+                let prev_value = prev_delayed_values.get(key);
+                let value = delayed_values.get(key);
+                if prev_value != value {
+                    println!("+ {:?}", key.to_vec());
+                    old_delta_2.insert(key.to_vec(), prev_value.cloned());
+                }
+            }
+
             println!("{} {}", old_delta.len(), old_delta_2.len());
+            assert_eq!(old_delta, old_delta_2);
 
             let mut store_update = store.store_update();
             old_delta.apply_to_flat_state(&mut store_update, shard_uid);
