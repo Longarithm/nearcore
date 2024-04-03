@@ -1454,10 +1454,9 @@ impl MoveFlatHeadBackCmd {
                         .get_optimized_ref(trie_key, KeyLookupMode::Trie)
                         .unwrap()
                         .map(|value_ref| FlatStateValue::Ref(value_ref.into_value_ref()));
-                    let value =
-                        store_helper::get_flat_state_value(&store, shard_uid, &key.to_vec())
-                            .unwrap()
-                            .map(|val| FlatStateValue::Ref(val.to_value_ref()));
+                    let value = store_helper::get_flat_state_value(&store, shard_uid, trie_key)
+                        .unwrap()
+                        .map(|val| FlatStateValue::Ref(val.to_value_ref()));
                     if prev_value != value {
                         old_delta_2.insert(key.to_vec(), prev_value);
                     }
