@@ -1496,6 +1496,11 @@ impl MoveFlatHeadBackCmd {
             }
 
             println!("{} {}", old_delta.len(), old_delta_2.len());
+            for k in old_delta.0.keys() {
+                if old_delta_2.get(k).is_none() {
+                    println!("!!! {:?} {:?}", k, old_delta.get(k));
+                }
+            }
             assert_eq!(old_delta, old_delta_2);
 
             let mut store_update = store.store_update();
