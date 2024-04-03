@@ -32,7 +32,7 @@ use near_primitives::state::FlatStateValue;
 use near_primitives::state_record::state_record_to_account_id;
 use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::col::NON_DELAYED_RECEIPT_COLUMNS;
-use near_primitives::trie_key::{trie_key_parsers, TrieKey};
+use near_primitives::trie_key::{col, trie_key_parsers, TrieKey};
 use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
 use near_primitives_core::types::Gas;
 use near_store::flat::{store_helper, BlockInfo, FlatStorageChunkView, FlatStorageStatus};
@@ -1405,6 +1405,9 @@ impl MoveFlatHeadBackCmd {
             let mut old_delta = FlatStateChanges::default();
             for state_change in apply_result.trie_changes.state_changes() {
                 let key = state_change.trie_key.clone();
+                if key.to_vec()[0] == col::DELAYED_RECEIPT_OR_INDICES {
+                    println!("{:?}", key.to_vec());
+                }
                 let prev_value = prev_trie
                     .get_optimized_ref(&key.to_vec(), KeyLookupMode::Trie)
                     .unwrap()
@@ -1445,6 +1448,9 @@ impl MoveFlatHeadBackCmd {
                 };
 
                 if let Some(trie_key) = maybe_trie_key {
+                    if trie_key[0] == col::DELAYED_RECEIPT_OR_INDICES {
+                        println!("{:?}", trie_key);
+                    }
                     let prev_value = prev_trie
                         .get_optimized_ref(trie_key, KeyLookupMode::Trie)
                         .unwrap()
@@ -1460,6 +1466,7 @@ impl MoveFlatHeadBackCmd {
             }
 
             assert_eq!(old_delta, old_delta_2);
+            println!("{} {}", old_delta.len(), old_delta_2.len());
 
             let mut store_update = store.store_update();
             old_delta.apply_to_flat_state(&mut store_update, shard_uid);
