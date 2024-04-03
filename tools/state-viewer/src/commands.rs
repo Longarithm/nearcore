@@ -1366,6 +1366,7 @@ impl MoveFlatHeadBackCmd {
             }
         };
         let mut height = flat_head.height;
+        println!("{}", height);
         // let block_hash =
         //     chain_store.get_block_hash_by_height(height.clone()).expect("Block does not exist");
         // let block_hash = chain_store.get_next_block_hash(&block_hash).unwrap();
@@ -1408,9 +1409,12 @@ impl MoveFlatHeadBackCmd {
                     .get_optimized_ref(&key.to_vec(), KeyLookupMode::Trie)
                     .unwrap()
                     .map(|value_ref| FlatStateValue::Ref(value_ref.into_value_ref()));
-                // let value = ...;
-                // if prev_value != value ...
-                old_delta.insert(key.to_vec(), prev_value);
+                let value = store_helper::get_flat_state_value(&store, shard_uid, &key.to_vec())
+                    .unwrap()
+                    .map(|val| FlatStateValue::Ref(val.to_value_ref()));
+                if prev_value != value {
+                    old_delta.insert(key.to_vec(), prev_value);
+                }
             }
 
             let mut old_delta_2 = FlatStateChanges::default();
@@ -1445,11 +1449,17 @@ impl MoveFlatHeadBackCmd {
                         .get_optimized_ref(trie_key, KeyLookupMode::Trie)
                         .unwrap()
                         .map(|value_ref| FlatStateValue::Ref(value_ref.into_value_ref()));
-                    // let value = ...;
-                    // if prev_value != value ...
-                    old_delta_2.insert(trie_key.to_vec(), prev_value);
+                    let value =
+                        store_helper::get_flat_state_value(&store, shard_uid, &key.to_vec())
+                            .unwrap()
+                            .map(|val| FlatStateValue::Ref(val.to_value_ref()));
+                    if prev_value != value {
+                        old_delta_2.insert(key.to_vec(), prev_value);
+                    }
                 }
             }
+
+            assert_eq!(old_delta, old_delta_2);
 
             let mut store_update = store.store_update();
             old_delta.apply_to_flat_state(&mut store_update, shard_uid);
