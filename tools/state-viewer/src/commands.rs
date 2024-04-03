@@ -40,10 +40,10 @@ use near_primitives_core::types::Gas;
 use near_store::flat::{store_helper, BlockInfo, FlatStorageChunkView, FlatStorageStatus};
 use near_store::flat::{FlatStateChanges, FlatStorageManager};
 use near_store::test_utils::create_test_store;
-use near_store::TrieStorage;
 use near_store::{
     DBCol, KeyLookupMode, Store, Trie, TrieCache, TrieCachingStorage, TrieConfig, TrieDBStorage,
 };
+use near_store::{NibbleSlice, TrieStorage};
 use nearcore::{NearConfig, NightshadeRuntime};
 use node_runtime::adapter::ViewRuntimeAdapter;
 use serde_json::json;
@@ -1464,17 +1464,21 @@ impl MoveFlatHeadBackCmd {
             }
 
             let mut prev_iter = prev_trie.iter().unwrap();
-            prev_iter.seek_prefix([col::DELAYED_RECEIPT_OR_INDICES]).unwrap();
-            let prev_delayed_values: HashMap<Vec<u8>, FlatStateValue> =
-                HashMap::from_iter(prev_iter.map(|it| {
-                    let (key, value) = it.unwrap();
-                    (key, FlatStateValue::Ref(ValueRef::new(&value)))
-                }));
+            let left: Vec<_> = NibbleSlice::new(&[col::RECEIVED_DATA]).iter().collect();
+            let right: Vec<_> =
+                NibbleSlice::new(&[col::DELAYED_RECEIPT_OR_INDICES + 1]).iter().collect();
+            let prev_delayed_values: HashMap<Vec<u8>, FlatStateValue> = HashMap::from_iter(
+                prev_iter
+                    .get_trie_items(&left, &right)
+                    .unwrap()
+                    .into_iter()
+                    .map(|(key, value)| (key, FlatStateValue::Ref(ValueRef::new(&value)))),
+            );
 
             let mut iter = store_helper::iter_flat_state_entries(
                 shard_uid,
                 &store,
-                Some(&[col::DELAYED_RECEIPT_OR_INDICES]),
+                Some(&[col::RECEIVED_DATA]),
                 Some(&[col::DELAYED_RECEIPT_OR_INDICES + 1]),
             );
             let delayed_values: HashMap<Vec<u8>, FlatStateValue> =
