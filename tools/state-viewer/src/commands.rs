@@ -1458,7 +1458,7 @@ impl MoveFlatHeadBackCmd {
                         .unwrap()
                         .map(|val| FlatStateValue::Ref(val.to_value_ref()));
                     if prev_value != value {
-                        old_delta_2.insert(key.to_vec(), prev_value);
+                        old_delta_2.insert(trie_key.to_vec(), prev_value);
                     }
                 }
             }
