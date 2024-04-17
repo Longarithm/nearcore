@@ -157,6 +157,7 @@ pub struct ApplyResult {
     pub state_changes: Vec<RawStateChangesWithTrieKey>,
     pub stats: ApplyStats,
     pub processed_delayed_receipts: Vec<Receipt>,
+    pub processed_yield_timeouts: Vec<PromiseYieldTimeout>,
     pub proof: Option<PartialStorage>,
     pub delayed_receipts_count: u64,
     pub metrics: Option<metrics::ApplyMetrics>,
@@ -432,6 +433,7 @@ impl Runtime {
                     state_update,
                     apply_state,
                     actor_id,
+                    epoch_info_provider,
                 )?;
             }
             #[cfg(feature = "protocol_feature_nonrefundable_transfer_nep491")]
@@ -448,6 +450,7 @@ impl Runtime {
                     state_update,
                     apply_state,
                     actor_id,
+                    epoch_info_provider,
                 )?;
             }
             Action::Stake(stake) => {
@@ -1364,6 +1367,7 @@ impl Runtime {
                 state_changes,
                 stats,
                 processed_delayed_receipts: vec![],
+                processed_yield_timeouts: vec![],
                 proof,
                 delayed_receipts_count: delayed_receipts_indices.len(),
                 metrics: None,
@@ -1422,6 +1426,9 @@ impl Runtime {
             )
             .entered();
             let node_counter_before = state_update.trie().get_trie_nodes_count();
+            let recorded_storage_size_before = state_update.trie().recorded_storage_size();
+            let storage_proof_size_upper_bound_before =
+                state_update.trie().recorded_storage_size_upper_bound();
             let result = self.process_receipt(
                 state_update,
                 apply_state,
@@ -1434,6 +1441,26 @@ impl Runtime {
             let node_counter_after = state_update.trie().get_trie_nodes_count();
             tracing::trace!(target: "runtime", ?node_counter_before, ?node_counter_after);
 
+            let recorded_storage_diff = state_update
+                .trie()
+                .recorded_storage_size()
+                .saturating_sub(recorded_storage_size_before)
+                as f64;
+            let recorded_storage_upper_bound_diff = state_update
+                .trie()
+                .recorded_storage_size_upper_bound()
+                .saturating_sub(storage_proof_size_upper_bound_before)
+                as f64;
+            metrics::RECEIPT_RECORDED_SIZE.observe(recorded_storage_diff);
+            metrics::RECEIPT_RECORDED_SIZE_UPPER_BOUND.observe(recorded_storage_upper_bound_diff);
+            let recorded_storage_proof_ratio =
+                recorded_storage_upper_bound_diff / f64::max(1.0, recorded_storage_diff);
+            // Record the ratio only for large receipts, small receipts can have a very high ratio,
+            // but the ratio is not that important for them.
+            if recorded_storage_upper_bound_diff > 100_000. {
+                metrics::RECEIPT_RECORDED_SIZE_UPPER_BOUND_RATIO
+                    .observe(recorded_storage_proof_ratio);
+            }
             if let Some(outcome_with_id) = result? {
                 let gas_burnt = outcome_with_id.outcome.gas_burnt;
                 let compute_usage = outcome_with_id
@@ -1463,8 +1490,8 @@ impl Runtime {
             };
 
         // We first process local receipts. They contain staking, local contract calls, etc.
+        let local_processing_start = std::time::Instant::now();
         if let Some(prefetcher) = &mut prefetcher {
-            prefetcher.clear();
             // Prefetcher is allowed to fail
             _ = prefetcher.prefetch_receipts_data(&local_receipts);
         }
@@ -1480,9 +1507,16 @@ impl Runtime {
                 process_receipt(receipt, &mut state_update, &mut total)?;
             }
         }
-        metrics.local_receipts_done(total.gas, total.compute);
+        metrics.local_receipts_done(
+            local_receipts.len() as u64,
+            local_processing_start.elapsed(),
+            total.gas,
+            total.compute,
+        );
 
         // Then we process the delayed receipts. It's a backlog of receipts from the past blocks.
+        let delayed_processing_start = std::time::Instant::now();
+        let mut delayed_receipt_count = 0;
         while delayed_receipts_indices.first_index < delayed_receipts_indices.next_available_index {
             if total.compute >= compute_limit
                 || proof_size_limit
@@ -1490,6 +1524,7 @@ impl Runtime {
             {
                 break;
             }
+            delayed_receipt_count += 1;
             let key = TrieKey::DelayedReceipt { index: delayed_receipts_indices.first_index };
             let receipt: Receipt = get(&state_update, &key)?.ok_or_else(|| {
                 StorageError::StorageInconsistentState(format!(
@@ -1499,7 +1534,6 @@ impl Runtime {
             })?;
 
             if let Some(prefetcher) = &mut prefetcher {
-                prefetcher.clear();
                 // Prefetcher is allowed to fail
                 _ = prefetcher.prefetch_receipts_data(std::slice::from_ref(&receipt));
             }
@@ -1523,11 +1557,16 @@ impl Runtime {
             process_receipt(&receipt, &mut state_update, &mut total)?;
             processed_delayed_receipts.push(receipt);
         }
-        metrics.delayed_receipts_done(total.gas, total.compute);
+        metrics.delayed_receipts_done(
+            delayed_receipt_count,
+            delayed_processing_start.elapsed(),
+            total.gas,
+            total.compute,
+        );
 
         // And then we process the new incoming receipts. These are receipts from other shards.
+        let incoming_processing_start = std::time::Instant::now();
         if let Some(prefetcher) = &mut prefetcher {
-            prefetcher.clear();
             // Prefetcher is allowed to fail
             _ = prefetcher.prefetch_receipts_data(&incoming_receipts);
         }
@@ -1549,12 +1588,12 @@ impl Runtime {
                 process_receipt(receipt, &mut state_update, &mut total)?;
             }
         }
-        metrics.incoming_receipts_done(total.gas, total.compute);
-
-        // No more receipts are executed on this trie, stop any pending prefetches on it.
-        if let Some(prefetcher) = &prefetcher {
-            prefetcher.clear();
-        }
+        metrics.incoming_receipts_done(
+            incoming_receipts.len() as u64,
+            incoming_processing_start.elapsed(),
+            total.gas,
+            total.compute,
+        );
 
         // Resolve timed-out PromiseYield receipts
         let mut promise_yield_indices: PromiseYieldIndices =
@@ -1562,7 +1601,9 @@ impl Runtime {
         let initial_promise_yield_indices = promise_yield_indices.clone();
         let mut new_receipt_index: usize = 0;
 
+        let mut processed_yield_timeouts = vec![];
         let mut timeout_receipts = vec![];
+        let yield_processing_start = std::time::Instant::now();
         while promise_yield_indices.first_index < promise_yield_indices.next_available_index {
             if total.compute >= compute_limit
                 || proof_size_limit
@@ -1588,11 +1629,11 @@ impl Runtime {
             }
 
             // Check if the yielded promise still needs to be resolved
-            let yielded_promise_key = TrieKey::PromiseYieldReceipt {
+            let promise_yield_key = TrieKey::PromiseYieldReceipt {
                 receiver_id: queue_entry.account_id.clone(),
                 data_id: queue_entry.data_id,
             };
-            if state_update.contains_key(&yielded_promise_key)? {
+            if state_update.contains_key(&promise_yield_key)? {
                 let new_receipt_id = create_receipt_id_from_receipt_id(
                     protocol_version,
                     &queue_entry.data_id,
@@ -1622,11 +1663,17 @@ impl Runtime {
                 timeout_receipts.push(resume_receipt);
             }
 
+            processed_yield_timeouts.push(queue_entry);
             state_update.remove(queue_entry_key);
             // Math checked above: first_index is less than next_available_index
             promise_yield_indices.first_index += 1;
         }
-        metrics.yield_timeouts_done(total.gas, total.compute);
+        metrics.yield_timeouts_done(
+            processed_yield_timeouts.len() as u64,
+            yield_processing_start.elapsed(),
+            total.gas,
+            total.compute,
+        );
 
         let _span = tracing::debug_span!(target: "runtime", "apply_commit").entered();
         if delayed_receipts_indices != initial_delayed_receipt_indices {
@@ -1650,7 +1697,24 @@ impl Runtime {
 
         state_update.commit(StateChangeCause::UpdatedDelayedReceipts);
         self.apply_state_patch(&mut state_update, state_patch);
+        let chunk_recorded_size_upper_bound =
+            state_update.trie.recorded_storage_size_upper_bound() as f64;
+        metrics::CHUNK_RECORDED_SIZE_UPPER_BOUND.observe(chunk_recorded_size_upper_bound);
         let (trie, trie_changes, state_changes) = state_update.finalize()?;
+        if let Some(prefetcher) = &prefetcher {
+            // Only clear the prefetcher queue after finalize is done because as part of receipt
+            // processing we also prefetch account data and access keys that are accessed in
+            // finalize. This data can take a very long time otherwise if not prefetched.
+            //
+            // (This probably results in more data being accessed than strictly necessary and
+            // prefetcher may touch data that is no longer relevant as a result but...)
+            //
+            // In the future it may make sense to have prefetcher have a mode where it has two
+            // queues: one for data that is going to be required soon, and the other that it would
+            // only work when otherwise idle.
+            let discarded_prefetch_requests = prefetcher.clear();
+            tracing::debug!(target: "runtime", discarded_prefetch_requests);
+        }
 
         // Dedup proposals from the same account.
         // The order is deterministically changed.
@@ -1665,6 +1729,10 @@ impl Runtime {
         }
 
         let state_root = trie_changes.new_root;
+        let chunk_recorded_size = trie.recorded_storage_size() as f64;
+        metrics::CHUNK_RECORDED_SIZE.observe(chunk_recorded_size);
+        metrics::CHUNK_RECORDED_SIZE_UPPER_BOUND_RATIO
+            .observe(chunk_recorded_size_upper_bound / f64::max(1.0, chunk_recorded_size));
         let proof = trie.recorded_storage();
         Ok(ApplyResult {
             state_root,
@@ -1675,6 +1743,7 @@ impl Runtime {
             state_changes,
             stats,
             processed_delayed_receipts,
+            processed_yield_timeouts,
             proof,
             delayed_receipts_count: delayed_receipts_indices.len(),
             metrics: Some(metrics),
@@ -1720,6 +1789,7 @@ fn action_transfer_or_implicit_account_creation(
     state_update: &mut TrieUpdate,
     apply_state: &ApplyState,
     actor_id: &mut AccountId,
+    epoch_info_provider: &dyn EpochInfoProvider,
 ) -> Result<(), RuntimeError> {
     Ok(if let Some(account) = account.as_mut() {
         if nonrefundable {
@@ -1757,6 +1827,7 @@ fn action_transfer_or_implicit_account_creation(
             apply_state.block_height,
             apply_state.current_protocol_version,
             nonrefundable,
+            epoch_info_provider,
         );
     })
 }
