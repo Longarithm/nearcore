@@ -520,7 +520,7 @@ impl Runtime {
         validator_proposals: &mut Vec<ValidatorStake>,
         stats: &mut ApplyStats,
         epoch_info_provider: &dyn EpochInfoProvider,
-    ) -> Result<ExecutionOutcomeWithId, RuntimeError> {
+    ) -> Result<(ExecutionOutcomeWithId, bool), RuntimeError> {
         let action_receipt = match &receipt.receipt {
             ReceiptEnum::Action(action_receipt) | ReceiptEnum::PromiseYield(action_receipt) => {
                 action_receipt
@@ -824,19 +824,22 @@ impl Runtime {
 
         Self::print_log(&result.logs);
 
-        Ok(ExecutionOutcomeWithId {
-            id: receipt.receipt_id,
-            outcome: ExecutionOutcome {
-                status,
-                logs: result.logs,
-                receipt_ids,
-                gas_burnt: result.gas_burnt,
-                compute_usage: Some(result.compute_usage),
-                tokens_burnt,
-                executor_id: account_id.clone(),
-                metadata: ExecutionMetadata::V3(result.profile),
+        Ok((
+            ExecutionOutcomeWithId {
+                id: receipt.receipt_id,
+                outcome: ExecutionOutcome {
+                    status,
+                    logs: result.logs,
+                    receipt_ids,
+                    gas_burnt: result.gas_burnt,
+                    compute_usage: Some(result.compute_usage),
+                    tokens_burnt,
+                    executor_id: account_id.clone(),
+                    metadata: ExecutionMetadata::V3(result.profile),
+                },
             },
-        })
+            false,
+        ))
     }
 
     fn generate_refund_receipts(
@@ -918,7 +921,7 @@ impl Runtime {
         validator_proposals: &mut Vec<ValidatorStake>,
         stats: &mut ApplyStats,
         epoch_info_provider: &dyn EpochInfoProvider,
-    ) -> Result<Option<ExecutionOutcomeWithId>, RuntimeError> {
+    ) -> Result<Option<(ExecutionOutcomeWithId, bool)>, RuntimeError> {
         let account_id = &receipt.receiver_id;
         match receipt.receipt {
             ReceiptEnum::Data(ref data_receipt) => {
@@ -987,7 +990,7 @@ impl Runtime {
                                 stats,
                                 epoch_info_provider,
                             )
-                            .map(Some);
+                            .map(|r| Some(r));
                     } else {
                         // There is still some pending data for the receipt, so we update the
                         // pending data count in the state.
@@ -1041,7 +1044,7 @@ impl Runtime {
                             stats,
                             epoch_info_provider,
                         )
-                        .map(Some);
+                        .map(|r| Some(r));
                 } else {
                     // Not all input data is available now.
                     // Save the counter for the number of pending input data items into the state.
@@ -1092,7 +1095,7 @@ impl Runtime {
                             stats,
                             epoch_info_provider,
                         )
-                        .map(Some);
+                        .map(|r| Some(r));
                 } else {
                     // If the user happens to call `promise_yield_resume` multiple times, it may so
                     // happen that multiple PromiseResume receipts are delivered. We can safely
@@ -1683,6 +1686,8 @@ impl Runtime {
         if promise_yield_indices != initial_promise_yield_indices {
             set(&mut state_update, TrieKey::PromiseYieldIndices, &promise_yield_indices);
         }
+
+        // postfetch
 
         check_balance(
             &apply_state.config,
@@ -3045,14 +3050,16 @@ pub mod estimator {
         stats: &mut ApplyStats,
         epoch_info_provider: &dyn EpochInfoProvider,
     ) -> Result<ExecutionOutcomeWithId, RuntimeError> {
-        Runtime {}.apply_action_receipt(
-            state_update,
-            apply_state,
-            receipt,
-            outgoing_receipts,
-            validator_proposals,
-            stats,
-            epoch_info_provider,
-        )
+        Runtime {}
+            .apply_action_receipt(
+                state_update,
+                apply_state,
+                receipt,
+                outgoing_receipts,
+                validator_proposals,
+                stats,
+                epoch_info_provider,
+            )
+            .map(|r| r.0)
     }
 }
