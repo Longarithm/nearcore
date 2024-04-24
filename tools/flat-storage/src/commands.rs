@@ -100,6 +100,8 @@ pub struct InitCmd {
     target_db_path: PathBuf,
     #[clap(long, default_value = "3")]
     num_threads: usize,
+    #[clap(long, default_value_t = false, action = clap::ArgAction::Set)]
+    resume: bool,
 }
 
 #[derive(Parser)]
@@ -362,11 +364,13 @@ impl FlatStorageCommand {
         let tip = rw_chain_store.final_head()?;
         let shard_uid = epoch_manager.shard_id_to_uid(cmd.shard_id, &tip.epoch_id)?;
 
-        let mut store_update = rw_hot_store.store_update();
-        store_update
-            .set_ser(DBCol::FlatStorageStatus, &shard_uid.to_bytes(), &FlatStorageStatus::Empty)
-            .expect("Unable to set FS status");
-        store_update.commit().expect("Unable to change FS status");
+        if !cmd.resume {
+            let mut store_update = rw_hot_store.store_update();
+            store_update
+                .set_ser(DBCol::FlatStorageStatus, &shard_uid.to_bytes(), &FlatStorageStatus::Empty)
+                .expect("Unable to set FS status");
+            store_update.commit().expect("Unable to change FS status");
+        }
 
         let mut creator =
             FlatStorageShardCreator::new(shard_uid, tip.height - 1, epoch_manager, rw_hot_runtime);
