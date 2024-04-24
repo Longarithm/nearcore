@@ -100,7 +100,7 @@ pub struct InitCmd {
     target_db_path: PathBuf,
     #[clap(long, default_value = "3")]
     num_threads: usize,
-    #[clap(long, default_value_t = false, action = clap::ArgAction::Set)]
+    #[clap(long)]
     resume: bool,
 }
 
