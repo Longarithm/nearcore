@@ -479,7 +479,8 @@ impl DBCol {
             | DBCol::FlatState
             | DBCol::FlatStateChanges
             | DBCol::FlatStateDeltaMetadata
-            | DBCol::FlatStorageStatus  => false,
+            | DBCol::FlatStorageStatus
+            | DBCol::StateTransitionData => false,
             #[cfg(feature = "new_epoch_sync")]
             DBCol::EpochSyncInfo => false
         }
@@ -550,6 +551,8 @@ impl DBCol {
             DBCol::FlatStateChanges => &[DBKeyType::ShardUId, DBKeyType::BlockHash],
             DBCol::FlatStateDeltaMetadata => &[DBKeyType::ShardUId, DBKeyType::BlockHash],
             DBCol::FlatStorageStatus => &[DBKeyType::ShardUId],
+            // fake
+            DBCol::StateTransitionData => &[DBKeyType::ShardUId],
             #[cfg(feature = "new_epoch_sync")]
             DBCol::EpochSyncInfo => &[DBKeyType::EpochId],
         }
