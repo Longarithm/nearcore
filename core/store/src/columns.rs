@@ -279,6 +279,7 @@ pub enum DBCol {
     /// - *Rows*: arbitrary string, see `crate::db::FLAT_STATE_VALUES_INLINING_MIGRATION_STATUS_KEY` for example
     /// - *Column type*: arbitrary bytes
     Misc,
+    StateTransitionData,
     /// Column to store data for Epoch Sync.
     /// Does not contain data for genesis epoch.
     /// - *Rows*: `epoch_id`
