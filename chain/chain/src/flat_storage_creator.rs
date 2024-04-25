@@ -99,7 +99,9 @@ impl FlatStorageShardCreator {
         let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
         let trie = Trie::new(Rc::new(trie_storage), state_root, None);
         let path_begin = trie.find_state_part_boundary(part_id.idx, part_id.total).unwrap();
+        println!("path_begin {:?}", path_begin);
         let path_end = trie.find_state_part_boundary(part_id.idx + 1, part_id.total).unwrap();
+        println!("path_begin {:?}", path_end);
         let hex_path_begin = Self::nibbles_to_hex(&path_begin);
         debug!(target: "store", "Preload state part from {hex_path_begin}");
         let mut trie_iter = trie.iter().unwrap();
@@ -109,6 +111,7 @@ impl FlatStorageShardCreator {
         for TrieTraversalItem { hash, key } in
             trie_iter.visit_nodes_interval(&path_begin, &path_end).unwrap()
         {
+            println!("traversal {} {:?}", hash, key);
             if let Some(key) = key {
                 let value = trie.retrieve_value(&hash).unwrap();
                 store_helper::set_flat_state_value(
