@@ -101,7 +101,7 @@ impl FlatStorageShardCreator {
         let path_begin = trie.find_state_part_boundary(part_id.idx, part_id.total).unwrap();
         println!("path_begin {:?}", path_begin);
         let path_end = trie.find_state_part_boundary(part_id.idx + 1, part_id.total).unwrap();
-        println!("path_begin {:?}", path_end);
+        println!("path_end {:?}", path_end);
         let hex_path_begin = Self::nibbles_to_hex(&path_begin);
         debug!(target: "store", "Preload state part from {hex_path_begin}");
         let mut trie_iter = trie.iter().unwrap();
