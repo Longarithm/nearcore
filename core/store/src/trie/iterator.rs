@@ -235,7 +235,7 @@ impl<'a> TrieIterator<'a> {
     fn iter_step(&mut self) -> Option<IterStep> {
         let last = self.trail.last_mut()?;
         last.increment();
-        // println!("iter_step {:?}", last);
+        println!("iter_step {:?}", last);
         Some(match (last.status, &last.node.node) {
             (CrumbStatus::Exiting, n) => {
                 match n {
