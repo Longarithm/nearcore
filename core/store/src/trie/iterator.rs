@@ -372,7 +372,12 @@ impl<'a> TrieIterator<'a> {
                         Ok(_) => {}
                         Err(err) => {
                             println!("Error descending into node {hash}: {:?}", err);
-                            eprintln!("last_key={:?}, hash={}", self.last_key, hash);
+                            eprintln!(
+                                "last_key={:?}, curr_key={:?}, hash={}",
+                                self.last_key,
+                                self.key(),
+                                hash
+                            );
                             continue;
                         }
                     }
@@ -387,7 +392,12 @@ impl<'a> TrieIterator<'a> {
                         Ok(_) => {}
                         Err(err) => {
                             println!("Error retrieving value {hash}: {:?}", err);
-                            eprintln!("last_key={:?}, hash={}", self.last_key, hash);
+                            eprintln!(
+                                "last_key={:?}, curr_key={:?}, hash={}",
+                                self.last_key,
+                                self.key(),
+                                hash
+                            );
                             continue;
                         }
                     }
