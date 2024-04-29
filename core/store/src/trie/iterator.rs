@@ -68,6 +68,7 @@ pub struct TrieIterator<'a> {
     /// the key also should be pruned. Otherwise it would be possible to bypass
     /// the pruning by seeking inside of the pruned sub-tree.
     prune_condition: Option<Box<dyn Fn(&Vec<u8>) -> bool>>,
+    pub last_key: Vec<u8>,
 }
 
 /// The TrieTiem is a tuple of (key, value) of the node.
@@ -95,6 +96,7 @@ impl<'a> TrieIterator<'a> {
             key_nibbles: Vec::with_capacity(64),
             visited_nodes: None,
             prune_condition,
+            last_key: vec![],
         };
         r.descend_into_node(&trie.root)?;
         Ok(r)
@@ -235,7 +237,7 @@ impl<'a> TrieIterator<'a> {
     fn iter_step(&mut self) -> Option<IterStep> {
         let last = self.trail.last_mut()?;
         last.increment();
-        println!("iter_step {:?}", last);
+        // println!("iter_step {:?}", last);
         Some(match (last.status, &last.node.node) {
             (CrumbStatus::Exiting, n) => {
                 match n {
@@ -343,7 +345,8 @@ impl<'a> TrieIterator<'a> {
 
         // Actually (self.key_nibbles[..] == path_begin) always because path_begin always ends in a node
         if &self.key_nibbles[..] >= path_begin {
-            println!("see key {:?}", self.key());
+            self.last_key = self.key();
+            // println!("see key {:?}", self.key());
             nodes_list.push(TrieTraversalItem {
                 hash: last_hash,
                 key: self.has_value().then(|| self.key()),
@@ -365,7 +368,14 @@ impl<'a> TrieIterator<'a> {
                     if self.key_nibbles[prefix..] >= path_end[prefix..] {
                         break;
                     }
-                    self.descend_into_node(&hash)?;
+                    match self.descend_into_node(&hash) {
+                        Ok(_) => {}
+                        Err(err) => {
+                            println!("Error descending into node {hash}: {:?}", err);
+                            eprintln!("last_key={:?}, hash={}", self.last_key, hash);
+                            continue;
+                        }
+                    }
                     nodes_list.push(TrieTraversalItem { hash, key: None });
                 }
                 IterStep::Continue => {}
@@ -373,8 +383,16 @@ impl<'a> TrieIterator<'a> {
                     if self.key_nibbles[prefix..] >= path_end[prefix..] {
                         break;
                     }
-                    self.trie.retrieve_value(&hash)?;
-                    println!("see key {:?}", self.key());
+                    match self.trie.retrieve_value(&hash) {
+                        Ok(_) => {}
+                        Err(err) => {
+                            println!("Error retrieving value {hash}: {:?}", err);
+                            eprintln!("last_key={:?}, hash={}", self.last_key, hash);
+                            continue;
+                        }
+                    }
+                    self.last_key = self.key();
+                    // println!("see key {:?}", self.key());
                     nodes_list.push(TrieTraversalItem {
                         hash,
                         key: self.has_value().then(|| self.key()),

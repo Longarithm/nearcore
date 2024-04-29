@@ -99,15 +99,15 @@ impl FlatStorageShardCreator {
         let trie_storage = TrieDBStorage::new(store.clone(), shard_uid);
         let trie = Trie::new(Rc::new(trie_storage), state_root, None);
 
-        let hack_key = vec![
-            0, 97, 121, 119, 106, 49, 54, 106, 104, 105, 118, 112, 106, 46, 117, 115, 101, 114,
-            115, 46, 107, 97, 105, 99, 104, 105, 110, 103,
-        ];
-        let path_begin: Vec<u8> = NibbleSlice::new(&hack_key).iter().collect();
-        // let path_begin = trie.find_state_part_boundary(part_id.idx, part_id.total).unwrap();
-        println!("path_begin {:?}", path_begin);
+        // let hack_key = vec![
+        //     0, 97, 121, 119, 106, 49, 54, 106, 104, 105, 118, 112, 106, 46, 117, 115, 101, 114,
+        //     115, 46, 107, 97, 105, 99, 104, 105, 110, 103,
+        // ];
+        // let path_begin: Vec<u8> = NibbleSlice::new(&hack_key).iter().collect();
+        let path_begin = trie.find_state_part_boundary(part_id.idx, part_id.total).unwrap();
+        // println!("path_begin {:?}", path_begin);
         let path_end = trie.find_state_part_boundary(part_id.idx + 1, part_id.total).unwrap();
-        println!("path_end {:?}", path_end);
+        // println!("path_end {:?}", path_end);
         let hex_path_begin = Self::nibbles_to_hex(&path_begin);
         debug!(target: "store", "Preload state part from {hex_path_begin}");
         let mut trie_iter = trie.iter().unwrap();

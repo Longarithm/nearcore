@@ -50,7 +50,7 @@ pub use types::{
 pub(crate) const POISONED_LOCK_ERR: &str = "The lock was poisoned.";
 
 /// Number of traversed parts during a single step of fetching state.
-pub const NUM_PARTS_IN_ONE_STEP: u64 = 1;
+pub const NUM_PARTS_IN_ONE_STEP: u64 = 20;
 
 /// Memory limit for state part being fetched.
 pub const STATE_PART_MEMORY_LIMIT: bytesize::ByteSize = bytesize::ByteSize(10 * bytesize::MIB);
