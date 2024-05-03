@@ -90,16 +90,16 @@ impl BlockStats {
         if let Some(min_ratio2) = min_ratio {
             if cur_ratio < min_ratio2 {
                 panic!(
-                    "ratio of blocks to longest chain is too low got: {:.2} expected: {:.2}",
-                    cur_ratio, min_ratio2
+                    "ratio of blocks to longest chain is too low got: {} / {} = {:.2} expected: {:.2}",
+                    self.num_blocks, self.max_chain_length, cur_ratio, min_ratio2
                 );
             }
         }
         if let Some(max_ratio2) = max_ratio {
             if cur_ratio > max_ratio2 {
                 panic!(
-                    "ratio of blocks to longest chain is too high got: {:.2} expected: {:.2}",
-                    cur_ratio, max_ratio2
+                    "ratio of blocks to longest chain is too high got: {} / {} = {:.2} expected: {:.2}",
+                    self.num_blocks, self.max_chain_length, cur_ratio, max_ratio2
                 );
             }
         }

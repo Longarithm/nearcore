@@ -9,7 +9,7 @@ use near_async::time::Clock;
 use near_chain::test_utils::{account_id_to_shard_id, ValidatorSchedule};
 use near_crypto::{InMemorySigner, KeyType};
 use near_network::client::{ProcessTxRequest, ProcessTxResponse};
-use near_network::types::PeerInfo;
+use near_network::types::{NetworkRequests, PeerInfo};
 use near_network::types::{
     NetworkResponses, PeerManagerMessageRequest, PeerManagerMessageResponse,
 };
@@ -20,6 +20,7 @@ use near_primitives::transaction::SignedTransaction;
 use near_primitives::types::{AccountId, BlockId, BlockReference};
 use near_primitives::views::QueryResponseKind::ViewAccount;
 use near_primitives::views::{QueryRequest, QueryResponse};
+use rand::{thread_rng, Rng};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -245,6 +246,7 @@ fn test_cross_shard_tx_callback(
                 iteration.fetch_add(1, Ordering::Relaxed);
                 let iteration_local = iteration.load(Ordering::Relaxed);
                 if iteration_local > num_iters {
+                    println!("CHECK STATS");
                     (&mut *block_stats.write().unwrap()).check_stats(true);
                     (&mut *block_stats.write().unwrap()).check_block_ratio(min_ratio, max_ratio);
                     System::current().stop();
@@ -326,17 +328,17 @@ fn test_cross_shard_tx_callback(
             // The balance is not correct, optionally trace, and resend the query
             unsuccessful_queries.fetch_add(1, Ordering::Relaxed);
             if unsuccessful_queries.load(Ordering::Relaxed) % 100 == 0 {
-                println!("Waiting for balances");
-                print!("Expected: ");
-                for i in 0..8 {
-                    print!("{} ", balances.read().unwrap()[i]);
-                }
-                println!();
-                print!("Received: ");
-                for i in 0..8 {
-                    print!("{} ", observed_balances.read().unwrap()[i]);
-                }
-                println!();
+                // println!("Waiting for balances");
+                // print!("Expected: ");
+                // for i in 0..8 {
+                //     print!("{} ", balances.read().unwrap()[i]);
+                // }
+                // println!();
+                // print!("Received: ");
+                // for i in 0..8 {
+                //     print!("{} ", observed_balances.read().unwrap()[i]);
+                // }
+                // println!();
             }
 
             let connectors_ = connectors.write().unwrap();
@@ -455,7 +457,13 @@ fn test_cross_shard_tx_common(
             vec![false; validators.len()],
             true,
             None,
-            Box::new(move |_, _account_id: _, _msg: &PeerManagerMessageRequest| {
+            Box::new(move |_, _account_id: _, msg: &PeerManagerMessageRequest| {
+                let msg = msg.as_network_requests_ref();
+                if let NetworkRequests::Block { .. } = msg {
+                    thread_rng().gen_bool(0.1)
+                } else {
+                    true
+                };
                 (PeerManagerMessageResponse::NetworkResponses(NetworkResponses::NoResponse), true)
             }),
         );
