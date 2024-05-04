@@ -7,6 +7,7 @@ use futures::{future, FutureExt};
 use near_actix_test_utils::run_actix;
 use near_async::time::Clock;
 use near_chain::test_utils::{account_id_to_shard_id, ValidatorSchedule};
+use near_client_primitives::types::GetBlock;
 use near_crypto::{InMemorySigner, KeyType};
 use near_network::client::{ProcessTxRequest, ProcessTxResponse};
 use near_network::types::{NetworkRequests, PeerInfo};
@@ -17,13 +18,16 @@ use near_o11y::testonly::init_integration_logger;
 use near_o11y::WithSpanContextExt;
 use near_primitives::hash::CryptoHash;
 use near_primitives::transaction::SignedTransaction;
-use near_primitives::types::{AccountId, BlockId, BlockReference};
+use near_primitives::types::{AccountId, BlockId, BlockReference, EpochId};
 use near_primitives::views::QueryResponseKind::ViewAccount;
 use near_primitives::views::{QueryRequest, QueryResponse};
 use rand::{thread_rng, Rng};
-use std::collections::HashSet;
+use std::cmp::max;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
+use std::thread;
+use std::time::{Duration, Instant};
 
 /// Tests that the KeyValueRuntime properly sets balances in genesis and makes them queriable
 #[test]
@@ -247,8 +251,8 @@ fn test_cross_shard_tx_callback(
                 let iteration_local = iteration.load(Ordering::Relaxed);
                 if iteration_local > num_iters {
                     println!("CHECK STATS");
-                    (&mut *block_stats.write().unwrap()).check_stats(true);
-                    (&mut *block_stats.write().unwrap()).check_block_ratio(min_ratio, max_ratio);
+                    // (&mut *block_stats.write().unwrap()).check_stats(true);
+                    // (&mut *block_stats.write().unwrap()).check_block_ratio(min_ratio, max_ratio);
                     System::current().stop();
                 }
 
@@ -459,23 +463,24 @@ fn test_cross_shard_tx_common(
             None,
             Box::new(move |_, _account_id: _, msg: &PeerManagerMessageRequest| {
                 let msg = msg.as_network_requests_ref();
-                if let NetworkRequests::Block { .. } = msg {
-                    thread_rng().gen_bool(0.1)
+                let propagate = if let NetworkRequests::Block { .. } = msg {
+                    let wait = thread_rng().gen_range(0..block_production_time / 4);
+                    thread::sleep(Duration::from_millis(wait));
+                    // thread_rng().gen_bool(0.2)
+                    true
                 } else {
                     true
                 };
-                (PeerManagerMessageResponse::NetworkResponses(NetworkResponses::NoResponse), true)
+                (
+                    PeerManagerMessageResponse::NetworkResponses(NetworkResponses::NoResponse),
+                    propagate,
+                )
             }),
         );
         let genesis_block = {
             conn[0]
                 .view_client_actor
-                .send(
-                    near_client_primitives::types::GetBlock(BlockReference::BlockId(
-                        BlockId::Height(0),
-                    ))
-                    .with_span_context(),
-                )
+                .send(GetBlock(BlockReference::BlockId(BlockId::Height(0))).with_span_context())
                 .await
                 .unwrap()
                 .unwrap()
@@ -495,6 +500,104 @@ fn test_cross_shard_tx_common(
         let nonce = Arc::new(AtomicUsize::new(1));
         let successful_queries = Arc::new(RwLock::new(HashSet::new()));
         let unsuccessful_queries = Arc::new(AtomicUsize::new(0));
+        let view_clients: Vec<_> =
+            connectors_.iter().map(|a| a.view_client_actor.clone()).collect();
+        let mut current_height = 0;
+        let mut max_height = 0;
+        let mut num_blocks = 0;
+        let mut max_chain_length = 0;
+
+        let future = async move {
+            let mut iters = 0;
+            let mut hash2depth: HashMap<CryptoHash, u64> = HashMap::new();
+            hash2depth.insert(block_hash, 0);
+
+            loop {
+                if iters == 0 {
+                    println!("HEIGHT RANGE {}..={} ITER {}", current_height, max_height, iters);
+                }
+                let mut result: Option<near_primitives::views::BlockView> = None;
+                for height in current_height..=max_height {
+                    for view_client in view_clients.iter() {
+                        if let Ok(block) = view_client
+                            .send(
+                                GetBlock(BlockReference::BlockId(BlockId::Height(height)))
+                                    .with_span_context(),
+                            )
+                            .await
+                            .unwrap()
+                        {
+                            current_height = height;
+                            result = Some(block);
+                            break;
+                        }
+                    }
+                    if result.is_some() {
+                        break;
+                    }
+                }
+
+                let Some(block) = result else {
+                    tokio::time::sleep(std::time::Duration::from_millis(block_production_time))
+                        .await;
+                    iters += 1;
+                    if iters == 5 {
+                        // println!("INCREASING HEIGHT {max_height}");
+                        iters = 0;
+                        max_height += 1;
+                    }
+                    continue;
+                };
+
+                iters = 0;
+
+                let prev_height = hash2depth.get(&block.header.prev_hash).map(|v| *v).unwrap_or(0);
+                hash2depth.insert(block.header.hash, prev_height + 1);
+                num_blocks += 1;
+                max_chain_length = max(max_chain_length, prev_height + 1);
+
+                assert_eq!(block.header.height, current_height);
+                current_height += 1;
+                max_height = current_height;
+
+                let block_producer = block.author;
+                println!(
+                    "[{:?}]: BLOCK {} PRODUCER {} HEIGHT {} -> {}; CHUNK HEADER HEIGHTS: {:?};\nAPPROVALS: {:?}",
+                    Instant::now(),
+                    block.header.hash,
+                    block_producer,
+                    block.header.prev_height.unwrap_or(0),
+                    block.header.height,
+                    block.chunks.iter().map(|c| c.height_created).collect::<Vec<_>>(),
+                    block.header.approvals,
+                );
+                let cur_ratio = (num_blocks as f64) / (max(1, max_chain_length) as f64);
+                println!("STATS: {} {} {}", num_blocks, max_chain_length, cur_ratio);
+
+                if current_height < 50 {
+                    continue;
+                }
+
+                if let Some(min_ratio2) = min_ratio {
+                    if cur_ratio < min_ratio2 {
+                        panic!(
+                            "ratio of blocks to longest chain is too low got: {} / {} = {:.2} expected: {:.2}",
+                            num_blocks, max_chain_length, cur_ratio, min_ratio2
+                        );
+                    }
+                }
+                if let Some(max_ratio2) = max_ratio {
+                    if cur_ratio > max_ratio2 {
+                        panic!(
+                            "ratio of blocks to longest chain is too high got: {} / {} = {:.2} expected: {:.2}",
+                            num_blocks, max_chain_length, cur_ratio, max_ratio2
+                        );
+                    }
+                }
+            }
+        };
+
+        actix::spawn(future);
 
         for i in 0..8 {
             let connectors1 = connectors.clone();

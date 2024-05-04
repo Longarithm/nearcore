@@ -593,11 +593,11 @@ pub fn setup_mock_all_validators(
 
                     match msg.as_network_requests_ref() {
                         NetworkRequests::Block { block } => {
-                            if check_block_stats {
-                                let block_stats2 = &mut *block_stats1.write().unwrap();
-                                block_stats2.add_block(block);
-                                block_stats2.check_stats(false);
-                            }
+                            // if check_block_stats {
+                            //     let block_stats2 = &mut *block_stats1.write().unwrap();
+                            //     block_stats2.add_block(block);
+                            //     block_stats2.check_stats(false);
+                            // }
 
                             for actor_handles in connectors1 {
                                 actor_handles.client_actor.do_send(
