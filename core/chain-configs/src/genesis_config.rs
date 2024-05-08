@@ -172,9 +172,9 @@ pub struct GenesisConfig {
     #[default(300)]
     /// Deprecated.
     pub num_chunk_only_producer_seats: NumSeats,
-    /// The minimum number of validators each shard must have
     #[serde(default = "default_minimum_validators_per_shard")]
     #[default(1)]
+    /// Deprecated.
     pub minimum_validators_per_shard: NumSeats,
     #[serde(default = "default_max_kickout_stake_threshold")]
     #[default(100)]
