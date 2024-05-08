@@ -25,6 +25,7 @@ pub fn assign_shards<T: HasStake + Eq + Clone>(
     chunk_producers: Vec<T>,
     num_shards: NumShards,
     min_validators_per_shard: usize,
+    prev_chunk_producers_settlement: &[Vec<near_primitives::types::ValidatorId>],
 ) -> Result<Vec<Vec<T>>, NotEnoughValidators> {
     // If there's not enough chunk producers to fill up a single shard there’s
     // nothing we can do. Return with an error.
@@ -230,7 +231,7 @@ mod tests {
     ) -> Result<Vec<(usize, Balance)>, NotEnoughValidators> {
         let chunk_producers = stakes.iter().copied().enumerate().collect();
         let assignments =
-            super::assign_shards(chunk_producers, num_shards, min_validators_per_shard)?;
+            super::assign_shards(chunk_producers, num_shards, min_validators_per_shard, &[])?;
 
         // All chunk producers must be assigned at least once.  Furthermore, no
         // chunk producer can be assigned to more than one shard than chunk

@@ -115,6 +115,7 @@ pub fn proposals_to_epoch_info(
     validator_reward: HashMap<AccountId, Balance>,
     minted_amount: Balance,
     next_version: ProtocolVersion,
+    will_shard_layout_change: bool,
 ) -> Result<EpochInfo, EpochError> {
     debug_assert!(
         proposals.iter().map(|stake| stake.account_id()).collect::<HashSet<_>>().len()
@@ -202,12 +203,37 @@ pub fn proposals_to_epoch_info(
 
         // Assign chunk producers to shards.
         let num_chunk_producers = chunk_producers.len();
+        let chunk_producer_set =
+            chunk_producers.iter().map(|vs| vs.account_id().clone()).collect::<HashSet<_>>();
         let minimum_validators_per_shard =
             epoch_config.validator_selection_config.minimum_validators_per_shard as usize;
+        let prev_chunk_producers_settlement = if !will_shard_layout_change {
+            let s = prev_epoch_info.chunk_producers_settlement();
+            let prev_chunk_validator_accounts = s
+                .iter()
+                .map(|vs| {
+                    vs.into_iter()
+                        .map(|v| {
+                            let account_id = prev_epoch_info.get_validator(*v).account_id().clone();
+                            if chunk_producer_set.contains(&account_id) {
+                                validator_to_index.get(&account_id).copied()
+                            } else {
+                                None
+                            }
+                        })
+                        .flatten()
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>();
+            prev_chunk_validator_accounts
+        } else {
+            vec![]
+        };
         let shard_assignment = assign_shards(
             chunk_producers,
             shard_ids.len() as NumShards,
             minimum_validators_per_shard,
+            &prev_chunk_producers_settlement,
         )
         .map_err(|_| EpochError::NotEnoughValidators {
             num_validators: num_chunk_producers as u64,
@@ -501,6 +527,7 @@ mod old_validator_selection {
             chunk_producers,
             shard_ids.len() as NumShards,
             minimum_validators_per_shard,
+            &[],
         )
         .map_err(|_| EpochError::NotEnoughValidators {
             num_validators: num_chunk_producers as u64,
@@ -625,6 +652,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -697,6 +725,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -788,6 +817,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
         let epoch_info_no_shuffling_different_seed = proposals_to_epoch_info(
@@ -799,6 +829,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -812,6 +843,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
         let epoch_info_with_shuffling_different_seed = proposals_to_epoch_info(
@@ -823,6 +855,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -885,6 +918,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -928,6 +962,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -955,6 +990,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -1014,6 +1050,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -1094,6 +1131,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -1137,6 +1175,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
         #[cfg(feature = "protocol_feature_fix_staking_threshold")]
@@ -1160,6 +1199,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
         assert_eq!(num_validators, epoch_info.validators_iter().len());
@@ -1187,6 +1227,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -1216,6 +1257,7 @@ mod tests {
             rewards_map,
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
