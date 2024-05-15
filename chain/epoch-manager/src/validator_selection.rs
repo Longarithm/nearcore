@@ -202,45 +202,13 @@ pub fn proposals_to_epoch_info(
             }
         }
 
-        // Assign chunk producers to shards.
-        let num_chunk_producers = chunk_producers.len();
-        let chunk_producer_set =
-            chunk_producers.iter().map(|vs| vs.account_id().clone()).collect::<HashSet<_>>();
-        let minimum_validators_per_shard =
-            epoch_config.validator_selection_config.minimum_validators_per_shard as usize;
-        let prev_chunk_producers_settlement = if !will_shard_layout_change {
-            let s = prev_epoch_info.chunk_producers_settlement();
-            let prev_chunk_validator_accounts = s
-                .iter()
-                .map(|vs| {
-                    vs.into_iter()
-                        .map(|v| {
-                            let account_id = prev_epoch_info.get_validator(*v).account_id().clone();
-                            if chunk_producer_set.contains(&account_id) {
-                                validator_to_index.get(&account_id).copied().map(|v| v as usize)
-                            } else {
-                                None
-                            }
-                        })
-                        .flatten()
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
-            prev_chunk_validator_accounts
-        } else {
-            vec![]
-        };
-        let shard_assignment = assign_shards(
+        let shard_assignment = assign_chunk_producers_to_shards(
+            epoch_config,
+            &rng_seed,
             chunk_producers,
-            shard_ids.len() as NumShards,
-            minimum_validators_per_shard,
-            &prev_chunk_producers_settlement,
-        )
-        .map_err(|_| EpochError::NotEnoughValidators {
-            num_validators: num_chunk_producers as u64,
-            num_shards: shard_ids.len() as NumShards,
-        })?;
-
+            prev_epoch_info,
+            will_shard_layout_change,
+        )?;
         let chunk_producers_settlement = shard_assignment
             .into_iter()
             .map(|vs| vs.into_iter().map(|v| validator_to_index[v.account_id()]).collect())
@@ -505,6 +473,7 @@ fn assign_chunk_producers_to_shards(
 
     Ok(shard_assignment)
 }
+
 /// We store stakes in max heap and want to order them such that the validator
 /// with the largest state and (in case of a tie) lexicographically smallest
 /// AccountId comes at the top.
