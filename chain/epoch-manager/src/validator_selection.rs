@@ -10,6 +10,7 @@ use near_primitives::types::{
 use near_primitives::validator_mandates::{ValidatorMandates, ValidatorMandatesConfig};
 use num_rational::Ratio;
 use rand::seq::SliceRandom;
+use rand::Rng;
 use std::cmp::{self, Ordering};
 use std::collections::hash_map;
 use std::collections::{BTreeMap, BinaryHeap, HashMap, HashSet};
@@ -115,6 +116,7 @@ pub fn proposals_to_epoch_info(
     validator_reward: HashMap<AccountId, Balance>,
     minted_amount: Balance,
     next_version: ProtocolVersion,
+    will_shard_layout_change: bool,
 ) -> Result<EpochInfo, EpochError> {
     debug_assert!(
         proposals.iter().map(|stake| stake.account_id()).collect::<HashSet<_>>().len()
@@ -200,20 +202,13 @@ pub fn proposals_to_epoch_info(
             }
         }
 
-        // Assign chunk producers to shards.
-        let num_chunk_producers = chunk_producers.len();
-        let minimum_validators_per_shard =
-            epoch_config.validator_selection_config.minimum_validators_per_shard as usize;
-        let shard_assignment = assign_shards(
+        let shard_assignment = assign_chunk_producers_to_shards(
+            epoch_config,
+            &rng_seed,
             chunk_producers,
-            shard_ids.len() as NumShards,
-            minimum_validators_per_shard,
-        )
-        .map_err(|_| EpochError::NotEnoughValidators {
-            num_validators: num_chunk_producers as u64,
-            num_shards: shard_ids.len() as NumShards,
-        })?;
-
+            prev_epoch_info,
+            will_shard_layout_change,
+        )?;
         let chunk_producers_settlement = shard_assignment
             .into_iter()
             .map(|vs| vs.into_iter().map(|v| validator_to_index[v.account_id()]).collect())
@@ -402,6 +397,83 @@ fn select_validators(
     }
 }
 
+fn assign_chunk_producers_to_shards(
+    epoch_config: &EpochConfig,
+    rng_seed: &RngSeed,
+    chunk_producers: Vec<ValidatorStake>,
+    prev_epoch_info: &EpochInfo,
+    will_shard_layout_change: bool,
+) -> Result<Vec<Vec<ValidatorStake>>, EpochError> {
+    let shard_ids: Vec<_> = epoch_config.shard_layout.shard_ids().collect();
+    let num_chunk_producers = chunk_producers.len();
+    let chunk_producer_indices = chunk_producers
+        .iter()
+        .enumerate()
+        .map(|(i, vs)| (vs.account_id().clone(), i))
+        .collect::<HashMap<_, _>>();
+    let minimum_validators_per_shard =
+        epoch_config.validator_selection_config.minimum_validators_per_shard as usize;
+    let prev_remained_chunk_producers_settlement = if !will_shard_layout_change {
+        let s = prev_epoch_info.chunk_producers_settlement();
+        let prev_chunk_validator_accounts = s
+            .iter()
+            .map(|vs| {
+                vs.into_iter()
+                    .map(|v| {
+                        let account_id = prev_epoch_info.get_validator(*v).account_id().clone();
+                        chunk_producer_indices.get(&account_id).copied()
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        prev_chunk_validator_accounts
+    } else {
+        vec![vec![]; shard_ids.len()]
+    };
+
+    // filter out same shard ids which could appear due to
+    // minimum_validators_per_shard requirement
+    let mut prev_remained_chunk_producers_to_shards = HashMap::<usize, Vec<usize>>::new();
+    for (index, chunk_producers) in prev_remained_chunk_producers_settlement.iter().enumerate() {
+        for chunk_producer in chunk_producers {
+            prev_remained_chunk_producers_to_shards
+                .entry(*chunk_producer)
+                .or_insert(vec![])
+                .push(index);
+        }
+    }
+
+    let mut rng = EpochInfo::shard_assignment_shuffling_rng(rng_seed);
+    let prev_remained_chunk_producers_to_unique_shards = prev_remained_chunk_producers_to_shards
+        .iter()
+        .map(|(chunk_producer, shards)| {
+            let index = rng.gen_range(0..shards.len());
+            (*chunk_producer, shards[index])
+        })
+        .collect::<HashMap<_, _>>();
+    let mut prev_remained_unique_chunk_producers_settlement = vec![vec![]; shard_ids.len()];
+    for (chunk_producer, shard) in prev_remained_chunk_producers_to_unique_shards {
+        prev_remained_unique_chunk_producers_settlement[shard].push(chunk_producer);
+    }
+    for chunk_producers in prev_remained_unique_chunk_producers_settlement.iter_mut() {
+        chunk_producers.sort();
+    }
+
+    let shard_assignment = assign_shards(
+        chunk_producers,
+        shard_ids.len() as NumShards,
+        minimum_validators_per_shard,
+        &prev_remained_unique_chunk_producers_settlement,
+    )
+    .map_err(|_| EpochError::NotEnoughValidators {
+        num_validators: num_chunk_producers as u64,
+        num_shards: shard_ids.len() as NumShards,
+    })?;
+
+    Ok(shard_assignment)
+}
+
 /// We store stakes in max heap and want to order them such that the validator
 /// with the largest state and (in case of a tie) lexicographically smallest
 /// AccountId comes at the top.
@@ -501,6 +573,7 @@ mod old_validator_selection {
             chunk_producers,
             shard_ids.len() as NumShards,
             minimum_validators_per_shard,
+            &[],
         )
         .map_err(|_| EpochError::NotEnoughValidators {
             num_validators: num_chunk_producers as u64,
@@ -625,6 +698,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -697,6 +771,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -788,6 +863,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
         let epoch_info_no_shuffling_different_seed = proposals_to_epoch_info(
@@ -799,6 +875,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -812,6 +889,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
         let epoch_info_with_shuffling_different_seed = proposals_to_epoch_info(
@@ -823,6 +901,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -885,6 +964,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -928,6 +1008,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -955,6 +1036,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -1014,6 +1096,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -1094,6 +1177,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -1137,6 +1221,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
         #[cfg(feature = "protocol_feature_fix_staking_threshold")]
@@ -1160,6 +1245,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
         assert_eq!(num_validators, epoch_info.validators_iter().len());
@@ -1187,6 +1273,7 @@ mod tests {
             Default::default(),
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 
@@ -1216,6 +1303,7 @@ mod tests {
             rewards_map,
             0,
             PROTOCOL_VERSION,
+            false,
         )
         .unwrap();
 

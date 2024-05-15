@@ -25,6 +25,7 @@ pub fn assign_shards<T: HasStake + Eq + Clone>(
     chunk_producers: Vec<T>,
     num_shards: NumShards,
     min_validators_per_shard: usize,
+    prev_remained_chunk_producers_settlement: &[Vec<usize>],
 ) -> Result<Vec<Vec<T>>, NotEnoughValidators> {
     // If there's not enough chunk producers to fill up a single shard there’s
     // nothing we can do. Return with an error.
@@ -41,13 +42,27 @@ pub fn assign_shards<T: HasStake + Eq + Clone>(
         );
     }
 
-    let mut result: Vec<Vec<T>> = (0..num_shards).map(|_| Vec::new()).collect();
-
     // Initially, sort by number of validators first so we fill shards up.
-    let mut shard_index: MinHeap<(usize, Balance, ShardId)> =
-        (0..num_shards).map(|s| (0, 0, s)).collect();
+    let mut result: Vec<Vec<T>> = (0..num_shards).map(|_| Vec::new()).collect();
+    let mut initial_stakes: Vec<Balance> = vec![0; num_shards as usize];
 
-    // First, distribute chunk producers until all shards have at least the
+    // First, fill seats with previous chunk producer remained online.
+    for (shard_id, remained_chunk_producers) in
+        prev_remained_chunk_producers_settlement.iter().enumerate()
+    {
+        for &cp_index in remained_chunk_producers {
+            let cp = chunk_producers[cp_index].clone();
+            initial_stakes[shard_id] += cp.get_stake();
+            result[shard_id].push(cp);
+        }
+    }
+    let mut shard_index: MinHeap<(usize, Balance, ShardId)> = (0..num_shards)
+        .map(|i| (result[i as usize].len(), initial_stakes[i as usize], i))
+        .collect();
+
+    // TODO: move used chunk producers to the end of the list
+
+    // Second, distribute chunk producers until all shards have at least the
     // minimum requested number.  If there are not enough validators to satisfy
     // that requirement, assign some of the validators to multiple shards.
     let mut chunk_producers = chunk_producers.into_iter().enumerate().cycle();
@@ -58,7 +73,7 @@ pub fn assign_shards<T: HasStake + Eq + Clone>(
         min_validators_per_shard,
     );
 
-    // Second, if there are any unassigned chunk producers left, distribute them
+    // Third, if there are any unassigned chunk producers left, distribute them
     // between shards trying to balance total stake.
     let remaining_producers =
         num_chunk_producers.saturating_sub(num_shards as usize * min_validators_per_shard);
@@ -230,7 +245,7 @@ mod tests {
     ) -> Result<Vec<(usize, Balance)>, NotEnoughValidators> {
         let chunk_producers = stakes.iter().copied().enumerate().collect();
         let assignments =
-            super::assign_shards(chunk_producers, num_shards, min_validators_per_shard)?;
+            super::assign_shards(chunk_producers, num_shards, min_validators_per_shard, &[])?;
 
         // All chunk producers must be assigned at least once.  Furthermore, no
         // chunk producer can be assigned to more than one shard than chunk
