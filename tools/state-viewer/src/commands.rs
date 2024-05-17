@@ -970,8 +970,8 @@ pub(crate) fn print_epoch_analysis(
             epoch_summary_t.validator_kickout.clone(),
             epoch_info_t2.validator_reward().clone(),
             epoch_info_t2.minted_amount(),
-            epoch_summary_t.next_version.clone(),
             epoch_info_t.protocol_version(),
+            epoch_summary_t.next_version.clone(),
         )
         .unwrap();
 
