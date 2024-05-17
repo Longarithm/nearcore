@@ -34,9 +34,9 @@ use near_primitives::state_record::state_record_to_account_id;
 use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::col::COLUMNS_WITH_ACCOUNT_ID_IN_KEY;
 use near_primitives::trie_key::TrieKey;
-use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
+use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, EpochId, ShardId, StateRoot};
 use near_primitives::version::PROTOCOL_VERSION;
-use near_primitives_core::types::Gas;
+use near_primitives_core::types::{EpochHeight, Gas};
 use near_store::flat::FlatStorageChunkView;
 use near_store::flat::FlatStorageManager;
 use near_store::test_utils::create_test_store;
@@ -894,6 +894,58 @@ pub(crate) fn print_epoch_info(
         &mut chain_store,
         &epoch_manager,
     );
+}
+
+pub(crate) fn print_epoch_analysis(
+    epoch_height: EpochHeight,
+    near_config: NearConfig,
+    store: Store,
+) {
+    let genesis_height = near_config.genesis.config.genesis_height;
+    let chain_store =
+        ChainStore::new(store.clone(), genesis_height, near_config.client_config.save_trie_changes);
+    let epoch_manager =
+        EpochManager::new_from_genesis_config(store.clone(), &near_config.genesis.config)
+            .expect("Failed to start Epoch Manager");
+
+    let head = chain_store.head().unwrap();
+    let mut last_epoch_id = head.epoch_id;
+    let last_block_hash = head.last_block_hash;
+    let last_epoch_first_block = epoch_manager.get_block_info(&last_block_hash).unwrap();
+
+    // We will iterate from this block until epoch height is matched.
+    let mut next_epoch_ids = HashMap::<EpochId, EpochId>::default();
+    let mut block_hash = *last_epoch_first_block.prev_hash();
+    loop {
+        let epoch_id = epoch_manager.get_epoch_id(&block_hash).unwrap();
+        let epoch_info = epoch_manager.get_epoch_info(&epoch_id).unwrap();
+        let block_info = epoch_manager.get_block_info(&block_hash).unwrap();
+        let epoch_first_block = block_info.epoch_first_block();
+        let block_header = chain_store.get_block_header(epoch_first_block).unwrap();
+        block_hash = *block_header.prev_hash();
+        next_epoch_ids.insert(epoch_id.clone(), last_epoch_id.clone());
+        last_epoch_id = epoch_id;
+        if epoch_info.epoch_height() == epoch_height {
+            break;
+        }
+    }
+
+    let mut epoch_id = last_epoch_id;
+    loop {
+        let epoch_info = epoch_manager.get_epoch_info(&epoch_id).unwrap();
+        let evi = epoch_manager.get_epoch_validator_info(&epoch_id).unwrap();
+        println!(
+            "{:?} {} {} {}",
+            epoch_id,
+            epoch_info.epoch_height(),
+            evi.all_proposals.len(),
+            evi.validator_kickout.len()
+        );
+        epoch_id = next_epoch_ids.get(&epoch_id).unwrap().clone();
+        if !next_epoch_ids.contains_key(&epoch_id) {
+            break;
+        }
+    }
 }
 
 fn get_trie(store: Store, hash: CryptoHash, shard_id: u32, shard_version: u32) -> Trie {
