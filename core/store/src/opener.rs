@@ -259,14 +259,14 @@ impl<'a> StoreOpener<'a> {
 
         let hot_snapshot = {
             Self::ensure_created(mode, &self.hot)?;
-            Self::ensure_kind(mode, &self.hot, self.archive, Temperature::Hot)?;
-            Self::ensure_version(mode, &self.hot, &self.migrator)?
+            Self::ensure_kind(mode, &self.hot, self.archive, Temperature::Hot)?
+            // Self::ensure_version(mode, &self.hot, &self.migrator)?
         };
 
         let cold_snapshot = if let Some(cold) = &self.cold {
             Self::ensure_created(mode, cold)?;
-            Self::ensure_kind(mode, cold, self.archive, Temperature::Cold)?;
-            Self::ensure_version(mode, cold, &self.migrator)?
+            Self::ensure_kind(mode, cold, self.archive, Temperature::Cold)?
+            // Self::ensure_version(mode, cold, &self.migrator)?
         } else {
             Snapshot::none()
         };
