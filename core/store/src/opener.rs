@@ -402,61 +402,61 @@ impl<'a> StoreOpener<'a> {
         let metadata = metadata.ok_or(StoreOpenerError::DbDoesNotExist {})?;
         let DbMetadata { version, .. } = metadata;
 
-        if version >= DB_VERSION {
+        if version == DB_VERSION {
             return Ok(Snapshot::none());
         }
-        // if version > DB_VERSION {
-        //     return Err(StoreOpenerError::DbVersionTooNew { got: version, want: DB_VERSION });
-        // }
+        if version > DB_VERSION {
+            return Err(StoreOpenerError::DbVersionTooNew { got: version, want: DB_VERSION });
+        }
 
         // If we’re opening for reading, we cannot perform migrations thus we
         // must fail if the database has old version (even if we support
         // migration from that version).
-        // if mode.read_only() {
-        //     return Err(StoreOpenerError::DbVersionMismatchOnRead {
-        //         got: version,
-        //         want: DB_VERSION,
-        //     });
-        // }
+        if mode.read_only() {
+            return Err(StoreOpenerError::DbVersionMismatchOnRead {
+                got: version,
+                want: DB_VERSION,
+            });
+        }
 
         // Figure out if we have migrator which supports the database version.
-        // let migrator = migrator
-        //     .ok_or(StoreOpenerError::DbVersionMismatch { got: version, want: DB_VERSION })?;
-        // if let Err(release) = migrator.check_support(version) {
-        //     return Err(StoreOpenerError::DbVersionTooOld {
-        //         got: version,
-        //         want: DB_VERSION,
-        //         latest_release: release,
-        //     });
-        // }
+        let migrator = migrator
+            .ok_or(StoreOpenerError::DbVersionMismatch { got: version, want: DB_VERSION })?;
+        if let Err(release) = migrator.check_support(version) {
+            return Err(StoreOpenerError::DbVersionTooOld {
+                got: version,
+                want: DB_VERSION,
+                latest_release: release,
+            });
+        }
 
         let snapshot = opener.snapshot()?;
 
-        // for version in version..DB_VERSION {
-        //     tracing::info!(target: "db_opener", path=%opener.path.display(),
-        //                    "Migrating the database from version {} to {}",
-        //                    version, version + 1);
-        //
-        //     // Note: here we open the cold store as a regular Store object
-        //     // backed by RocksDB. It doesn't matter today as we don't expect any
-        //     // old migrations on the cold storage. In the future however it may
-        //     // be better to wrap it in the ColdDB object instead.
-        //
-        //     let store = Self::open_store(mode, opener, version)?;
-        //     migrator.migrate(&store, version).map_err(StoreOpenerError::MigrationError)?;
-        //     store.set_db_version(version + 1)?;
-        // }
+        for version in version..DB_VERSION {
+            tracing::info!(target: "db_opener", path=%opener.path.display(),
+                           "Migrating the database from version {} to {}",
+                           version, version + 1);
 
-        // if cfg!(feature = "nightly") || cfg!(feature = "nightly_protocol") {
-        //     let version = 10000;
-        //     tracing::info!(target: "db_opener", path=%opener.path.display(),
-        //     "Setting the database version to {version} for nightly");
-        //
-        //     // Set some dummy value to avoid conflict with other migrations from
-        //     // nightly features.
-        //     let store = Self::open_store(mode, opener, DB_VERSION)?;
-        //     store.set_db_version(version)?;
-        // }
+            // Note: here we open the cold store as a regular Store object
+            // backed by RocksDB. It doesn't matter today as we don't expect any
+            // old migrations on the cold storage. In the future however it may
+            // be better to wrap it in the ColdDB object instead.
+
+            let store = Self::open_store(mode, opener, version)?;
+            migrator.migrate(&store, version).map_err(StoreOpenerError::MigrationError)?;
+            store.set_db_version(version + 1)?;
+        }
+
+        if cfg!(feature = "nightly") || cfg!(feature = "nightly_protocol") {
+            let version = 10000;
+            tracing::info!(target: "db_opener", path=%opener.path.display(),
+            "Setting the database version to {version} for nightly");
+
+            // Set some dummy value to avoid conflict with other migrations from
+            // nightly features.
+            let store = Self::open_store(mode, opener, DB_VERSION)?;
+            store.set_db_version(version)?;
+        }
 
         Ok(snapshot)
     }
@@ -521,12 +521,12 @@ impl<'a> DBOpener<'a> {
     fn open(&self, mode: Mode, want_version: DbVersion) -> std::io::Result<(RocksDB, DbMetadata)> {
         let db = RocksDB::open(&self.path, &self.config, mode, self.temp)?;
         let metadata = DbMetadata::read(&db)?;
-        // if want_version != metadata.version {
-        //     let msg = format!("unexpected DbVersion {}; expected {want_version}", metadata.version);
-        //     Err(std::io::Error::other(msg))
-        // } else {
-        Ok((db, metadata))
-        // }
+        if want_version != metadata.version {
+            let msg = format!("unexpected DbVersion {}; expected {want_version}", metadata.version);
+            Err(std::io::Error::other(msg))
+        } else {
+            Ok((db, metadata))
+        }
     }
 
     /// Opens the database in given mode without checking the expected version and kind.
