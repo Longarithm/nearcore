@@ -3,6 +3,7 @@ use crate::cli::ApplyRangeMode;
 use crate::contract_accounts::ContractAccount;
 use crate::contract_accounts::ContractAccountFilter;
 use crate::contract_accounts::Summary;
+use crate::epoch_info::iterate_and_filter;
 use crate::state_dump::state_dump;
 use crate::state_dump::state_dump_redis;
 use crate::tx_dump::dump_tx_from_block;
@@ -25,6 +26,8 @@ use near_epoch_manager::{EpochManager, EpochManagerAdapter};
 use near_primitives::account::id::AccountId;
 use near_primitives::apply::ApplyChunkReason;
 use near_primitives::block::{Block, BlockHeader};
+use near_primitives::epoch_manager::epoch_info::EpochInfo;
+use near_primitives::epoch_manager::{EpochConfig, RngSeed};
 use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardLayout;
 use near_primitives::shard_layout::ShardUId;
@@ -34,9 +37,9 @@ use near_primitives::state_record::state_record_to_account_id;
 use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::col::COLUMNS_WITH_ACCOUNT_ID_IN_KEY;
 use near_primitives::trie_key::TrieKey;
-use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, ShardId, StateRoot};
+use near_primitives::types::{chunk_extra::ChunkExtra, BlockHeight, EpochId, ShardId, StateRoot};
 use near_primitives::version::PROTOCOL_VERSION;
-use near_primitives_core::types::Gas;
+use near_primitives_core::types::{Balance, EpochHeight, Gas, ProtocolVersion};
 use near_store::flat::FlatStorageChunkView;
 use near_store::flat::FlatStorageManager;
 use near_store::test_utils::create_test_store;
@@ -46,8 +49,8 @@ use nearcore::NightshadeRuntimeExt;
 use nearcore::{NearConfig, NightshadeRuntime};
 use node_runtime::adapter::ViewRuntimeAdapter;
 use serde_json::json;
-use std::collections::BinaryHeap;
 use std::collections::HashMap;
+use std::collections::{BTreeMap, BinaryHeap};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -894,6 +897,102 @@ pub(crate) fn print_epoch_info(
         &mut chain_store,
         &epoch_manager,
     );
+}
+
+pub(crate) fn print_epoch_analysis(
+    epoch_height: EpochHeight,
+    near_config: NearConfig,
+    store: Store,
+) {
+    let epoch_manager =
+        EpochManager::new_from_genesis_config(store.clone(), &near_config.genesis.config)
+            .expect("Failed to start Epoch Manager");
+
+    let epoch_ids = iterate_and_filter(store, |_| true);
+    let epoch_infos: HashMap<EpochId, Arc<EpochInfo>> = HashMap::from_iter(
+        epoch_ids
+            .into_iter()
+            .map(|epoch_id| (epoch_id.clone(), epoch_manager.get_epoch_info(&epoch_id).unwrap())),
+    );
+    let epoch_heights_to_ids = BTreeMap::from_iter(
+        epoch_infos
+            .iter()
+            .map(|(epoch_id, epoch_info)| (epoch_info.epoch_height(), epoch_id.clone())),
+    );
+    let epoch_heights_to_infos =
+        BTreeMap::from_iter(epoch_infos.values().map(|e| (e.epoch_height(), e.clone())));
+    let min_epoch_height = epoch_height;
+    let max_epoch_height = *epoch_heights_to_infos.keys().max().unwrap();
+    let epoch_heights_to_validator_infos =
+        BTreeMap::from_iter(epoch_heights_to_ids.iter().filter_map(|(epoch_height, epoch_id)| {
+            if *epoch_height >= min_epoch_height
+                && *epoch_height <= max_epoch_height.saturating_sub(4)
+            {
+                Some((epoch_height, epoch_manager.get_epoch_validator_info(&epoch_id).unwrap()))
+            } else {
+                None
+            }
+        }));
+    println!("MAX HEIGHT {max_epoch_height}");
+    for (epoch_height, _) in epoch_heights_to_infos.range(min_epoch_height..=max_epoch_height - 4) {
+        println!("{epoch_height}");
+        // T = epoch_height
+        // T+1 = next epoch, already generated
+        // T+2 = resulting assignment
+        let epoch_id = epoch_heights_to_ids.get(&epoch_height).unwrap();
+        let epoch_id_t1 = epoch_heights_to_ids.get(&epoch_height.saturating_add(1)).unwrap();
+        let epoch_id_t2 = epoch_heights_to_ids.get(&epoch_height.saturating_add(2)).unwrap();
+        let epoch_summary_t = epoch_heights_to_validator_infos.get(epoch_height).unwrap();
+        let epoch_info_t = epoch_heights_to_infos.get(epoch_height).unwrap();
+        let epoch_info_t1 = epoch_heights_to_infos.get(&epoch_height.saturating_add(1)).unwrap();
+        let epoch_info_t2 = epoch_heights_to_infos.get(&epoch_height.saturating_add(2)).unwrap();
+
+        let epoch_config_t = epoch_manager.get_epoch_config(epoch_id).unwrap();
+        let epoch_config_t1 = epoch_manager.get_epoch_config(epoch_id_t1).unwrap();
+        let epoch_config_t2 = epoch_manager.get_epoch_config(epoch_id_t2).unwrap();
+        let rng_seed = epoch_info_t2.rng_seed();
+        println!(
+            "{} {}",
+            epoch_summary_t.all_proposals.len(),
+            epoch_summary_t.validator_kickout.len()
+        );
+        if epoch_config_t.shard_layout != epoch_config_t1.shard_layout
+            || epoch_config_t1.shard_layout != epoch_config_t2.shard_layout
+        {
+            println!("SKIP");
+            continue;
+        }
+        let epoch_info_t2_gen = near_epoch_manager::proposals_to_epoch_info(
+            &epoch_config_t1,
+            rng_seed,
+            epoch_info_t1.as_ref(),
+            epoch_summary_t.all_proposals.clone(),
+            epoch_summary_t.validator_kickout.clone(),
+            epoch_info_t2.validator_reward().clone(),
+            epoch_info_t2.minted_amount(),
+            epoch_summary_t.next_version.clone(),
+            epoch_info_t.protocol_version(),
+        )
+        .unwrap();
+
+        assert_eq!(epoch_info_t2.epoch_height(), epoch_info_t2_gen.epoch_height());
+        assert_eq!(epoch_info_t2.protocol_version(), epoch_info_t2_gen.protocol_version());
+        // for (a, b) in epoch_info_t2.stake_change().iter().zip(epoch_info_t2_gen.stake_change()) {
+        //     assert_eq!(a, b);
+        //     println!("{:?}", a);
+        // }
+        assert_eq!(epoch_info_t2.stake_change(), epoch_info_t2_gen.stake_change());
+        assert_eq!(epoch_info_t2.validators_len(), epoch_info_t2_gen.validators_len());
+        assert_eq!(
+            epoch_info_t2.block_producers_settlement().len(),
+            epoch_info_t2_gen.block_producers_settlement().len()
+        );
+        assert_eq!(
+            epoch_info_t2.chunk_producers_settlement().len(),
+            epoch_info_t2_gen.chunk_producers_settlement().len()
+        );
+        assert_eq!(epoch_info_t2.as_ref(), &epoch_info_t2_gen);
+    }
 }
 
 fn get_trie(store: Store, hash: CryptoHash, shard_id: u32, shard_version: u32) -> Trie {

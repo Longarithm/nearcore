@@ -1122,6 +1122,15 @@ pub mod epoch_info {
             }
         }
 
+        #[inline]
+        pub fn rng_seed(&self) -> RngSeed {
+            match self {
+                Self::V1(_) | Self::V2(_) => Default::default(),
+                Self::V3(v3) => v3.rng_seed,
+                Self::V4(v4) => v4.rng_seed,
+            }
+        }
+
         pub fn sample_block_producer(&self, height: BlockHeight) -> ValidatorId {
             match &self {
                 Self::V1(v1) => {
