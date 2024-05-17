@@ -975,7 +975,7 @@ pub(crate) fn print_epoch_analysis(
         let prev_assignment = epoch_info_t1.chunk_producers_settlement();
         let new_assignment = epoch_info.chunk_producers_settlement();
 
-        let mut prev_validator_to_shard = HashMap::default();
+        let mut prev_validator_to_shard = HashMap::<AccountId, usize>::default();
         for (i, validator_ids) in prev_assignment.iter().enumerate() {
             for validator_id in validator_ids {
                 let validator = epoch_info_t1.get_validator(*validator_id).take_account_id();
@@ -983,7 +983,7 @@ pub(crate) fn print_epoch_analysis(
             }
         }
         let mut state_syncs = 0;
-        let mut new_validator_to_shard = HashMap::default();
+        let mut new_validator_to_shard = HashMap::<AccountId, usize>::default();
         for (i, validator_ids) in new_assignment.iter().enumerate() {
             for validator_id in validator_ids {
                 let validator = epoch_info.get_validator(*validator_id).take_account_id();
