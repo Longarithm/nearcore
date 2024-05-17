@@ -935,7 +935,6 @@ pub(crate) fn print_epoch_analysis(
         }));
     println!("MAX HEIGHT {max_epoch_height}");
     for (epoch_height, _) in epoch_heights_to_infos.range(min_epoch_height..=max_epoch_height - 4) {
-        println!("{epoch_height}");
         // T = epoch_height
         // T+1 = next epoch, already generated
         // T+2 = resulting assignment
@@ -951,18 +950,15 @@ pub(crate) fn print_epoch_analysis(
         let epoch_config_t1 = epoch_manager.get_epoch_config(epoch_id_t1).unwrap();
         let epoch_config_t2 = epoch_manager.get_epoch_config(epoch_id_t2).unwrap();
         let rng_seed = epoch_info_t2.rng_seed();
-        println!(
-            "{} {}",
-            epoch_summary_t.all_proposals.len(),
-            epoch_summary_t.validator_kickout.len()
-        );
+
         if epoch_config_t.shard_layout != epoch_config_t1.shard_layout
             || epoch_config_t1.shard_layout != epoch_config_t2.shard_layout
         {
-            println!("SKIP");
+            println!("{: >5} SKIP", epoch_height);
             continue;
         }
-        let epoch_info_t2_gen = near_epoch_manager::proposals_to_epoch_info(
+
+        let epoch_info = near_epoch_manager::proposals_to_epoch_info(
             &epoch_config_t1,
             rng_seed,
             epoch_info_t1.as_ref(),
@@ -971,27 +967,35 @@ pub(crate) fn print_epoch_analysis(
             epoch_info_t2.validator_reward().clone(),
             epoch_info_t2.minted_amount(),
             epoch_info_t.protocol_version(),
-            epoch_summary_t.next_version.clone(),
+            PROTOCOL_VERSION,
+            // epoch_summary_t.next_version.clone(),
         )
         .unwrap();
 
-        assert_eq!(epoch_info_t2.epoch_height(), epoch_info_t2_gen.epoch_height());
-        assert_eq!(epoch_info_t2.protocol_version(), epoch_info_t2_gen.protocol_version());
-        // for (a, b) in epoch_info_t2.stake_change().iter().zip(epoch_info_t2_gen.stake_change()) {
-        //     assert_eq!(a, b);
-        //     println!("{:?}", a);
-        // }
-        assert_eq!(epoch_info_t2.stake_change(), epoch_info_t2_gen.stake_change());
-        assert_eq!(epoch_info_t2.validators_len(), epoch_info_t2_gen.validators_len());
-        assert_eq!(
-            epoch_info_t2.block_producers_settlement().len(),
-            epoch_info_t2_gen.block_producers_settlement().len()
-        );
-        assert_eq!(
-            epoch_info_t2.chunk_producers_settlement().len(),
-            epoch_info_t2_gen.chunk_producers_settlement().len()
-        );
-        assert_eq!(epoch_info_t2.as_ref(), &epoch_info_t2_gen);
+        let prev_assignment = epoch_info_t1.chunk_producers_settlement();
+        let new_assignment = epoch_info.chunk_producers_settlement();
+
+        let mut prev_validator_to_shard = HashMap::default();
+        for (i, validator_ids) in prev_assignment.iter().enumerate() {
+            for validator_id in validator_ids {
+                let validator = epoch_info_t1.get_validator(*validator_id).take_account_id();
+                prev_validator_to_shard.insert(validator, i);
+            }
+        }
+        let mut state_syncs = 0;
+        let mut new_validator_to_shard = HashMap::default();
+        for (i, validator_ids) in new_assignment.iter().enumerate() {
+            for validator_id in validator_ids {
+                let validator = epoch_info.get_validator(*validator_id).take_account_id();
+                new_validator_to_shard.insert(validator, i);
+                if prev_validator_to_shard.get(&validator) != Some(&i) {
+                    state_syncs += 1;
+                }
+            }
+        }
+
+        println!("{: >5} {state_syncs}", epoch_height);
+        // assert_eq!(epoch_info_t2.as_ref(), &epoch_info);
     }
 }
 
