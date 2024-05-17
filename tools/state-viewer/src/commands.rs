@@ -987,10 +987,10 @@ pub(crate) fn print_epoch_analysis(
         for (i, validator_ids) in new_assignment.iter().enumerate() {
             for validator_id in validator_ids {
                 let validator = epoch_info.get_validator(*validator_id).take_account_id();
-                new_validator_to_shard.insert(validator, i);
                 if prev_validator_to_shard.get(&validator) != Some(&i) {
                     state_syncs += 1;
                 }
+                new_validator_to_shard.insert(validator, i);
             }
         }
 
