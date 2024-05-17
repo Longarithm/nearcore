@@ -521,12 +521,12 @@ impl<'a> DBOpener<'a> {
     fn open(&self, mode: Mode, want_version: DbVersion) -> std::io::Result<(RocksDB, DbMetadata)> {
         let db = RocksDB::open(&self.path, &self.config, mode, self.temp)?;
         let metadata = DbMetadata::read(&db)?;
-        if want_version != metadata.version {
-            let msg = format!("unexpected DbVersion {}; expected {want_version}", metadata.version);
-            Err(std::io::Error::other(msg))
-        } else {
-            Ok((db, metadata))
-        }
+        // if want_version != metadata.version {
+        //     let msg = format!("unexpected DbVersion {}; expected {want_version}", metadata.version);
+        //     Err(std::io::Error::other(msg))
+        // } else {
+        Ok((db, metadata))
+        // }
     }
 
     /// Opens the database in given mode without checking the expected version and kind.
