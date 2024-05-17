@@ -402,12 +402,12 @@ impl<'a> StoreOpener<'a> {
         let metadata = metadata.ok_or(StoreOpenerError::DbDoesNotExist {})?;
         let DbMetadata { version, .. } = metadata;
 
-        if version == DB_VERSION {
+        if version >= DB_VERSION {
             return Ok(Snapshot::none());
         }
-        if version > DB_VERSION {
-            return Err(StoreOpenerError::DbVersionTooNew { got: version, want: DB_VERSION });
-        }
+        // if version > DB_VERSION {
+        //     return Err(StoreOpenerError::DbVersionTooNew { got: version, want: DB_VERSION });
+        // }
 
         // If we’re opening for reading, we cannot perform migrations thus we
         // must fail if the database has old version (even if we support
