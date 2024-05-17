@@ -1,4 +1,3 @@
-use crate::proposals::proposals_to_epoch_info;
 use crate::types::EpochInfoAggregator;
 use near_cache::SyncLruCache;
 use near_chain_configs::GenesisConfig;
@@ -33,6 +32,7 @@ use tracing::{debug, warn};
 use types::BlockHeaderInfo;
 
 pub use crate::adapter::EpochManagerAdapter;
+pub use crate::proposals::proposals_to_epoch_info;
 pub use crate::reward_calculator::RewardCalculator;
 pub use crate::reward_calculator::NUM_SECONDS_IN_A_YEAR;
 pub use crate::types::RngSeed;
