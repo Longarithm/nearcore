@@ -1026,13 +1026,13 @@ pub(crate) fn print_epoch_analysis(
         let max_stake = stakes.values().max().unwrap();
 
         println!(
-            "{: >5} {state_syncs} {: >5} {: >5} {: >30} {: >30} {: >30}",
+            "{: >5} {state_syncs} {: >5} {: >5} {: >30} {: >30} {}",
             epoch_height,
             validator_num.values().min().unwrap(),
             validator_num.values().max().unwrap() - validator_num.values().min().unwrap(),
             max_stake,
             max_stake - min_stake,
-            (max_stake - min_stake).div(max_stake)
+            ((max_stake - min_stake) as f64) / (*max_stake as f64)
         );
         // assert_eq!(epoch_info_t2.as_ref(), &epoch_info);
     }
