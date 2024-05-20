@@ -1026,7 +1026,7 @@ pub(crate) fn print_epoch_analysis(
         let max_stake = stakes.values().max().unwrap();
 
         println!(
-            "{: >5} {state_syncs} {: >5} {: >5} {: >30} {: >30} {}",
+            "{: >5} {state_syncs: >5} {: >5} {: >5} {: >30} {: >30} {}",
             epoch_height,
             validator_num.values().min().unwrap(),
             validator_num.values().max().unwrap() - validator_num.values().min().unwrap(),
