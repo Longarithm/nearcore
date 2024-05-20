@@ -981,7 +981,7 @@ pub(crate) fn print_epoch_analysis(
             &epoch_config_last,
             // &epoch_config_t1,
             rng_seed,
-            epoch_info_t1.as_ref(),
+            &epoch_info,
             epoch_summary_t.all_proposals.clone(),
             epoch_summary_t.validator_kickout.clone(),
             epoch_info_t2.validator_reward().clone(),
