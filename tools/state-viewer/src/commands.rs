@@ -974,7 +974,7 @@ pub(crate) fn print_epoch_analysis(
         // }
 
         let mut epoch_info = epoch_info_t1.as_ref().clone();
-        let mut cps_mut = epoch_info.chunk_producers_settlement_mut();
+        let cps_mut = epoch_info.chunk_producers_settlement_mut();
         *cps_mut = prev_cps.clone();
 
         let epoch_info = near_epoch_manager::proposals_to_epoch_info(
@@ -988,6 +988,7 @@ pub(crate) fn print_epoch_analysis(
             epoch_info_t2.minted_amount(),
             epoch_info_t.protocol_version(),
             PROTOCOL_VERSION,
+            true,
             // epoch_summary_t.next_version.clone(),
         )
         .unwrap();
