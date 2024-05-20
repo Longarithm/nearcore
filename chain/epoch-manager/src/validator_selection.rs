@@ -239,7 +239,8 @@ pub fn proposals_to_epoch_info(
         all_validators,
         validator_to_index,
         mut chunk_producers_settlement,
-    } = if checked_feature!("stable", StatelessValidationV0, next_version) {
+    } = if false {
+        // checked_feature!("stable", StatelessValidationV0, next_version) {
         get_chunk_producers_assignment(
             epoch_config,
             rng_seed,
