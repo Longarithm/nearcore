@@ -933,6 +933,21 @@ pub(crate) fn print_epoch_analysis(
                 None
             }
         }));
+
+    let chain_store = ChainStore::new(
+        store.clone(),
+        near_config.genesis.config.genesis_height,
+        near_config.client_config.save_trie_changes,
+    );
+    let tip_epoch_id = chain_store.head().unwrap().epoch_id;
+    let epoch_config_last = epoch_manager.get_epoch_config(&tip_epoch_id).unwrap();
+    println!(
+        "{:?} {}",
+        epoch_config_last.shard_layout,
+        epoch_config_last.validator_selection_config.num_chunk_producer_seats
+    );
+
+    let mut prev_cps = vec![vec![]; epoch_config_last.shard_layout.shard_ids().len()];
     println!("MAX HEIGHT {max_epoch_height}");
     for (epoch_height, _) in epoch_heights_to_infos.range(min_epoch_height..=max_epoch_height - 4) {
         // T = epoch_height
@@ -951,15 +966,20 @@ pub(crate) fn print_epoch_analysis(
         let epoch_config_t2 = epoch_manager.get_epoch_config(epoch_id_t2).unwrap();
         let rng_seed = epoch_info_t2.rng_seed();
 
-        if epoch_config_t.shard_layout != epoch_config_t1.shard_layout
-            || epoch_config_t1.shard_layout != epoch_config_t2.shard_layout
-        {
-            println!("{: >5} SKIP", epoch_height);
-            continue;
-        }
+        // if epoch_config_t.shard_layout != epoch_config_t1.shard_layout
+        //     || epoch_config_t1.shard_layout != epoch_config_t2.shard_layout
+        // {
+        //     println!("{: >5} SKIP", epoch_height);
+        //     continue;
+        // }
+
+        let mut epoch_info = epoch_info_t1.as_ref().clone();
+        let mut cps_mut = epoch_info.chunk_producers_settlement_mut();
+        cps_mut = prev_cps.clone();
 
         let epoch_info = near_epoch_manager::proposals_to_epoch_info(
-            &epoch_config_t1,
+            &epoch_config_last,
+            // &epoch_config_t1,
             rng_seed,
             epoch_info_t1.as_ref(),
             epoch_summary_t.all_proposals.clone(),
@@ -974,6 +994,7 @@ pub(crate) fn print_epoch_analysis(
 
         let prev_assignment = epoch_info_t1.chunk_producers_settlement();
         let new_assignment = epoch_info.chunk_producers_settlement();
+        prev_cps = new_assignment.to_vec();
 
         let mut prev_validator_to_shard = HashMap::<AccountId, usize>::default();
         for (i, validator_ids) in prev_assignment.iter().enumerate() {

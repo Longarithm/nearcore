@@ -944,6 +944,16 @@ pub mod epoch_info {
         }
 
         #[inline]
+        pub fn chunk_producers_settlement_mut(&mut self) -> &mut Vec<Vec<ValidatorId>> {
+            match self {
+                Self::V1(v1) => &mut v1.chunk_producers_settlement,
+                Self::V2(v2) => &mut v2.chunk_producers_settlement,
+                Self::V3(v3) => &mut v3.chunk_producers_settlement,
+                Self::V4(v4) => &mut v4.chunk_producers_settlement,
+            }
+        }
+
+        #[inline]
         pub fn validator_kickout(&self) -> &HashMap<AccountId, ValidatorKickoutReason> {
             match self {
                 Self::V1(v1) => &v1.validator_kickout,
