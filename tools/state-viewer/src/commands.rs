@@ -53,6 +53,7 @@ use std::collections::HashMap;
 use std::collections::{BTreeMap, BinaryHeap};
 use std::fs::{self, File};
 use std::io::Write;
+use std::ops::Div;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -1006,17 +1007,29 @@ pub(crate) fn print_epoch_analysis(
         }
         let mut state_syncs = 0;
         let mut new_validator_to_shard = HashMap::<AccountId, usize>::default();
+        let mut stakes = HashMap::default();
         for (i, validator_ids) in new_assignment.iter().enumerate() {
             for validator_id in validator_ids {
-                let validator = epoch_info.get_validator(*validator_id).take_account_id();
-                if prev_validator_to_shard.get(&validator) != Some(&i) {
+                let validator = epoch_info.get_validator(*validator_id);
+                *stakes.entry(i).or_insert(0) += validator.stake();
+                let account_id = validator.take_account_id();
+                if prev_validator_to_shard.get(&account_id) != Some(&i) {
                     state_syncs += 1;
                 }
-                new_validator_to_shard.insert(validator, i);
+                new_validator_to_shard.insert(account_id, i);
             }
         }
 
-        println!("{: >5} {state_syncs}", epoch_height);
+        let min_stake = stakes.values().min().unwrap();
+        let max_stake = stakes.values().max().unwrap();
+
+        println!(
+            "{: >5} {state_syncs} {: >30} {: >30} {: >30}",
+            epoch_height,
+            max_stake,
+            max_stake - min_stake,
+            (max_stake - min_stake).div(max_stake)
+        );
         // assert_eq!(epoch_info_t2.as_ref(), &epoch_info);
     }
 }
