@@ -908,7 +908,7 @@ pub(crate) fn print_epoch_analysis(
         EpochManager::new_from_genesis_config(store.clone(), &near_config.genesis.config)
             .expect("Failed to start Epoch Manager");
 
-    let epoch_ids = iterate_and_filter(store, |_| true);
+    let epoch_ids = iterate_and_filter(store.clone(), |_| true);
     let epoch_infos: HashMap<EpochId, Arc<EpochInfo>> = HashMap::from_iter(
         epoch_ids
             .into_iter()
