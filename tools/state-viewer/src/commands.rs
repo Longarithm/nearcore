@@ -973,15 +973,15 @@ pub(crate) fn print_epoch_analysis(
         //     continue;
         // }
 
-        let mut epoch_info = epoch_info_t1.as_ref().clone();
-        let cps_mut = epoch_info.chunk_producers_settlement_mut();
+        let mut epoch_info_t1 = epoch_info_t1.as_ref().clone();
+        let cps_mut = epoch_info_t1.chunk_producers_settlement_mut();
         *cps_mut = prev_cps.clone();
 
         let epoch_info = near_epoch_manager::proposals_to_epoch_info(
             &epoch_config_last,
             // &epoch_config_t1,
             rng_seed,
-            &epoch_info,
+            &epoch_info_t1,
             epoch_summary_t.all_proposals.clone(),
             epoch_summary_t.validator_kickout.clone(),
             epoch_info_t2.validator_reward().clone(),
