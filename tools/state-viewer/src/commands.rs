@@ -947,7 +947,7 @@ pub(crate) fn print_epoch_analysis(
         epoch_config_last.validator_selection_config.num_chunk_producer_seats
     );
 
-    let mut prev_cps = vec![vec![]; epoch_config_last.shard_layout.shard_ids().len()];
+    let mut prev_cps = vec![vec![]; epoch_config_last.shard_layout.shard_ids().count()];
     println!("MAX HEIGHT {max_epoch_height}");
     for (epoch_height, _) in epoch_heights_to_infos.range(min_epoch_height..=max_epoch_height - 4) {
         // T = epoch_height
@@ -975,7 +975,7 @@ pub(crate) fn print_epoch_analysis(
 
         let mut epoch_info = epoch_info_t1.as_ref().clone();
         let mut cps_mut = epoch_info.chunk_producers_settlement_mut();
-        cps_mut = prev_cps.clone();
+        *cps_mut = prev_cps.clone();
 
         let epoch_info = near_epoch_manager::proposals_to_epoch_info(
             &epoch_config_last,
