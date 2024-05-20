@@ -1007,11 +1007,13 @@ pub(crate) fn print_epoch_analysis(
         }
         let mut state_syncs = 0;
         let mut new_validator_to_shard = HashMap::<AccountId, usize>::default();
-        let mut stakes = HashMap::default();
+        let mut stakes: HashMap<usize, Balance> = HashMap::default();
+        let mut validator_num: HashMap<usize, usize> = HashMap::default();
         for (i, validator_ids) in new_assignment.iter().enumerate() {
             for validator_id in validator_ids {
                 let validator = epoch_info.get_validator(*validator_id);
                 *stakes.entry(i).or_insert(0) += validator.stake();
+                *validator_num.entry(i).or_insert(0) += 1;
                 let account_id = validator.take_account_id();
                 if prev_validator_to_shard.get(&account_id) != Some(&i) {
                     state_syncs += 1;
@@ -1024,8 +1026,10 @@ pub(crate) fn print_epoch_analysis(
         let max_stake = stakes.values().max().unwrap();
 
         println!(
-            "{: >5} {state_syncs} {: >30} {: >30} {: >30}",
+            "{: >5} {state_syncs} {: >5} {: >5} {: >30} {: >30} {: >30}",
             epoch_height,
+            validator_num.values().min().unwrap(),
+            validator_num.values().max().unwrap() - validator_num.values().min().unwrap(),
             max_stake,
             max_stake - min_stake,
             (max_stake - min_stake).div(max_stake)
