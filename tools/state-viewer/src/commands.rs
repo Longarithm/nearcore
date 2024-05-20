@@ -942,14 +942,15 @@ pub(crate) fn print_epoch_analysis(
     );
     let tip_epoch_id = chain_store.head().unwrap().epoch_id;
     let epoch_config_last = epoch_manager.get_epoch_config(&tip_epoch_id).unwrap();
-    println!(
-        "{:?} {}",
-        epoch_config_last.shard_layout,
-        epoch_config_last.validator_selection_config.num_chunk_producer_seats
-    );
+    // println!(
+    //     "{:?} {}",
+    //     epoch_config_last.shard_layout,
+    //     epoch_config_last.validator_selection_config.num_chunk_producer_seats
+    // );
 
+    println!("epoch_height,state_syncs,min_validator_num,diff_validator_num,min_stake,diff_stake,rel_diff_stake");
     let mut prev_cps = vec![vec![]; epoch_config_last.shard_layout.shard_ids().count()];
-    println!("MAX HEIGHT {max_epoch_height}");
+    // println!("MAX HEIGHT {max_epoch_height}");
     for (epoch_height, _) in epoch_heights_to_infos.range(min_epoch_height..=max_epoch_height - 4) {
         // T = epoch_height
         // T+1 = next epoch, already generated
@@ -1025,12 +1026,13 @@ pub(crate) fn print_epoch_analysis(
         let min_stake = stakes.values().min().unwrap();
         let max_stake = stakes.values().max().unwrap();
 
+        // let fmt_str = "{: >5} {state_syncs: >5} {: >5} {: >5} {: >30} {: >30} {}";
+        // let fmt_str = "{},{},{},{},{},{},{}";
         println!(
-            "{: >5} {state_syncs: >5} {: >5} {: >5} {: >30} {: >30} {}",
-            epoch_height,
+            "{epoch_height},{state_syncs},{},{},{},{},{}",
             validator_num.values().min().unwrap(),
             validator_num.values().max().unwrap() - validator_num.values().min().unwrap(),
-            max_stake,
+            min_stake,
             max_stake - min_stake,
             ((max_stake - min_stake) as f64) / (*max_stake as f64)
         );
