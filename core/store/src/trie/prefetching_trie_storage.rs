@@ -361,7 +361,7 @@ impl PrefetchStagingArea {
         loop {
             let slot = guard.slots.get(&key)?;
             if key == CryptoHash::default() {
-                println!("blocking_get {}", slot);
+                println!("blocking_get {:?}", slot);
             }
             if let PrefetchSlot::Done(value) = slot {
                 return Some(value.clone());
