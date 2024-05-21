@@ -28,6 +28,7 @@ impl ContractStorage {
     }
 
     pub fn get(&self, code_hash: CryptoHash) -> Option<ContractCode> {
+        println!("retrieve code bytes {}", code_hash);
         match self.storage.retrieve_raw_bytes(&code_hash) {
             Ok(raw_code) => Some(ContractCode::new(raw_code.to_vec(), Some(code_hash))),
             Err(_) => None,

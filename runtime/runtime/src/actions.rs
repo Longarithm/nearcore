@@ -80,6 +80,7 @@ pub(crate) fn execute_function_call(
     is_last_action: bool,
     view_config: Option<ViewConfig>,
 ) -> Result<VMOutcome, RuntimeError> {
+    println!("call {} {}", runtime_ext.account_id(), function_call.method_name);
     let account_id = runtime_ext.account_id();
     tracing::debug!(target: "runtime", %account_id, "Calling the contract");
     // Output data receipts are ignored if the function call is not the last action in the batch.

@@ -476,6 +476,7 @@ impl TrieStorage for TrieCachingStorage {
                             self.metrics.prefetch_pending.inc();
                             std::thread::yield_now();
                             // If data is already being prefetched, wait for that instead of sending a new request.
+                            println!("block on {} {}", self.shard_uid.shard_id, hash);
                             match prefetcher.prefetching.blocking_get(*hash) {
                                 Some(value) => value,
                                 // Only main thread (this one) removes values from staging area,
