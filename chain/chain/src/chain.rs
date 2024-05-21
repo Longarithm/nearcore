@@ -1459,6 +1459,7 @@ impl Chain {
         let mut accepted_blocks = vec![];
         let mut errors = HashMap::new();
         while let Ok((block_hash, apply_result)) = self.apply_chunks_receiver.try_recv() {
+            panic!("DEBUG");
             match self.postprocess_block(
                 me,
                 block_hash,
