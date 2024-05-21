@@ -446,6 +446,9 @@ impl TrieStorage for TrieCachingStorage {
                 let val;
                 if let Some(prefetcher) = &self.prefetch_api {
                     let prefetch_state = prefetcher.prefetching.get_or_set_fetching(*hash);
+                    if hash == &CryptoHash::default() {
+                        println!("{} {:?}", self.shard_uid.shard_id, prefetch_state);
+                    }
                     // Keep lock until here to avoid race condition between shard cache lookup and reserving prefetch slot.
                     std::mem::drop(guard);
 

@@ -121,6 +121,7 @@ struct InnerPrefetchStagingArea {
 }
 
 /// Result when atomically accessing the prefetch staging area.
+#[derive(Debug)]
 pub(crate) enum PrefetcherResult {
     SlotReserved,
     Pending,
@@ -240,6 +241,9 @@ impl TrieStorage for TriePrefetchingStorage {
             self.prefetching.get_and_set_if_empty(*hash, PrefetchSlot::PendingPrefetch);
         // Keep lock until here to avoid race condition between shard cache insertion and reserving prefetch slot.
         std::mem::drop(shard_cache_guard);
+        if hash == &CryptoHash::default() {
+            println!("PREFETCH THREAD {} {:?}", self.shard_uid.shard_id, prefetch_state);
+        }
 
         match prefetch_state {
             // Slot reserved for us, this thread should fetch it from DB.
@@ -262,6 +266,9 @@ impl TrieStorage for TriePrefetchingStorage {
                         ))
                     }
                     Err(e) => {
+                        if hash == &CryptoHash::default() {
+                            println!("PREFETCH ERROR {} {:?}", self.shard_uid.shard_id, e);
+                        }
                         // This is an unrecoverable IO error.
                         // Releasing the lock here to unstuck main thread if it
                         // was blocking on this value, but it will also fail on its read.
@@ -352,6 +359,10 @@ impl PrefetchStagingArea {
     pub(crate) fn blocking_get(&self, key: CryptoHash) -> Option<Arc<[u8]>> {
         let mut guard = self.0.lock();
         loop {
+            let slot = guard.slots.get(&key)?;
+            if key == CryptoHash::default() {
+                println!("blocking_get {}", slot);
+            }
             if let PrefetchSlot::Done(value) = guard.slots.get(&key)? {
                 return Some(value.clone());
             }
