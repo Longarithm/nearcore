@@ -363,6 +363,7 @@ impl Chain {
         epoch_manager: &dyn EpochManagerAdapter,
         runtime_adapter: &dyn RuntimeAdapter,
     ) -> Result<(), Error> {
+        let h = witness.chunk_header.height_created();
         let shard_id = witness.chunk_header.shard_id();
         let chunk_hash = witness.chunk_header.chunk_hash();
         let (encoded_witness, raw_witness_size) = {
@@ -398,36 +399,38 @@ impl Chain {
         );
         let epoch_manager = self.epoch_manager.clone();
         let runtime_adapter = self.runtime_adapter.clone();
-        rayon::spawn(move || {
-            let validation_start = Instant::now();
-            match validate_chunk_state_witness(
-                witness,
-                pre_validation_result,
-                epoch_manager.as_ref(),
-                runtime_adapter.as_ref(),
-                &MainStateTransitionCache::default(),
-            ) {
-                Ok(()) => {
-                    tracing::debug!(
-                        target: "client",
-                        shard_id,
-                        ?chunk_hash,
-                        validation_elapsed = ?validation_start.elapsed(),
-                        "completed shadow chunk validation"
-                    );
-                }
-                Err(err) => {
-                    crate::metrics::SHADOW_CHUNK_VALIDATION_FAILED_TOTAL.inc();
-                    tracing::error!(
-                        target: "client",
-                        ?err,
-                        shard_id,
-                        ?chunk_hash,
-                        "shadow chunk validation failed"
-                    );
-                }
+
+        let validation_start = Instant::now();
+        match validate_chunk_state_witness(
+            witness,
+            pre_validation_result,
+            epoch_manager.as_ref(),
+            runtime_adapter.as_ref(),
+            &MainStateTransitionCache::default(),
+        ) {
+            Ok(()) => {
+                println!("{} {} | OK", shard_id, h);
+                tracing::debug!(
+                    target: "client",
+                    shard_id,
+                    ?chunk_hash,
+                    validation_elapsed = ?validation_start.elapsed(),
+                    "completed shadow chunk validation"
+                );
             }
-        });
+            Err(err) => {
+                crate::metrics::SHADOW_CHUNK_VALIDATION_FAILED_TOTAL.inc();
+                println!("{} {} | ERROR {:?}", shard_id, h, err);
+                tracing::error!(
+                    target: "client",
+                    ?err,
+                    shard_id,
+                    ?chunk_hash,
+                    "shadow chunk validation failed"
+                );
+            }
+        }
+
         Ok(())
     }
 }

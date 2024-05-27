@@ -25,7 +25,7 @@ pub enum StateWitnessCmd {
 impl StateWitnessCmd {
     pub(crate) fn run(&self, home_dir: &Path, near_config: NearConfig, store: Store) {
         match self {
-            StateWitnessCmd::Latest(cmd) => cmd.run(near_config, store),
+            StateWitnessCmd::Latest(cmd) => cmd.run(home_dir, near_config, store),
             StateWitnessCmd::Validate(cmd) => cmd.run(home_dir, near_config, store),
         }
     }
@@ -55,30 +55,64 @@ pub struct LatestWitnessesCmd {
 }
 
 impl LatestWitnessesCmd {
-    pub(crate) fn run(&self, near_config: NearConfig, store: Store) {
-        let chain_store =
-            Rc::new(ChainStore::new(store, near_config.genesis.config.genesis_height, false));
+    pub(crate) fn run(&self, home_dir: &Path, near_config: NearConfig, store: Store) {
+        let chain_store = Rc::new(ChainStore::new(
+            store.clone(),
+            near_config.genesis.config.genesis_height,
+            false,
+        ));
+        let chain_genesis = ChainGenesis::new(&near_config.genesis.config);
+        let epoch_manager =
+            EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
+        let runtime_adapter =
+            NightshadeRuntime::from_config(home_dir, store, &near_config, epoch_manager.clone())
+                .expect("could not create the transaction runtime");
 
-        let witnesses = chain_store
+        let mut witnesses = chain_store
             .get_latest_witnesses(self.height, self.shard_id, self.epoch_id.clone())
             .unwrap();
+        witnesses.sort_by_key(|w| {
+            (0i64.saturating_sub(w.chunk_header.height_created() as i64), w.chunk_header.shard_id())
+        });
         println!("Found {} witnesses:", witnesses.len());
-        for (i, witness) in witnesses.iter().enumerate() {
-            println!(
-                "#{} (height: {}, shard_id: {}, epoch_id: {:?}):",
-                i,
-                witness.chunk_header.height_created(),
-                witness.chunk_header.shard_id(),
-                witness.epoch_id
+        for (i, witness) in witnesses.into_iter().enumerate() {
+            let shard_tracker = ShardTracker::new(
+                TrackedConfig::from_config(&near_config.client_config),
+                epoch_manager.clone(),
             );
-            if self.pretty {
-                println!("{:#?}", witness);
-            } else if self.binary {
-                println!("{:?}", borsh::to_vec(witness).unwrap());
-            } else {
-                println!("{:?}", witness);
-            }
-            println!("");
+            let chain = Chain::new_for_view_client(
+                Clock::real(),
+                epoch_manager.clone(),
+                shard_tracker,
+                runtime_adapter.clone(),
+                &chain_genesis,
+                DoomslugThresholdMode::TwoThirds,
+                false,
+            )
+            .unwrap();
+            chain
+                .shadow_validate_state_witness(
+                    witness,
+                    epoch_manager.as_ref(),
+                    runtime_adapter.as_ref(),
+                )
+                .unwrap();
+
+            // println!(
+            //     "#{} (height: {}, shard_id: {}, epoch_id: {:?}):",
+            //     i,
+            //     witness.chunk_header.height_created(),
+            //     witness.chunk_header.shard_id(),
+            //     witness.epoch_id
+            // );
+            // if self.pretty {
+            //     println!("{:#?}", witness);
+            // } else if self.binary {
+            //     println!("{:?}", borsh::to_vec(witness).unwrap());
+            // } else {
+            //     println!("{:?}", witness);
+            // }
+            // println!("");
         }
     }
 }
