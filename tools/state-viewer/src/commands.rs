@@ -233,6 +233,10 @@ pub(crate) fn apply_range(
         epoch_manager.clone(),
     )
     .expect("could not create the transaction runtime");
+    let shard_layout = ShardLayout::get_simple_nightshade_layout_v3();
+    runtime.get_tries().load_mem_tries_for_enabled_shards(&[
+        ShardUId::from_shard_id_and_layout(0, &shard_layout),
+    ])?;
     apply_chain_range(
         mode,
         store,
