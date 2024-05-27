@@ -10,10 +10,12 @@ use near_chain_configs::Genesis;
 use near_epoch_manager::{EpochManagerAdapter, EpochManagerHandle};
 use near_primitives::apply::ApplyChunkReason;
 use near_primitives::receipt::DelayedReceiptIndices;
+use near_primitives::stateless_validation::StoredChunkStateTransitionData;
 use near_primitives::transaction::{Action, ExecutionOutcomeWithId, ExecutionOutcomeWithProof};
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, ShardId};
+use near_primitives::utils::get_block_shard_id;
 use near_store::flat::{BlockInfo, FlatStateChanges, FlatStorageStatus};
 use near_store::{DBCol, Store};
 use nearcore::NightshadeRuntime;
@@ -293,6 +295,16 @@ fn apply_block_from_range(
         apply_result.total_balance_burnt,
         apply_result.congestion_info,
     );
+    let ssd = StoredChunkStateTransitionData {
+        base_state: apply_result.proof.unwrap().nodes,
+        receipts_hash: apply_result.applied_receipts_hash,
+    };
+    let ser_ssd = borsh::to_vec(&ssd).unwrap();
+    let real_ssd = store
+        .get(DBCol::StateTransitionData, &get_block_shard_id(&block_hash, shard_id))
+        .unwrap()
+        .unwrap();
+    assert_eq!(ser_ssd, real_ssd);
 
     let state_update =
         runtime_adapter.get_tries().new_trie_update(shard_uid, *chunk_extra.state_root());
