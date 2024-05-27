@@ -238,7 +238,7 @@ pub(crate) fn apply_range(
         .get_tries()
         .load_mem_tries_for_enabled_shards(
             &[ShardUId::from_shard_id_and_layout(0, &shard_layout)],
-            true,
+            false,
         )
         .unwrap();
     apply_chain_range(
