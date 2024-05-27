@@ -150,7 +150,7 @@ pub fn load_trie_from_flat_state_and_delta(
                         )));
         }
     };
-
+    println!("flat_head: {:?}", flat_head);
     let state_root = match state_root {
         Some(state_root) => state_root,
         None => get_state_root(store, flat_head.hash, shard_uid)?,
