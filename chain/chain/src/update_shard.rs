@@ -178,7 +178,9 @@ pub fn apply_new_chunk(
         target: "chain",
         parent: parent_span,
         "apply_new_chunk",
-        shard_id)
+        shard_id,
+        num_transactions = transactions.len(),
+    )
     .entered();
     let gas_limit = chunk_header.gas_limit();
 

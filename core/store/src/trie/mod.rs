@@ -1660,6 +1660,7 @@ impl<'a> TrieWithReadLock<'a> {
     /// If memtries are present, returns an iterator that traverses the memtrie.
     /// Otherwise, it falls back to an iterator that traverses the on-disk trie.
     pub fn iter(&self) -> Result<TrieIterator<'_>, StorageError> {
+        println!("TAKE ITERATOR");
         match &self.memtries {
             Some(memtries) => {
                 let root = if self.trie.root == CryptoHash::default() {
@@ -1672,6 +1673,7 @@ impl<'a> TrieWithReadLock<'a> {
                         ))
                     })?)
                 };
+                println!("MEMTRIE");
                 Ok(TrieIterator::Memtrie(MemTrieIterator::new(
                     root,
                     Box::new(|value_ref| self.trie.deref_optimized(&value_ref)),
