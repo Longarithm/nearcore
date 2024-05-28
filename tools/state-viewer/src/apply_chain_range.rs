@@ -299,14 +299,6 @@ fn apply_block_from_range(
         base_state: apply_result.proof.unwrap().nodes,
         receipts_hash: apply_result.applied_receipts_hash,
     };
-    let ser_ssd = borsh::to_vec(&ssd).unwrap();
-    let real_ssd = store
-        .get(DBCol::StateTransitionData, &get_block_shard_id(&block_hash, shard_id))
-        .unwrap()
-        .unwrap()
-        .to_vec();
-    // assert_eq!(ser_ssd, real_ssd, "SSD fail");
-    pretty_assertions::assert_eq!(ser_ssd, real_ssd);
 
     let state_update =
         runtime_adapter.get_tries().new_trie_update(shard_uid, *chunk_extra.state_root());
@@ -342,6 +334,16 @@ fn apply_block_from_range(
             }
         }
     };
+    let ser_ssd = borsh::to_vec(&ssd).unwrap();
+    let real_ssd = store
+        .get(DBCol::StateTransitionData, &get_block_shard_id(&block_hash, shard_id))
+        .unwrap()
+        .unwrap()
+        .to_vec();
+    if ser_ssd != real_ssd {
+        panic!("SSD fail");
+    }
+
     maybe_add_to_csv(
         csv_file_mutex,
         &format!(
