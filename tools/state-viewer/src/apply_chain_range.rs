@@ -350,8 +350,7 @@ fn apply_block_from_range(
     let target_hash = CryptoHash::from_str("13EF3sGuQm3RUqEG1DYt8yXHT37L3sH1xScL6oRopZDX").unwrap();
     println!("SEARCH {}", node_hashes.contains(&target_hash));
 
-    if true {
-        // ser_ssd != real_ssd {
+    if ser_ssd != real_ssd {
         println!("NEW SSD DISCOVERED");
         let mut store_update = store.store_update();
         println!("STATE TRANSITION KEY = ({}, {})", block_hash, shard_id);
@@ -359,14 +358,6 @@ fn apply_block_from_range(
             .set_ser(DBCol::StateTransitionData, &get_block_shard_id(&block_hash, shard_id), &ssd)
             .unwrap();
         store_update.commit();
-        // let mut chain_store_update = chain_store.store_update();
-        // chain_store_update.save_state_transition_data(
-        //     block_hash,
-        //     shard_id,
-        //     apply_result.proof,
-        //     apply_result.applied_receipts_hash,
-        // );
-        // chain_store_update.commit().unwrap();
     }
 
     maybe_add_to_csv(
