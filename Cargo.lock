@@ -7321,6 +7321,7 @@ dependencies = [
  "nearcore",
  "node-runtime",
  "once_cell",
+ "pretty_assertions",
  "rand",
  "rayon",
  "redis",

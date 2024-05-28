@@ -305,7 +305,8 @@ fn apply_block_from_range(
         .unwrap()
         .unwrap()
         .to_vec();
-    assert_eq!(ser_ssd, real_ssd, "SSD fail");
+    // assert_eq!(ser_ssd, real_ssd, "SSD fail");
+    pretty_assertions::assert_eq!(ser_ssd, real_ssd);
 
     let state_update =
         runtime_adapter.get_tries().new_trie_update(shard_uid, *chunk_extra.state_root());
