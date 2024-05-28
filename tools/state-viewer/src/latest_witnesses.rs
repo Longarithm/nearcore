@@ -76,9 +76,11 @@ impl RegenerateWitnessCmd {
             .chain_store
             .get_latest_witnesses(Some(self.height), Some(self.shard_id), None)
             .unwrap();
-        let mut old_witness = old_witnesses.into_iter().next().unwrap();
+        let old_witness = old_witnesses.into_iter().next().unwrap();
         let chunk_header = old_witness.chunk_header;
-        let chunk = chain.get_chunk_clone_from_header(&chunk_header).unwrap();
+        // let chunk = chain.get_chunk_clone_from_header(&chunk_header).unwrap();
+        let new_txs = old_witness.new_transactions;
+        let new_txs_proof = old_witness.new_transactions_validation_state;
         let prev_block = chain.get_block(chunk_header.prev_block_hash()).unwrap();
         let prev_chunk_header = prev_block
             .chunks()
@@ -86,24 +88,6 @@ impl RegenerateWitnessCmd {
             .find(|chunk| chunk.shard_id() == self.shard_id)
             .unwrap()
             .clone();
-        let transactions_validation_storage_config = RuntimeStorageConfig {
-            state_root: chunk_header.prev_state_root(),
-            use_flat_storage: true,
-            source: StorageDataSource::Db,
-            state_patch: Default::default(),
-        };
-
-        // We call `validate_prepared_transactions()` here because we need storage proof for transactions validation.
-        // Normally it is provided by chunk producer, but for shadow validation we need to generate it ourselves.
-        let Ok(validated_transactions) = validate_prepared_transactions(
-            &chain,
-            runtime_adapter.as_ref(),
-            &chunk_header,
-            transactions_validation_storage_config,
-            chunk.transactions(),
-        ) else {
-            panic!("Could not produce storage proof for new transactions");
-        };
 
         let witness = chain
             .create_and_save_state_witness(
@@ -111,9 +95,10 @@ impl RegenerateWitnessCmd {
                 "alice.near".parse().unwrap(),
                 prev_block.header(),
                 &prev_chunk_header,
-                &chunk,
-                validated_transactions.storage_proof,
-                true,
+                chunk_header,
+                new_txs,
+                Some(new_txs_proof),
+                false,
             )
             .unwrap();
         println!("{:?}", borsh::to_vec(&witness).unwrap());

@@ -66,12 +66,15 @@ impl Client {
             ));
         };
 
+        let chunk_header = chunk.cloned_header();
+        let txs = chunk.transactions().to_vec();
         let witness = self.chain.create_and_save_state_witness(
             // Setting arbitrary chunk producer is OK for shadow validation
             "alice.near".parse().unwrap(),
             prev_block_header,
             prev_chunk_header,
-            chunk,
+            chunk_header,
+            txs,
             validated_transactions.storage_proof,
             self.config.save_latest_witnesses,
         )?;

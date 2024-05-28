@@ -369,7 +369,8 @@ impl Chain {
         chunk_producer: AccountId,
         prev_block_header: &BlockHeader,
         prev_chunk_header: &ShardChunkHeader,
-        chunk: &ShardChunk,
+        chunk_header: ShardChunkHeader,
+        new_transactions: Vec<SignedTransaction>,
         new_transactions_proof: Option<PartialState>,
         save_to_disk: bool,
     ) -> Result<ChunkStateWitness, Error> {
@@ -377,7 +378,8 @@ impl Chain {
             chunk_producer,
             prev_block_header,
             prev_chunk_header,
-            chunk,
+            chunk_header,
+            new_transactions,
             new_transactions_proof,
         )?;
         if save_to_disk {
@@ -391,17 +393,16 @@ impl Chain {
         chunk_producer: AccountId,
         prev_block_header: &BlockHeader,
         prev_chunk_header: &ShardChunkHeader,
-        chunk: &ShardChunk,
+        chunk_header: ShardChunkHeader,
+        new_transactions: Vec<SignedTransaction>,
         transactions_storage_proof: Option<PartialState>,
     ) -> Result<ChunkStateWitness, Error> {
-        let chunk_header = chunk.cloned_header();
         let epoch_id =
             self.epoch_manager.get_epoch_id_from_prev_block(chunk_header.prev_block_hash())?;
         let prev_chunk = self.get_chunk(&prev_chunk_header.chunk_hash())?;
         let (main_state_transition, implicit_transitions, applied_receipts_hash) =
             self.collect_state_transition_data(&chunk_header, prev_chunk_header)?;
 
-        let new_transactions = chunk.transactions().to_vec();
         let new_transactions_validation_state = if new_transactions.is_empty() {
             PartialState::default()
         } else {

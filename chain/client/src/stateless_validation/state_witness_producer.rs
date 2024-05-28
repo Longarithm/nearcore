@@ -35,7 +35,8 @@ impl Client {
             my_signer.validator_id().clone(),
             prev_block_header,
             prev_chunk_header,
-            chunk,
+            chunk_header,
+            chunk.transactions().to_vec(),
             transactions_storage_proof,
             self.config.save_latest_witnesses,
         )?;
