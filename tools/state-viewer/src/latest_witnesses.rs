@@ -7,7 +7,7 @@ use near_async::time::Clock;
 use near_chain::runtime::NightshadeRuntime;
 use near_chain::stateless_validation::state_witness::validate_prepared_transactions;
 use near_chain::types::{RuntimeStorageConfig, StorageDataSource};
-use near_chain::{Chain, ChainGenesis, ChainStore, DoomslugThresholdMode, Error};
+use near_chain::{Chain, ChainGenesis, ChainStore, DoomslugThresholdMode};
 use near_epoch_manager::shard_tracker::{ShardTracker, TrackedConfig};
 use near_epoch_manager::EpochManager;
 use near_primitives::stateless_validation::ChunkStateWitness;
@@ -75,10 +75,14 @@ impl CreateWitnessCmd {
         let block = chain.get_block_by_height(self.height).unwrap();
         let prev_block = chain.get_block(block.header().prev_hash()).unwrap();
         let chunk_header =
-            block.chunks().iter().find(|chunk| chunk.shard_id() == self.shard_id).unwrap();
-        let chunk = chain.get_chunk_clone_from_header(chunk_header).unwrap();
-        let prev_chunk_header =
-            prev_block.chunks().iter().find(|chunk| chunk.shard_id() == self.shard_id).unwrap();
+            block.chunks().iter().find(|chunk| chunk.shard_id() == self.shard_id).unwrap().clone();
+        let chunk = chain.get_chunk_clone_from_header(&chunk_header).unwrap();
+        let prev_chunk_header = prev_block
+            .chunks()
+            .iter()
+            .find(|chunk| chunk.shard_id() == self.shard_id)
+            .unwrap()
+            .clone();
 
         let chunk_header = chunk.cloned_header();
         let transactions_validation_storage_config = RuntimeStorageConfig {
