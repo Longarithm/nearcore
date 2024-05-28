@@ -18,10 +18,10 @@ use nearcore::NightshadeRuntimeExt;
 
 #[derive(clap::Subcommand)]
 pub enum StateWitnessCmd {
-    /// Creates state witness for given height and shard.
-    Create(CreateWitnessCmd),
     /// Prints latest state witnesses saved to DB.
     Latest(LatestWitnessesCmd),
+    /// Regenerates state witness for given height and shard.
+    Regenerate(RegenerateWitnessCmd),
     /// Validates given state witness and hangs.
     Validate(ValidateWitnessCmd),
 }
@@ -29,7 +29,7 @@ pub enum StateWitnessCmd {
 impl StateWitnessCmd {
     pub(crate) fn run(&self, home_dir: &Path, near_config: NearConfig, store: Store) {
         match self {
-            StateWitnessCmd::Create(cmd) => cmd.run(home_dir, near_config, store),
+            StateWitnessCmd::Regenerate(cmd) => cmd.run(home_dir, near_config, store),
             StateWitnessCmd::Latest(cmd) => cmd.run(near_config, store),
             StateWitnessCmd::Validate(cmd) => cmd.run(home_dir, near_config, store),
         }
@@ -37,7 +37,7 @@ impl StateWitnessCmd {
 }
 
 #[derive(Parser)]
-pub struct CreateWitnessCmd {
+pub struct RegenerateWitnessCmd {
     /// Block height
     #[arg(long)]
     height: u64,
@@ -46,7 +46,7 @@ pub struct CreateWitnessCmd {
     shard_id: u64,
 }
 
-impl CreateWitnessCmd {
+impl RegenerateWitnessCmd {
     pub(crate) fn run(&self, home_dir: &Path, near_config: NearConfig, store: Store) {
         let chain_genesis = ChainGenesis::new(&near_config.genesis.config);
         let epoch_manager =
@@ -72,19 +72,20 @@ impl CreateWitnessCmd {
         )
         .unwrap();
 
-        let block = chain.get_block_by_height(self.height).unwrap();
-        let prev_block = chain.get_block(block.header().prev_hash()).unwrap();
-        let chunk_header =
-            block.chunks().iter().find(|chunk| chunk.shard_id() == self.shard_id).unwrap().clone();
+        let old_witnesses = chain
+            .chain_store
+            .get_latest_witnesses(Some(self.height), Some(self.shard_id), None)
+            .unwrap();
+        let mut old_witness = old_witnesses.into_iter().next().unwrap();
+        let chunk_header = old_witness.chunk_header;
         let chunk = chain.get_chunk_clone_from_header(&chunk_header).unwrap();
+        let prev_block = chain.get_block(chunk_header.prev_block_hash()).unwrap();
         let prev_chunk_header = prev_block
             .chunks()
             .iter()
             .find(|chunk| chunk.shard_id() == self.shard_id)
             .unwrap()
             .clone();
-
-        let chunk_header = chunk.cloned_header();
         let transactions_validation_storage_config = RuntimeStorageConfig {
             state_root: chunk_header.prev_state_root(),
             use_flat_storage: true,
@@ -104,7 +105,7 @@ impl CreateWitnessCmd {
             panic!("Could not produce storage proof for new transactions");
         };
 
-        chain
+        let witness = chain
             .create_and_save_state_witness(
                 // Doesn't matter if used for testing.
                 "alice.near".parse().unwrap(),
@@ -115,6 +116,7 @@ impl CreateWitnessCmd {
                 true,
             )
             .unwrap();
+        println!("{:?}", borsh::to_vec(&witness).unwrap());
     }
 }
 
