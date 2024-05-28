@@ -349,6 +349,7 @@ fn apply_block_from_range(
             apply_result.proof,
             apply_result.applied_receipts_hash,
         );
+        chain_store_update.commit().unwrap();
     }
 
     maybe_add_to_csv(
