@@ -109,7 +109,7 @@ impl CreateWitnessCmd {
                 // Doesn't matter if used for testing.
                 "alice.near".parse().unwrap(),
                 prev_block.header(),
-                prev_chunk_header,
+                &prev_chunk_header,
                 &chunk,
                 validated_transactions.storage_proof,
                 true,
