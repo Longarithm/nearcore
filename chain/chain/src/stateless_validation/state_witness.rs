@@ -10,7 +10,6 @@ use crate::types::{
 };
 use crate::validate::validate_chunk_with_chunk_extra_and_receipts_root;
 use crate::{Chain, ChainStoreAccess};
-use itertools::Chunk;
 use lru::LruCache;
 use near_async::futures::AsyncComputationSpawnerExt;
 use near_chain_primitives::Error;
@@ -371,38 +370,15 @@ impl Chain {
         prev_block_header: &BlockHeader,
         prev_chunk_header: &ShardChunkHeader,
         chunk: &ShardChunk,
-        runtime_adapter: &dyn RuntimeAdapter,
+        new_transactions_proof: Option<PartialState>,
         save_to_disk: bool,
     ) -> Result<ChunkStateWitness, Error> {
-        let chunk_header = chunk.cloned_header();
-
-        let transactions_validation_storage_config = RuntimeStorageConfig {
-            state_root: chunk_header.prev_state_root(),
-            use_flat_storage: true,
-            source: StorageDataSource::Db,
-            state_patch: Default::default(),
-        };
-
-        // We call `validate_prepared_transactions()` here because we need storage proof for transactions validation.
-        // Normally it is provided by chunk producer, but for shadow validation we need to generate it ourselves.
-        let Ok(validated_transactions) = validate_prepared_transactions(
-            &self,
-            runtime_adapter,
-            &chunk_header,
-            transactions_validation_storage_config,
-            chunk.transactions(),
-        ) else {
-            return Err(Error::Other(
-                "Could not produce storage proof for new transactions".to_owned(),
-            ));
-        };
-
         let witness = self.create_state_witness_inner(
             chunk_producer,
             prev_block_header,
             prev_chunk_header,
             chunk,
-            validated_transactions.storage_proof,
+            new_transactions_proof,
         )?;
         if save_to_disk {
             self.chain_store.save_latest_chunk_state_witness(&witness)?;

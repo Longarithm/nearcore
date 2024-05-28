@@ -1,18 +1,11 @@
-use std::collections::HashMap;
-
 use near_async::messaging::{CanSend, IntoSender};
-use near_chain::{BlockHeader, Chain, ChainStoreAccess};
+use near_chain::BlockHeader;
 use near_chain_primitives::Error;
-use near_o11y::log_assert_fail;
 use near_primitives::challenge::PartialState;
 use near_primitives::checked_feature;
-use near_primitives::hash::{hash, CryptoHash};
-use near_primitives::receipt::Receipt;
-use near_primitives::sharding::{ChunkHash, ReceiptProof, ShardChunk, ShardChunkHeader};
-use near_primitives::stateless_validation::{
-    ChunkStateTransition, ChunkStateWitness, StoredChunkStateTransitionData,
-};
-use near_primitives::types::{AccountId, EpochId};
+use near_primitives::sharding::{ShardChunk, ShardChunkHeader};
+use near_primitives::stateless_validation::StoredChunkStateTransitionData;
+use near_primitives::types::EpochId;
 
 use crate::stateless_validation::chunk_validator::send_chunk_endorsement_to_block_producers;
 use crate::Client;
