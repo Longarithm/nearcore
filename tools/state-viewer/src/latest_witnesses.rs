@@ -1,6 +1,8 @@
+use std::collections::HashSet;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::str::FromStr;
 
 use clap::Parser;
 use near_async::time::Clock;
@@ -10,8 +12,10 @@ use near_chain::types::{RuntimeStorageConfig, StorageDataSource};
 use near_chain::{Chain, ChainGenesis, ChainStore, DoomslugThresholdMode};
 use near_epoch_manager::shard_tracker::{ShardTracker, TrackedConfig};
 use near_epoch_manager::EpochManager;
+use near_primitives::challenge::PartialState;
 use near_primitives::stateless_validation::ChunkStateWitness;
 use near_primitives::types::EpochId;
+use near_primitives_core::hash::{hash, CryptoHash};
 use near_store::Store;
 use nearcore::NearConfig;
 use nearcore::NightshadeRuntimeExt;
@@ -101,6 +105,14 @@ impl RegenerateWitnessCmd {
                 false,
             )
             .unwrap();
+
+        let PartialState::TrieValues(nodes) =
+            witness.main_state_transition.base_state.clone().unwrap();
+        let node_hashes = nodes.iter().map(|x| hash(x)).collect::<HashSet<_>>();
+        let target_hash =
+            CryptoHash::from_str("13EF3sGuQm3RUqEG1DYt8yXHT37L3sH1xScL6oRopZDX").unwrap();
+        println!("SEARCH {}", node_hashes.contains(&target_hash));
+
         println!("{:?}", borsh::to_vec(&witness).unwrap());
     }
 }

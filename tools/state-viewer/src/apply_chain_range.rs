@@ -9,6 +9,7 @@ use near_chain::{ChainStore, ChainStoreAccess, ChainStoreUpdate};
 use near_chain_configs::Genesis;
 use near_epoch_manager::{EpochManagerAdapter, EpochManagerHandle};
 use near_primitives::apply::ApplyChunkReason;
+use near_primitives::challenge::PartialState;
 use near_primitives::receipt::DelayedReceiptIndices;
 use near_primitives::stateless_validation::StoredChunkStateTransitionData;
 use near_primitives::transaction::{Action, ExecutionOutcomeWithId, ExecutionOutcomeWithProof};
@@ -16,12 +17,15 @@ use near_primitives::trie_key::TrieKey;
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{BlockHeight, ShardId};
 use near_primitives::utils::get_block_shard_id;
+use near_primitives_core::hash::{hash, CryptoHash};
 use near_store::flat::{BlockInfo, FlatStateChanges, FlatStorageStatus};
 use near_store::{DBCol, Store};
 use nearcore::NightshadeRuntime;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -340,6 +344,12 @@ fn apply_block_from_range(
         .unwrap()
         .unwrap()
         .to_vec();
+
+    let PartialState::TrieValues(nodes) = apply_result.proof.clone().unwrap().nodes;
+    let node_hashes = nodes.iter().map(|x| hash(x)).collect::<HashSet<_>>();
+    let target_hash = CryptoHash::from_str("13EF3sGuQm3RUqEG1DYt8yXHT37L3sH1xScL6oRopZDX").unwrap();
+    println!("SEARCH {}", node_hashes.contains(&target_hash));
+
     if ser_ssd != real_ssd {
         println!("NEW SSD DISCOVERED");
         let mut chain_store_update = chain_store.store_update();
