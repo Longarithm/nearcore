@@ -296,8 +296,8 @@ fn apply_block_from_range(
         apply_result.congestion_info,
     );
     let ssd = StoredChunkStateTransitionData {
-        base_state: apply_result.proof.unwrap().nodes,
-        receipts_hash: apply_result.applied_receipts_hash,
+        base_state: apply_result.proof.clone().unwrap().nodes,
+        receipts_hash: apply_result.applied_receipts_hash.clone(),
     };
 
     let state_update =
@@ -341,7 +341,14 @@ fn apply_block_from_range(
         .unwrap()
         .to_vec();
     if ser_ssd != real_ssd {
-        panic!("SSD fail");
+        println!("NEW SSD DISCOVERED");
+        let mut chain_store_update = chain_store.store_update();
+        chain_store_update.save_state_transition_data(
+            *block_hash,
+            shard_id,
+            apply_result.proof,
+            apply_result.applied_receipts_hash,
+        );
     }
 
     maybe_add_to_csv(

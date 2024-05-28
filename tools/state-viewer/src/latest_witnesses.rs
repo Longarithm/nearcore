@@ -5,7 +5,9 @@ use std::rc::Rc;
 use clap::Parser;
 use near_async::time::Clock;
 use near_chain::runtime::NightshadeRuntime;
-use near_chain::{Chain, ChainGenesis, ChainStore, DoomslugThresholdMode};
+use near_chain::stateless_validation::state_witness::validate_prepared_transactions;
+use near_chain::types::{RuntimeStorageConfig, StorageDataSource};
+use near_chain::{Chain, ChainGenesis, ChainStore, DoomslugThresholdMode, Error};
 use near_epoch_manager::shard_tracker::{ShardTracker, TrackedConfig};
 use near_epoch_manager::EpochManager;
 use near_primitives::stateless_validation::ChunkStateWitness;
@@ -17,6 +19,8 @@ use nearcore::NightshadeRuntimeExt;
 #[derive(clap::Subcommand)]
 pub enum StateWitnessCmd {
     /// Prints latest state witnesses saved to DB.
+    Create(CreateWitnessCmd),
+    /// Prints latest state witnesses saved to DB.
     Latest(LatestWitnessesCmd),
     /// Validates given state witness and hangs.
     Validate(ValidateWitnessCmd),
@@ -25,9 +29,87 @@ pub enum StateWitnessCmd {
 impl StateWitnessCmd {
     pub(crate) fn run(&self, home_dir: &Path, near_config: NearConfig, store: Store) {
         match self {
+            StateWitnessCmd::Create(cmd) => cmd.run(home_dir, near_config, store),
             StateWitnessCmd::Latest(cmd) => cmd.run(near_config, store),
             StateWitnessCmd::Validate(cmd) => cmd.run(home_dir, near_config, store),
         }
+    }
+}
+
+pub struct CreateWitnessCmd {
+    /// Block height
+    #[arg(long)]
+    height: u64,
+    /// Shard id
+    #[arg(long)]
+    shard_id: u64,
+}
+
+impl CreateWitnessCmd {
+    pub(crate) fn run(&self, home_dir: &Path, near_config: NearConfig, store: Store) {
+        let chain_genesis = ChainGenesis::new(&near_config.genesis.config);
+        let epoch_manager =
+            EpochManager::new_arc_handle(store.clone(), &near_config.genesis.config);
+        let runtime_adapter =
+            NightshadeRuntime::from_config(home_dir, store, &near_config, epoch_manager.clone())
+                .expect("could not create the transaction runtime");
+        let shard_tracker = ShardTracker::new(
+            TrackedConfig::from_config(&near_config.client_config),
+            epoch_manager.clone(),
+        );
+
+        // TODO(stateless_validation): consider using `ChainStore` instead of
+        // `Chain`.
+        let mut chain = Chain::new_for_view_client(
+            Clock::real(),
+            epoch_manager.clone(),
+            shard_tracker,
+            runtime_adapter.clone(),
+            &chain_genesis,
+            DoomslugThresholdMode::TwoThirds,
+            false,
+        )
+        .unwrap();
+
+        let block = chain.get_block_by_height(self.height).unwrap();
+        let prev_block = chain.get_block(block.header().prev_hash())?;
+        let chunk_header =
+            block.chunks().iter().find(|chunk| chunk.shard_id() == self.shard_id).unwrap();
+        let chunk = chain.get_chunk_clone_from_header(chunk_header)?;
+        let prev_chunk_header =
+            prev_block.chunks().iter().find(|chunk| chunk.shard_id() == self.shard_id).unwrap();
+
+        let chunk_header = chunk.cloned_header();
+        let transactions_validation_storage_config = RuntimeStorageConfig {
+            state_root: chunk_header.prev_state_root(),
+            use_flat_storage: true,
+            source: StorageDataSource::Db,
+            state_patch: Default::default(),
+        };
+
+        // We call `validate_prepared_transactions()` here because we need storage proof for transactions validation.
+        // Normally it is provided by chunk producer, but for shadow validation we need to generate it ourselves.
+        let Ok(validated_transactions) = validate_prepared_transactions(
+            &chain,
+            runtime_adapter.as_ref(),
+            &chunk_header,
+            transactions_validation_storage_config,
+            chunk.transactions(),
+        ) else {
+            panic!("Could not produce storage proof for new transactions".to_owned());
+        };
+
+        chain
+            .create_and_save_state_witness(
+                // Doesn't matter if used for testing.
+                "alice.near".parse().unwrap(),
+                prev_block.header(),
+                prev_chunk_header,
+                &chunk,
+                validated_transactions.storage_proof,
+                true,
+            )
+            .unwrap();
     }
 }
 

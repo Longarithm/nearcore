@@ -4,7 +4,6 @@ use near_chain_primitives::Error;
 use near_primitives::challenge::PartialState;
 use near_primitives::checked_feature;
 use near_primitives::sharding::{ShardChunk, ShardChunkHeader};
-use near_primitives::stateless_validation::StoredChunkStateTransitionData;
 use near_primitives::types::EpochId;
 
 use crate::stateless_validation::chunk_validator::send_chunk_endorsement_to_block_producers;
