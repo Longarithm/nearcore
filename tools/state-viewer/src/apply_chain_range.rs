@@ -318,7 +318,19 @@ fn apply_block_from_range(
                 println!("block_height: {}, block_hash: {}\nchunk_extra: {:#?}\nexisting_chunk_extra: {:#?}\noutcomes: {:#?}", height, block_hash, chunk_extra, existing_chunk_extra, apply_result.outcomes);
             }
             if !smart_equals(&existing_chunk_extra, &chunk_extra) {
-                panic!("Got a different ChunkExtra:\nblock_height: {}, block_hash: {}\nchunk_extra: {:#?}\nexisting_chunk_extra: {:#?}\nnew outcomes: {:#?}\n\nold outcomes: {:#?}\n", height, block_hash, chunk_extra, existing_chunk_extra, apply_result.outcomes, old_outcomes(store, &apply_result.outcomes));
+                panic!(
+                    "Got a different ChunkExtra:\n\
+                    block_height: {height}, \
+                    block_hash: {block_hash}\n\
+                    chunk_extra: {:#?}\n\
+                    existing_chunk_extra: {:#?}\n\
+                    new outcomes: {:#?}\n\n\
+                    old outcomes: {:#?}\n",
+                    chunk_extra,
+                    existing_chunk_extra,
+                    apply_result.outcomes.len(),
+                    old_outcomes(store, &apply_result.outcomes).len(),
+                );
             }
         }
         None => {
