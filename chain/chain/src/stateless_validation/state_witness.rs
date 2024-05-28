@@ -449,6 +449,7 @@ impl Chain {
             self.epoch_manager.get_epoch_id_from_prev_block(chunk_header.prev_block_hash())?;
         let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
         let prev_chunk_height_included = prev_chunk_header.height_included();
+        tracing::debug!(target: "chain", shard_id, prev_chunk_height_included, "collect_state_transition_data");
         let mut prev_blocks = self.get_blocks_until_height(
             *chunk_header.prev_block_hash(),
             prev_chunk_height_included,
