@@ -96,7 +96,7 @@ impl CreateWitnessCmd {
             transactions_validation_storage_config,
             chunk.transactions(),
         ) else {
-            panic!("Could not produce storage proof for new transactions".to_owned());
+            panic!("Could not produce storage proof for new transactions");
         };
 
         chain
