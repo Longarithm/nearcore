@@ -458,7 +458,17 @@ pub fn apply_chain_range(
     println!("Printing results including outcomes of applying receipts");
     let csv_file_mutex = Mutex::new(csv_file);
     maybe_add_to_csv(&csv_file_mutex, "Height,Hash,Author,#Tx,#Receipt,Timestamp,GasUsed,ChunkPresent,#ProcessedDelayedReceipts,#DelayedReceipts,#StateChanges");
-
+    {
+        let chain_store = ChainStore::new(store.clone(), genesis.config.genesis_height, false);
+        let final_head = chain_store.final_head().unwrap();
+        let shard_layout = epoch_manager.get_shard_layout(&final_head.epoch_id).unwrap();
+        let shard_uid = near_primitives::shard_layout::ShardUId::from_shard_id_and_layout(
+            shard_id,
+            &shard_layout,
+        );
+        let flat_storage_manager = runtime_adapter.get_flat_storage_manager();
+        flat_storage_manager.create_flat_storage_for_shard(shard_uid).unwrap();
+    }
     let range = start_height..=end_height;
     let progress_reporter = ProgressReporter {
         cnt: AtomicU64::new(0),
