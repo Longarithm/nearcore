@@ -344,7 +344,7 @@ fn apply_block_from_range(
         println!("NEW SSD DISCOVERED");
         let mut chain_store_update = chain_store.store_update();
         chain_store_update.save_state_transition_data(
-            *block_hash,
+            block_hash,
             shard_id,
             apply_result.proof,
             apply_result.applied_receipts_hash,

@@ -18,7 +18,7 @@ use nearcore::NightshadeRuntimeExt;
 
 #[derive(clap::Subcommand)]
 pub enum StateWitnessCmd {
-    /// Prints latest state witnesses saved to DB.
+    /// Creates state witness for given height and shard.
     Create(CreateWitnessCmd),
     /// Prints latest state witnesses saved to DB.
     Latest(LatestWitnessesCmd),
@@ -36,6 +36,7 @@ impl StateWitnessCmd {
     }
 }
 
+#[derive(Parser)]
 pub struct CreateWitnessCmd {
     /// Block height
     #[arg(long)]
@@ -72,10 +73,10 @@ impl CreateWitnessCmd {
         .unwrap();
 
         let block = chain.get_block_by_height(self.height).unwrap();
-        let prev_block = chain.get_block(block.header().prev_hash())?;
+        let prev_block = chain.get_block(block.header().prev_hash()).unwrap();
         let chunk_header =
             block.chunks().iter().find(|chunk| chunk.shard_id() == self.shard_id).unwrap();
-        let chunk = chain.get_chunk_clone_from_header(chunk_header)?;
+        let chunk = chain.get_chunk_clone_from_header(chunk_header).unwrap();
         let prev_chunk_header =
             prev_block.chunks().iter().find(|chunk| chunk.shard_id() == self.shard_id).unwrap();
 
