@@ -106,8 +106,7 @@ impl RegenerateWitnessCmd {
             )
             .unwrap();
 
-        let PartialState::TrieValues(nodes) =
-            witness.main_state_transition.base_state.clone().unwrap();
+        let PartialState::TrieValues(nodes) = witness.main_state_transition.base_state.clone();
         let node_hashes = nodes.iter().map(|x| hash(x)).collect::<HashSet<_>>();
         let target_hash =
             CryptoHash::from_str("13EF3sGuQm3RUqEG1DYt8yXHT37L3sH1xScL6oRopZDX").unwrap();
