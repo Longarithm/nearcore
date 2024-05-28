@@ -162,8 +162,6 @@ impl LatestWitnessesCmd {
                 println!("{:#?}", witness);
             } else if self.binary {
                 println!("{:?}", borsh::to_vec(witness).unwrap());
-            } else {
-                println!("{:?}", witness);
             }
             println!("");
         }
