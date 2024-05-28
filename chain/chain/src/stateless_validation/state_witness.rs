@@ -457,6 +457,7 @@ impl Chain {
         )?;
         prev_blocks.reverse();
         let (main_block, implicit_blocks) = prev_blocks.split_first().unwrap();
+        println!("STATE TRANSITION KEY = ({}, {})", main_block, shard_id);
         let (base_state, receipts_hash) = if prev_chunk_header.is_genesis() {
             (Default::default(), hash(&borsh::to_vec::<[Receipt]>(&[]).unwrap()))
         } else {
