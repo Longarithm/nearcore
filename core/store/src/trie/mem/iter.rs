@@ -186,6 +186,7 @@ impl<'a> MemTrieIterator<'a> {
         let node = ptr.map(|ptr| {
             let view = ptr.view();
             if let Some(recorder) = &self.trie.recorder {
+                println!("NODE {:?}", view.node_hash());
                 let raw_node_serialized =
                     borsh::to_vec(&view.to_raw_trie_node_with_size()).unwrap();
                 recorder.borrow_mut().record(&view.node_hash(), raw_node_serialized.into());
