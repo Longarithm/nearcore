@@ -1717,10 +1717,6 @@ impl ShardsManagerActor {
 
             self.complete_chunk(partial_chunk, None);
             return Ok(ProcessPartialEncodedChunkResult::HaveAllPartsAndReceipts);
-        } else {
-            if have_all_parts {
-                println!("FUN!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-            }
         }
 
         // If we can reconstruct the chunk, then all parts and receipts are available so we can
