@@ -1,6 +1,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
 use actix::{Addr, System};
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -12,6 +13,7 @@ use crate::{ClientActor, Query};
 use near_actix_test_utils::run_actix;
 use near_chain::test_utils::{account_id_to_shard_id, ValidatorSchedule};
 use near_chain_configs::TEST_STATE_SYNC_TIMEOUT;
+use near_client_primitives::types::GetBlock;
 use near_crypto::{InMemorySigner, KeyType};
 use near_network::client::ProcessTxRequest;
 use near_network::types::PeerInfo;
@@ -23,7 +25,9 @@ use near_primitives::network::PeerId;
 use near_primitives::receipt::Receipt;
 use near_primitives::sharding::ChunkHash;
 use near_primitives::transaction::SignedTransaction;
-use near_primitives::types::{AccountId, BlockHeight, BlockHeightDelta, BlockReference};
+use near_primitives::types::{
+    AccountId, BlockHeight, BlockHeightDelta, BlockId, BlockReference, EpochId,
+};
 use near_primitives::views::QueryRequest;
 use near_primitives::views::QueryResponseKind::ViewAccount;
 
@@ -787,30 +791,113 @@ fn test_all_chunks_accepted_common(
                         ));
                     }
                 }
-                if let NetworkRequests::Block { block } = msg {
-                    // There is no chunks at height 1
-                    if block.header().height() > 1 {
-                        if block.header().height() % epoch_length != 1 {
-                            if block.header().chunks_included() != 4 {
-                                println!(
-                                    "BLOCK WITH {:?} CHUNKS, {:?}",
-                                    block.header().chunks_included(),
-                                    block
-                                );
-                                assert!(false);
-                            }
-                        }
-                        if block.header().height() == last_height {
-                            System::current().stop();
-                        }
-                    }
-                }
+                // if let NetworkRequests::Block { block } = msg {
+                //     // There is no chunks at height 1
+                //     if block.header().height() > 1 {
+                //         if block.header().height() % epoch_length != 1 {
+                //             if block.header().chunks_included() != 4 {
+                //                 println!(
+                //                     "BLOCK WITH {:?} CHUNKS, {:?}",
+                //                     block.header().chunks_included(),
+                //                     block
+                //                 );
+                //                 assert!(false);
+                //             }
+                //         }
+                //         if block.header().height() == last_height {
+                //             System::current().stop();
+                //         }
+                //     }
+                // }
                 (NetworkResponses::NoResponse.into(), true)
             }),
         );
         *connectors.write().unwrap() = conn;
-        let max_wait_ms = block_prod_time * last_height / 10 * 18 + 20000;
 
-        near_network::test_utils::wait_or_panic(max_wait_ms);
+        let max_wait_ms = block_prod_time * last_height / 10 * 18 + 20000;
+        // near_network::test_utils::wait_or_panic(max_wait_ms);
+
+        let mut current_height = 0;
+        let view_client_loop = connectors.write().unwrap()[0].view_client_actor.clone();
+
+        let future = async move {
+            let start = Clock::real().now();
+            let heights = Arc::new(RwLock::new(HashMap::new()));
+            let heights1 = heights;
+
+            let height_to_hash = Arc::new(RwLock::new(HashMap::new()));
+            let height_to_epoch = Arc::new(RwLock::new(HashMap::new()));
+
+            let check_heights = move |prev_hash: &CryptoHash, hash: &CryptoHash, height| {
+                let mut map = heights1.write().unwrap();
+                // Note that height of the previous block is not guaranteed to be height
+                // - 1.  All we know is that it’s less than height of the current block.
+                if let Some(prev_height) = map.get(prev_hash) {
+                    assert!(*prev_height < height);
+                }
+                assert_eq!(*map.entry(*hash).or_insert(height), height);
+            };
+
+            while current_height < last_height {
+                let duration = start.elapsed();
+                if duration >= Duration::from_millis(max_wait_ms) {
+                    panic!("Exceeded timeout = {max_wait_ms} ms.");
+                }
+
+                let Ok(block) = view_client_loop
+                    .send(
+                        GetBlock(BlockReference::BlockId(BlockId::Height(current_height)))
+                            .with_span_context(),
+                    )
+                    .await
+                    .unwrap()
+                else {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    continue;
+                };
+
+                assert_eq!(block.header.height, current_height);
+                current_height += 1;
+
+                let h = block.header.height;
+                check_heights(&block.header.prev_hash, &block.header.hash, h);
+
+                let mut height_to_hash = height_to_hash.write().unwrap();
+                height_to_hash.insert(h, block.header.hash);
+
+                let mut height_to_epoch = height_to_epoch.write().unwrap();
+                height_to_epoch.insert(h, EpochId(block.header.epoch_id));
+
+                let block_producer = block.author;
+                println!(
+                    "[{:?}]: BLOCK {} PRODUCER {} HEIGHT {}; CHUNK HEADER HEIGHTS: {} / {} / {} / {};\nAPPROVALS: {:?}",
+                    Instant::now(),
+                    block.header.hash,
+                    block_producer,
+                    block.header.height,
+                    block.chunks[0].height_created,
+                    block.chunks[1].height_created,
+                    block.chunks[2].height_created,
+                    block.chunks[3].height_created,
+                    block.header.approvals,
+                );
+
+                if h <= 1 || h % epoch_length != 1 {
+                    // For the first two blocks we may not have any chunks yet.
+                    continue;
+                }
+
+                for shard_id in 0..4 {
+                    assert_eq!(
+                        h, block.chunks[shard_id].height_created,
+                        "New chunk at height {h} for shard {shard_id} wasn't included by {block_producer}"
+                    );
+                }
+            }
+
+            System::current().stop();
+        };
+
+        actix::spawn(future);
     });
 }
