@@ -527,6 +527,22 @@ fn test_stateless_validators_with_multi_test_loop() {
                 block.header().chunk_mask(),
                 &(0..NUM_SHARDS).map(|_| true).collect::<Vec<_>>()
             );
+            let epoch_id = block.header().epoch_id().clone();
+            if data.account == "account0" {
+                for height in 10002..=10010 {
+                    for shard_id in 0..4 {
+                        println!(
+                            "{shard_id} {height} {:?}",
+                            chain
+                                .epoch_manager
+                                .get_chunk_validator_assignments(&epoch_id, shard_id, height)
+                                .unwrap()
+                                .ordered_chunk_validators()
+                        );
+                    }
+                }
+            }
+            panic!("lol");
         })
     }
     test.run_instant();
