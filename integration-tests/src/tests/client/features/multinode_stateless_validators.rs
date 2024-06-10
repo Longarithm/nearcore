@@ -221,6 +221,7 @@ fn test_stateless_validators_with_multi_test_loop() {
         .transaction_validity_period(1000)
         .epoch_length(EPOCH_LENGTH)
         .validators_desired_roles(&block_and_chunk_producers, &chunk_validators_only)
+        .target_validator_mandates_per_shard(1)
         .shuffle_shard_assignment_for_chunk_producers(true);
     for account in &accounts {
         genesis_builder.add_user_account_simple(account.clone(), initial_balance);
