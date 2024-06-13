@@ -317,15 +317,18 @@ pub fn migrate_38_to_39(store: &Store) -> anyhow::Result<()> {
 
     // Update EpochSummary
     println!("Migrating epoch summary");
+    let mut corruption = false;
     for result in store.iter(DBCol::EpochValidatorInfo) {
-        println!("Migrating epoch summary entry");
+        // println!("Migrating epoch summary entry");
         let (key, old_value) = result?;
-        println!(
-            "Migrating epoch summary entry {:?} {:?}",
-            key,
-            CryptoHash(key.to_vec().try_into().unwrap())
-        );
-        let legacy_summary = LegacyEpochSummary::try_from_slice(&old_value)?;
+        let legacy_summary = match LegacyEpochSummary::try_from_slice(&old_value) {
+            Ok(summary) => summary,
+            Err(e) => {
+                println!("CORRUPTION FOR {:?}", CryptoHash(key.to_vec().try_into().unwrap()));
+                corruption = true;
+                continue;
+            }
+        };
         println!("Deserialized epoch summary entry");
         let new_value = EpochSummary {
             prev_epoch_last_block_hash: legacy_summary.prev_epoch_last_block_hash,
@@ -349,6 +352,9 @@ pub fn migrate_38_to_39(store: &Store) -> anyhow::Result<()> {
         };
         println!("Setting new epoch summary entry");
         update.set(DBCol::EpochValidatorInfo, &key, &borsh::to_vec(&new_value)?);
+    }
+    if corruption {
+        panic!("lol");
     }
 
     update.commit()?;
