@@ -318,18 +318,24 @@ pub fn migrate_38_to_39(store: &Store) -> anyhow::Result<()> {
     // Update EpochSummary
     println!("Migrating epoch summary");
     let mut corruption = false;
+    let mut lens = vec![];
     for result in store.iter(DBCol::EpochValidatorInfo) {
         // println!("Migrating epoch summary entry");
         let (key, old_value) = result?;
+        let len = old_value.len();
+        lens.push(len);
         let legacy_summary = match LegacyEpochSummary::try_from_slice(&old_value) {
             Ok(summary) => summary,
             Err(e) => {
-                println!("CORRUPTION FOR {:?}", CryptoHash(key.to_vec().try_into().unwrap()));
+                println!(
+                    "CORRUPTION FOR {:?} | len = {len} e = {e}",
+                    CryptoHash(key.to_vec().try_into().unwrap())
+                );
                 corruption = true;
                 continue;
             }
         };
-        println!("Deserialized epoch summary entry");
+        // println!("Deserialized epoch summary entry");
         let new_value = EpochSummary {
             prev_epoch_last_block_hash: legacy_summary.prev_epoch_last_block_hash,
             all_proposals: legacy_summary.all_proposals,
@@ -350,10 +356,11 @@ pub fn migrate_38_to_39(store: &Store) -> anyhow::Result<()> {
                 .collect(),
             next_next_epoch_version: legacy_summary.next_version,
         };
-        println!("Setting new epoch summary entry");
+        // println!("Setting new epoch summary entry");
         update.set(DBCol::EpochValidatorInfo, &key, &borsh::to_vec(&new_value)?);
     }
     if corruption {
+        println!("{}", lens.iter().sum::<usize>() / lens.len());
         panic!("lol");
     }
 
