@@ -320,7 +320,11 @@ pub fn migrate_38_to_39(store: &Store) -> anyhow::Result<()> {
     for result in store.iter(DBCol::EpochValidatorInfo) {
         println!("Migrating epoch summary entry");
         let (key, old_value) = result?;
-        println!("Migrating epoch summary entry {:?}", key);
+        println!(
+            "Migrating epoch summary entry {:?} {:?}",
+            key,
+            CryptoHash(key.to_vec().try_into().unwrap())
+        );
         let legacy_summary = LegacyEpochSummary::try_from_slice(&old_value)?;
         println!("Deserialized epoch summary entry");
         let new_value = EpochSummary {
