@@ -284,6 +284,7 @@ pub fn migrate_38_to_39(store: &Store) -> anyhow::Result<()> {
     let mut update = store.store_update();
 
     // Update EpochInfoAggregator
+    println!("Migrating epoch info aggregator");
     let maybe_legacy_aggregator: Option<LegacyEpochInfoAggregator> =
         store.get_ser(DBCol::EpochInfo, AGGREGATOR_KEY)?;
     if let Some(legacy_aggregator) = maybe_legacy_aggregator {
@@ -310,13 +311,18 @@ pub fn migrate_38_to_39(store: &Store) -> anyhow::Result<()> {
             epoch_id: legacy_aggregator.epoch_id,
             last_block_hash: legacy_aggregator.last_block_hash,
         };
+        println!("Setting new aggregator");
         update.set_ser(DBCol::EpochInfo, AGGREGATOR_KEY, &new_aggregator)?;
     }
 
     // Update EpochSummary
+    println!("Migrating epoch summary");
     for result in store.iter(DBCol::EpochValidatorInfo) {
+        println!("Migrating epoch summary entry");
         let (key, old_value) = result?;
+        println!("Migrating epoch summary entry {:?}", key);
         let legacy_summary = LegacyEpochSummary::try_from_slice(&old_value)?;
+        println!("Deserialized epoch summary entry");
         let new_value = EpochSummary {
             prev_epoch_last_block_hash: legacy_summary.prev_epoch_last_block_hash,
             all_proposals: legacy_summary.all_proposals,
@@ -337,6 +343,7 @@ pub fn migrate_38_to_39(store: &Store) -> anyhow::Result<()> {
                 .collect(),
             next_next_epoch_version: legacy_summary.next_version,
         };
+        println!("Setting new epoch summary entry");
         update.set(DBCol::EpochValidatorInfo, &key, &borsh::to_vec(&new_value)?);
     }
 
