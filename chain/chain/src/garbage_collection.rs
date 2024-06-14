@@ -182,6 +182,17 @@ impl ChainStore {
             chain_store_update.commit()?;
         }
 
+        let flat_storage_manager = runtime_adapter.get_flat_storage_manager();
+        let shard_uids = flat_storage_manager.get_shard_uids();
+        for shard_uid in shard_uids {
+            let mut store_update = self.store_update();
+            let Some(flat_storage) = flat_storage_manager.get_flat_storage_for_shard(shard_uid) else {
+                continue;
+            };
+            flat_storage.update_flat_head()
+            store_update.commit()?;
+        }
+        
         // Canonical Chain Clearing
         for height in tail + 1..gc_stop_height {
             if gc_blocks_remaining == 0 {
