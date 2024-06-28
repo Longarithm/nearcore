@@ -42,8 +42,8 @@ import cluster
 from configured_logger import logger
 import utils
 
-EPOCH_LENGTH = 20
-TARGET_HEIGHT = 20 * EPOCH_LENGTH
+EPOCH_LENGTH = 10
+TARGET_HEIGHT = 10 * EPOCH_LENGTH
 
 _DurationMaybe = typing.Optional[datetime.timedelta]
 
@@ -155,6 +155,7 @@ def get_all_blocks(node: cluster.BaseNode) -> typing.Sequence[cluster.BlockId]:
         block = node.get_block(block_hash)
         assert 'result' in block, block
         header = block['result']['header']
+        print(block_hash, header['height'])
         ids.append(cluster.BlockId.from_header(header))
         block_hash = header.get('prev_hash')
     return list(reversed(ids))
@@ -164,6 +165,7 @@ def run_test(cluster: Cluster) -> None:
     # Start the validator and the first observer.  Wait until the observer
     # synchronises a few epoch’s worth of blocks to be generated and then kill
     # validator so no more blocks are generated.
+    logger.info('Stage 1: Generating blocks')
     boot = cluster.start_node(0, boot_node=None)
     fred = cluster.start_node(1, boot_node=boot)
     utils.wait_for_blocks(fred, target=TARGET_HEIGHT, poll_interval=1)
@@ -180,6 +182,7 @@ def run_test(cluster: Cluster) -> None:
     fred.kill(gentle=True)
     fred.start()
 
+    logger.info('Stage 2: Syncing blocks')
     barney = cluster.start_node(2, boot_node=fred)
     utils.wait_for_blocks(barney,
                           target=fred_blocks[-1].height,
