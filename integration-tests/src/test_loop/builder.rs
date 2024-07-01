@@ -1,5 +1,4 @@
-use std::sync::{Arc, Mutex, RwLock};
-
+use itertools::Itertools;
 use near_async::futures::FutureSpawner;
 use near_async::messaging::{noop, IntoMultiSender, IntoSender, LateBoundSender};
 use near_async::test_loop::sender::TestLoopSender;
@@ -35,6 +34,7 @@ use near_store::test_utils::create_test_store;
 use near_store::{StoreConfig, TrieConfig};
 use near_vm_runner::{ContractRuntimeCache, FilesystemContractRuntimeCache};
 use nearcore::state_sync::StateSyncDumper;
+use std::sync::{Arc, Mutex, RwLock};
 use tempfile::TempDir;
 
 use super::env::{ClientToShardsManagerSender, TestData, TestLoopChunksStorage, TestLoopEnv};
@@ -47,6 +47,8 @@ pub struct TestLoopBuilder {
     chunks_storage: Arc<Mutex<TestLoopChunksStorage>>,
     /// Whether test loop should drop all chunks validated by the given account.
     drop_chunks_validated_by: Option<AccountId>,
+    /// Whether clients must track all shards.
+    track_all_shards: bool,
     gc: bool,
 }
 
@@ -58,6 +60,7 @@ impl TestLoopBuilder {
             clients: vec![],
             chunks_storage: Default::default(),
             drop_chunks_validated_by: None,
+            track_all_shards: false,
             gc: true,
         }
     }
@@ -81,6 +84,11 @@ impl TestLoopBuilder {
 
     pub fn drop_chunks_validated_by(mut self, account_id: &str) -> Self {
         self.drop_chunks_validated_by = Some(account_id.parse().unwrap());
+        self
+    }
+
+    pub fn track_all_shards(mut self) -> Self {
+        self.track_all_shards = true;
         self
     }
 
@@ -158,7 +166,11 @@ impl TestLoopBuilder {
                 num_concurrent_requests_during_catchup: 1,
             }),
         };
-        client_config.tracked_shards = Vec::new();
+        client_config.tracked_shards = if self.track_all_shards {
+            genesis.config.shard_layout.shard_ids().collect_vec()
+        } else {
+            vec![]
+        };
 
         let homedir = tempdir.path().join(format!("{}", idx));
         std::fs::create_dir_all(&homedir).expect("Unable to create homedir");
