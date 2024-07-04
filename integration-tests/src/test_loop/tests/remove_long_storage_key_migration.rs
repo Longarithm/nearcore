@@ -83,12 +83,22 @@ fn run() {
     let success_condition = |test_loop_data: &mut TestLoopData| -> bool {
         let client = &test_loop_data.get(&client_handle).client;
         let tip = client.chain.head().unwrap();
-        let pv = client.epoch_manager.get_epoch_protocol_version(&tip.epoch_id).unwrap();
-        // println!("{} {}", tip.height, pv);
-        return false;
+        let prev_epoch_id =
+            client.epoch_manager.get_prev_epoch_id_from_prev_block(&tip.prev_block_hash).unwrap();
+        let pv = client.epoch_manager.get_epoch_protocol_version(&prev_epoch_id).unwrap();
+        return pv == target_protocol_version;
     };
 
     test_loop.run_until(success_condition, Duration::seconds(60));
+
+    let tip = rpc.chain.head().unwrap();
+    let block = rpc.chain.get_block(&tip.last_block_hash).unwrap();
+    let prev_state_root = block.chunks().get(1).unwrap().prev_state_root();
+    let trie = rpc
+        .runtime_adapter
+        .get_view_trie_for_shard(1, &tip.prev_block_hash, prev_state_root)
+        .unwrap();
+    println!("{:?}", get_account(&trie, &contract_id));
 
     TestLoopEnv { test_loop, datas: node_datas, tempdir }
         .shutdown_and_drain_remaining_events(Duration::seconds(20));
