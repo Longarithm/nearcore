@@ -166,12 +166,6 @@ impl MemTrieNodeId {
         // will be computed later in parallel.
         let data = match node {
             InputMemTrieNode::Leaf { value, extension } => {
-                if let FlatStateValue::Inlined(vec) = &value {
-                    if vec.len() > 8000 {
-                        println!("Large inlined value: {:?} hash {} bytes", node_hash, vec.len());
-                    }
-                }
-
                 let extension_header = EncodedExtensionHeader::from_input(&extension);
                 let value_header = EncodedValueHeader::from_input(&value);
                 let mut data = RawEncoder::new(
@@ -219,12 +213,6 @@ impl MemTrieNodeId {
                 data.finish()
             }
             InputMemTrieNode::BranchWithValue { children, value } => {
-                if let FlatStateValue::Inlined(vec) = &value {
-                    if vec.len() > 8000 {
-                        println!("Large inlined value: {:?} hash {} bytes", node_hash, vec.len());
-                    }
-                }
-
                 let children_header = EncodedChildrenHeader::from_input(&children);
                 let value_header = EncodedValueHeader::from_input(&value);
                 let mut data = RawEncoder::new(
