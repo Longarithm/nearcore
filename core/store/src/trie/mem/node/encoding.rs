@@ -157,6 +157,9 @@ impl MemTrieNodeId {
                     extension: extension_header,
                     value: value_header,
                 });
+                if extension_header.flexible_data_length() > 8000 {
+                    println!("Large extension: {:?} hash {} bytes", node_hash, extension.len());
+                }
                 data.encode_flexible(&extension_header, extension);
                 data.encode_flexible(&value_header, &value);
                 data.finish()
@@ -177,6 +180,9 @@ impl MemTrieNodeId {
                     child: child.pos,
                     extension: extension_header,
                 });
+                if extension_header.flexible_data_length() > 8000 {
+                    println!("Large extension: {:?} hash {} bytes", node_hash, extension.len());
+                }
                 data.encode_flexible(&extension_header, extension);
                 data.finish()
             }
