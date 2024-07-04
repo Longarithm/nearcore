@@ -5,6 +5,7 @@ use crate::trie::mem::node::InputMemTrieNode;
 use crate::NibbleSlice;
 use near_primitives::state::FlatStateValue;
 use smallvec::SmallVec;
+use std::io::Read;
 
 /// Algorithm to construct a trie from a given stream of sorted leaf values.
 ///
@@ -72,6 +73,7 @@ pub struct TrieConstructor<'a, A: Arena> {
 /// A segment of the rightmost path of the trie under construction, as
 /// described above. Ultimately, a segment is turned into a node when it's
 /// no longer part of the rightmost path.
+#[derive(Debug)]
 struct TrieConstructionSegment {
     /// Always determined at the beginning. If true, this is a branch node,
     /// possibly with value; if not, this is either leaf or extension node.
@@ -207,6 +209,10 @@ impl<'a, A: Arena> TrieConstructor<'a, A> {
     /// Encodes the bottom-most segment into a node, and pops it off the stack.
     fn pop_segment(&mut self) {
         let segment = self.segments.pop().unwrap();
+        if segment.trail.len() > 8000 {
+            let trail = &segment.trail.vec[..10];
+            println!("Long trail found: {:?}... | Segments: {:?}", &trail, self.segments);
+        }
         let node = segment.to_node(self.arena);
         self.recycle_segment(segment);
         let parent = self.segments.last_mut().unwrap();

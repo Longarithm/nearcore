@@ -17,8 +17,9 @@ pub struct VecU8Freelist {
 
 /// A wrapper around `Vec<u8>` that makes it harder to accidentally drop it
 /// without returning it to the freelist.
+#[derive(Debug)]
 pub struct ReusableVecU8 {
-    vec: Vec<u8>,
+    pub vec: Vec<u8>,
 }
 
 impl Deref for ReusableVecU8 {
