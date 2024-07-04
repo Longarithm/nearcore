@@ -1,7 +1,12 @@
-use near_structs_checker_core::collect_protocol_structs;
+use near_structs_checker::ProtocolStruct;
+use std::hash::Hash;
+
+#[derive(Debug, ProtocolStruct)]
+pub struct CryptoHash(pub [u8; 32]);
 
 fn main() {
-    let protocol_structs = collect_protocol_structs();
-    let json = serde_json::to_string_pretty(&protocol_structs).unwrap();
-    std::fs::write("protocol_structs.json", json).unwrap();
+    println!("{:?}", "Hello world");
+    // let json = serde_json::to_string_pretty(&protocol_structs).unwrap();
+    // std::fs::write("protocol_structs.json", json).unwrap();
+    // println!("{:?}", CryptoHash);
 }

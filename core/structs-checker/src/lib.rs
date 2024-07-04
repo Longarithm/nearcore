@@ -1,69 +1,71 @@
+use near_structs_checker_core::{register_protocol_struct, ProtocolStructInfo};
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
+use std::collections::BTreeMap;
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
+
+fn parse_protocol_struct(input: &DeriveInput) -> ProtocolStructInfo {
+    let name = input.ident.to_string();
+    let mut fields = BTreeMap::new();
+
+    match &input.data {
+        Data::Struct(data) => match &data.fields {
+            Fields::Named(named_fields) => {
+                for field in &named_fields.named {
+                    let field_name = field.ident.as_ref().unwrap().to_string();
+                    let field_type = field.ty.to_token_stream().to_string();
+                    fields.insert(field_name, field_type);
+                }
+            }
+            Fields::Unnamed(unnamed_fields) => {
+                for (index, field) in unnamed_fields.unnamed.iter().enumerate() {
+                    let field_name = index.to_string();
+                    let field_type = field.ty.to_token_stream().to_string();
+                    fields.insert(field_name, field_type);
+                }
+            }
+            Fields::Unit => {}
+        },
+        _ => panic!("ProtocolStruct can only be derived for structs"),
+    }
+
+    // Calculate hash (you may want to implement a more sophisticated hash function)
+    let hash = calculate_hash(&name, &fields);
+
+    ProtocolStructInfo { name, fields, hash }
+}
+
+fn calculate_hash(name: &str, fields: &BTreeMap<String, String>) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    name.hash(&mut hasher);
+    for (key, value) in fields {
+        key.hash(&mut hasher);
+        value.hash(&mut hasher);
+    }
+    hasher.finish()
+}
 
 #[proc_macro_derive(ProtocolStruct)]
 pub fn protocol_struct(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = &input.ident;
+    let info = parse_protocol_struct(&input);
 
-    // let fields = match &input.data {
-    //     Data::Struct(data) => &data.fields,
-    //     Data::Enum(_) => {
-    //         return TokenStream::from(quote! {
-    //             impl near_structs_checker_core::ProtocolStruct for #name {}
-    //         })
-    //     }
-    //     Data::Union(_) => panic!("ProtocolStruct cannot be derived for unions"),
-    // };
-    //
-    // let (field_infos, field_hashes) = match fields {
-    //     Fields::Named(fields) => {
-    //         fields.named.iter().map(|field| {
-    //             let field_name = field.ident.as_ref().unwrap().to_string();
-    //             let field_type = &field.ty;
-    //             let field_info = quote! {
-    //                 near_structs_checker_core::FieldInfo {
-    //                     name: #field_name.to_string(),
-    //                     type_name: <#field_type as near_structs_checker_core::ProtocolStruct>::type_name(),
-    //                     hash: <#field_type as near_structs_checker_core::ProtocolStruct>::calculate_hash(),
-    //                 }
-    //             };
-    //             let field_hash = quote! {
-    //                 <#field_type as near_structs_checker_core::ProtocolStruct>::calculate_hash().hash(&mut hasher);
-    //             };
-    //             (field_info, field_hash)
-    //         }).unzip()
-    //     },
-    //     Fields::Unnamed(_) => (vec![], vec![]),
-    //     Fields::Unit => (vec![], vec![]),
-    // };
-    //
-    // let expanded = quote! {
-    //     impl near_structs_checker_core::ProtocolStruct for #name {
-    //         fn calculate_hash() -> u64 {
-    //             let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    //             Self::type_name().hash(&mut hasher);
-    //             #(#field_hashes)*
-    //             hasher.finish()
-    //         }
-    //
-    //         fn get_info() -> near_structs_checker_core::ProtocolStructInfo {
-    //             near_structs_checker_core::ProtocolStructInfo {
-    //                 name: Self::type_name(),
-    //                 hash: Self::calculate_hash(),
-    //                 fields: vec![
-    //                     #(#field_infos),*
-    //                 ],
-    //             }
-    //         }
-    //     }
-    //
-    //     near_structs_checker_core::register_protocol_struct(<#name as near_structs_checker_core::ProtocolStruct>::get_info());
-    // };
+    println!("Inserting struct info for: {}", info.name);
+    register_protocol_struct(info.name.clone(), info.clone());
+
+    // Generate the implementation
+    let name = &input.ident;
+    let hash = info.hash;
 
     let expanded = quote! {
-        impl near_structs_checker_core::ProtocolStruct for #name {}
+        impl near_structs_checker_core::ProtocolStruct for #name {
+            fn calculate_hash() -> u64 {
+                #hash
+            }
+        }
     };
 
     TokenStream::from(expanded)

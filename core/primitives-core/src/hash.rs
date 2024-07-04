@@ -18,7 +18,6 @@ use std::io::Write;
     arbitrary::Arbitrary,
     borsh::BorshDeserialize,
     borsh::BorshSerialize,
-    ProtocolStruct,
 )]
 #[as_ref(forward)]
 #[as_mut(forward)]

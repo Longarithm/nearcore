@@ -4836,6 +4836,7 @@ version = "0.0.0"
 dependencies = [
  "once_cell",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -6194,8 +6195,8 @@ dependencies = [
 name = "protocol-schema-check"
 version = "0.0.0"
 dependencies = [
- "near-chain",
  "near-primitives",
+ "near-structs-checker",
  "near-structs-checker-core",
  "serde_json",
 ]

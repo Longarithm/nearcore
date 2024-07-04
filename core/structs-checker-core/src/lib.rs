@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::any::TypeId;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
 use once_cell::sync::Lazy;
@@ -13,11 +14,12 @@ pub struct FieldInfo {
     pub hash: u64,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+// Define the structure to hold protocol struct information
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ProtocolStructInfo {
     pub name: String,
+    pub fields: BTreeMap<String, String>,
     pub hash: u64,
-    pub fields: Vec<FieldInfo>,
 }
 
 pub trait ProtocolStruct {
@@ -29,10 +31,6 @@ pub trait ProtocolStruct {
         let mut hasher = DefaultHasher::new();
         Self::type_name().hash(&mut hasher);
         hasher.finish()
-    }
-
-    fn get_info() -> ProtocolStructInfo {
-        ProtocolStructInfo { name: Self::type_name(), hash: Self::calculate_hash(), fields: vec![] }
     }
 }
 
@@ -56,13 +54,22 @@ pub fn calculate_struct_hash<T: 'static>() -> u64 {
     hasher.finish()
 }
 
-static PROTOCOL_STRUCTS: Lazy<Mutex<Vec<ProtocolStructInfo>>> =
-    Lazy::new(|| Mutex::new(Vec::new()));
+pub type ProtocolStructs = BTreeMap<String, ProtocolStructInfo>;
 
-pub fn register_protocol_struct(info: ProtocolStructInfo) {
-    PROTOCOL_STRUCTS.lock().unwrap().push(info);
+struct ProtocolStructsWrapper(ProtocolStructs);
+
+static PROTOCOL_STRUCTS: Lazy<Mutex<ProtocolStructsWrapper>> =
+    Lazy::new(|| Mutex::new(ProtocolStructsWrapper(BTreeMap::new())));
+
+pub fn register_protocol_struct(name: String, info: ProtocolStructInfo) {
+    println!("Registering: {}", name);
+    PROTOCOL_STRUCTS.lock().unwrap().0.insert(name, info);
 }
 
-pub fn collect_protocol_structs() -> Vec<ProtocolStructInfo> {
-    PROTOCOL_STRUCTS.lock().unwrap().clone()
+impl Drop for ProtocolStructsWrapper {
+    fn drop(&mut self) {
+        println!("Size!: {}", self.0.len());
+        let json = serde_json::to_string_pretty(&self.0).unwrap();
+        std::fs::write("protocol_structs.json", json).unwrap();
+    }
 }
