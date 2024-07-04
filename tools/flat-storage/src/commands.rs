@@ -54,6 +54,7 @@ enum SubCommand {
 
     /// Move flat head forward.
     MoveFlatHead(MoveFlatHeadCmd),
+    Iterate(IterateCmd),
 }
 
 #[derive(Parser)]
@@ -129,6 +130,9 @@ pub struct MoveFlatHeadCmd {
     #[clap(subcommand)]
     mode: MoveFlatHeadMode,
 }
+
+#[derive(Parser)]
+pub struct IterateCmd;
 
 fn print_delta(store: &Store, shard_uid: ShardUId, metadata: FlatStateDeltaMetadata) {
     let changes =
@@ -593,6 +597,32 @@ impl FlatStorageCommand {
         Ok(())
     }
 
+    fn iterate(
+        &self,
+        home_dir: &PathBuf,
+        near_config: &NearConfig,
+        opener: StoreOpener,
+    ) -> anyhow::Result<()> {
+        let (_, epoch_manager, _, chain_store, hot_store) =
+            Self::get_db(&opener, home_dir, &near_config, near_store::Mode::ReadWriteExisting);
+
+        let tip = chain_store.final_head()?;
+        let shard_layout = epoch_manager.get_shard_layout(&tip.epoch_id)?;
+        for shard_uid in shard_layout.shard_uids() {
+            println!("Shard: {shard_uid:?}");
+            let flat_state_entries_iter =
+                store_helper::iter_flat_state_entries(shard_uid, &hot_store, None, None);
+            for item in flat_state_entries_iter {
+                let (key, _) = item?;
+                if key.len() > 4000 {
+                    let key_cut = &key[..100];
+                    println!("Key too long: {:?} | {:?}", key.len(), key_cut);
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn move_flat_head(
         &self,
         cmd: &MoveFlatHeadCmd,
@@ -657,6 +687,7 @@ impl FlatStorageCommand {
             SubCommand::MoveFlatHead(cmd) => {
                 self.move_flat_head(cmd, home_dir, &near_config, opener)
             }
+            SubCommand::Iterate(_) => self.iterate(home_dir, &near_config, opener),
         }
     }
 }
