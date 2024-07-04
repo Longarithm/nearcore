@@ -28,7 +28,7 @@ fn run() {
     let contract_id: AccountId = "contractregistry.testnet".parse().unwrap();
     let accounts = (0..3)
         .map(|i| format!("account{}", i).parse().unwrap())
-        .chain(vec![contract_id.clone()])
+        // .chain(vec![contract_id.clone()])
         .collect::<Vec<AccountId>>();
     let clients = accounts.clone();
     let accounts_str: Vec<_> = accounts.iter().map(|a| a.as_str()).collect();
