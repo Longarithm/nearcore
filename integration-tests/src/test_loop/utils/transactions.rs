@@ -135,6 +135,8 @@ pub fn call_contract(
     node_datas: &[TestData],
     sender_id: &AccountId,
     contract_id: &AccountId,
+    method_name: String,
+    args: Vec<u8>,
 ) -> CryptoHash {
     let block_hash = get_shared_block_hash(node_datas, test_loop);
 
@@ -142,14 +144,8 @@ pub fn call_contract(
     let nonce = 2;
     let signer = create_user_test_signer(sender_id);
 
-    let burn_gas = 250 * TGAS;
     let attach_gas = 300 * TGAS;
-
     let deposit = 0;
-
-    // TODO make method and args arguments
-    let method_name = "burn_gas_raw".to_owned();
-    let args = burn_gas.to_le_bytes().to_vec();
 
     let tx = SignedTransaction::call(
         nonce,

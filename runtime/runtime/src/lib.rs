@@ -1580,6 +1580,7 @@ impl Runtime {
             &mut processing_state.stats,
             processing_state.epoch_info_provider,
         );
+        println!("{:?}", result);
         let node_counter_after = state_update.trie().get_trie_nodes_count();
         tracing::trace!(target: "runtime", ?node_counter_before, ?node_counter_after);
 

@@ -16,7 +16,7 @@ use near_primitives::views::FinalExecutionStatus;
 use crate::test_loop::builder::TestLoopBuilder;
 use crate::test_loop::env::{TestData, TestLoopEnv};
 use crate::test_loop::utils::transactions::{call_contract, deploy_contract, get_node_data};
-use crate::test_loop::utils::ONE_NEAR;
+use crate::test_loop::utils::{ONE_NEAR, TGAS};
 
 const NUM_PRODUCERS: usize = 2;
 const NUM_VALIDATORS: usize = 2;
@@ -120,8 +120,19 @@ fn do_call_contract(
 ) {
     tracing::info!(target: "test", ?rpc_id, ?contract_id, "Calling contract.");
     let mut txs = vec![];
+
+    let method_name = "burn_gas_raw".to_owned();
+    let burn_gas = 250 * TGAS;
+    let args = burn_gas.to_le_bytes().to_vec();
     for sender_id in accounts {
-        let tx = call_contract(test_loop, node_datas, &sender_id, &contract_id);
+        let tx = call_contract(
+            test_loop,
+            node_datas,
+            &sender_id,
+            &contract_id,
+            method_name.clone(),
+            args.clone(),
+        );
         txs.push(tx);
     }
     test_loop.run_for(Duration::seconds(20));
