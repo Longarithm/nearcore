@@ -614,7 +614,7 @@ impl FlatStorageCommand {
                 store_helper::iter_flat_state_entries(shard_uid, &hot_store, None, None);
             for item in flat_state_entries_iter {
                 let (key, _) = item?;
-                if key.len() > 4000 {
+                if key.len() > 2000 {
                     let key_cut = &key[..100];
                     println!("Key too long: {:?} | {:?}", key.len(), key_cut);
                 }
