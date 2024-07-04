@@ -93,14 +93,17 @@ fn run() {
 
     test_loop.run_until(success_condition, Duration::seconds(60));
 
-    let tip = rpc.chain.head().unwrap();
-    let block = rpc.chain.get_block(&tip.last_block_hash).unwrap();
-    let prev_state_root = block.chunks().get(1).unwrap().prev_state_root();
-    let trie = rpc
-        .runtime_adapter
-        .get_view_trie_for_shard(1, &tip.prev_block_hash, prev_state_root)
-        .unwrap();
-    println!("{:?}", get_account(&trie, &contract_id));
+    {
+        let rpc = rpc_client(&test_loop, &node_datas, &rpc_id);
+        let tip = rpc.chain.head().unwrap();
+        let block = rpc.chain.get_block(&tip.last_block_hash).unwrap();
+        let prev_state_root = block.chunks().get(1).unwrap().prev_state_root();
+        let trie = rpc
+            .runtime_adapter
+            .get_view_trie_for_shard(1, &tip.prev_block_hash, prev_state_root)
+            .unwrap();
+        println!("{:?}", get_account(&trie, &contract_id));
+    }
 
     TestLoopEnv { test_loop, datas: node_datas, tempdir }
         .shutdown_and_drain_remaining_events(Duration::seconds(20));
