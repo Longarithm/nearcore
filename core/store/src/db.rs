@@ -21,6 +21,7 @@ pub use self::splitdb::SplitDB;
 
 pub use self::slice::DBSlice;
 pub use self::testdb::TestDB;
+use std::sync::Arc;
 
 // `DBCol::BlockMisc` keys
 pub const HEAD_KEY: &[u8; 4] = b"HEAD";
@@ -33,6 +34,7 @@ pub const LATEST_KNOWN_KEY: &[u8; 12] = b"LATEST_KNOWN";
 pub const LARGEST_TARGET_HEIGHT_KEY: &[u8; 21] = b"LARGEST_TARGET_HEIGHT";
 pub const GENESIS_JSON_HASH_KEY: &[u8; 17] = b"GENESIS_JSON_HASH";
 pub const GENESIS_STATE_ROOTS_KEY: &[u8; 19] = b"GENESIS_STATE_ROOTS";
+pub const GENESIS_CONGESTION_INFO_KEY: &[u8] = b"GENESIS_CONGESTION_INFO_KEY";
 pub const COLD_HEAD_KEY: &[u8; 9] = b"COLD_HEAD";
 pub const STATE_SYNC_DUMP_KEY: &[u8; 15] = b"STATE_SYNC_DUMP";
 pub const STATE_SNAPSHOT_KEY: &[u8; 18] = b"STATE_SNAPSHOT_KEY";
@@ -249,6 +251,12 @@ pub trait Database: Sync + Send {
         path: &std::path::Path,
         columns_to_keep: Option<&[DBCol]>,
     ) -> anyhow::Result<()>;
+
+    /// If this is a test database, return a copy of the entire database.
+    /// Otherwise return None.
+    fn copy_if_test(&self) -> Option<Arc<dyn Database>> {
+        None
+    }
 }
 
 fn assert_no_overwrite(col: DBCol, key: &[u8], value: &[u8], old_value: &[u8]) {

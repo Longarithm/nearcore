@@ -9,12 +9,13 @@ import ctypes
 import logging
 import multiprocessing
 import pathlib
-import requests
+from geventhttpclient import Session
 import sys
 import threading
 import time
 import typing
 import unittest
+from cachetools import cached, TTLCache, LRUCache
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[4] / 'lib'))
 
@@ -29,6 +30,10 @@ import utils
 
 DEFAULT_TRANSACTION_TTL = timedelta(minutes=30)
 logger = new_logger(level=logging.WARN)
+
+# This is used to make the specific tests wait for the do_on_locust_init function
+# to initialize the funding account, before initializating the users.
+INIT_DONE = threading.Event()
 
 
 def is_key_error(exception):
@@ -128,11 +133,18 @@ class FunctionCall(Transaction):
         Return a single dict for `FunctionCall` but a list of dict for `MultiFunctionCall`.
         """
 
+    @abc.abstractmethod
+    def attached_gas(self) -> int:
+        """
+        How much gas will be attached to this function call. 
+        """
+        return 300 * TGAS
+
     def sign(self, block_hash) -> transaction.SignedTransaction:
         return transaction.sign_function_call_transaction(
             self.sender.key, self.receiver_id, self.method,
-            json.dumps(self.args()).encode('utf-8'), 300 * TGAS, self.balance,
-            self.sender.use_nonce(), block_hash)
+            json.dumps(self.args()).encode('utf-8'), self.attached_gas(),
+            self.balance, self.sender.use_nonce(), block_hash)
 
     def sender_account(self) -> Account:
         return self.sender
@@ -152,7 +164,7 @@ class MultiFunctionCall(FunctionCall):
 
     def sign(self, block_hash) -> transaction.SignedTransaction:
         all_args = self.args()
-        gas = 300 * TGAS // len(all_args)
+        gas = self.attached_gas() // len(all_args)
 
         def create_action(args):
             return transaction.create_function_call_action(
@@ -228,6 +240,11 @@ class AddFullAccessKey(Transaction):
         return self.sender
 
 
+@cached(cache=LRUCache(maxsize=100))
+def get_near_node_proxy(environment):
+    return NearNodeProxy(environment)
+
+
 class NearNodeProxy:
     """
     Wrapper around a RPC node connection that tracks requests on locust.
@@ -237,7 +254,6 @@ class NearNodeProxy:
         self.request_event = environment.events.request
         [url, port] = environment.host.rsplit(":", 1)
         self.node = cluster.RpcNode(url, port)
-        self.session = requests.Session()
 
     def send_tx_retry(self, tx: Transaction, locust_name) -> dict:
         """
@@ -289,6 +305,7 @@ class NearNodeProxy:
                             "EXECUTED_OPTIMISTIC"
                     })
                 evaluate_rpc_result(result.json())
+
             except TxUnknownError as err:
                 # This means we time out in one way or another.
                 # In that case, the stateless transaction validation was
@@ -312,7 +329,9 @@ class NearNodeProxy:
                     # using retrying lib here to poll until a response is ready
                     self.poll_tx_result(meta, tx)
         except NearError as err:
-            logging.warn(f"marking an error {err.message}, {err.details}")
+            logging.warn(
+                f"marking an error for transaction '{locust_name}' (id={signed_tx.id}): {err.message}, {err.details}"
+            )
             meta["exception"] = err
 
         meta["response_time"] = (time.perf_counter() -
@@ -349,7 +368,9 @@ class NearNodeProxy:
                     details=submit_response)
                 meta["response"] = submit_response.content
         except NearError as err:
-            logging.warn(f"marking an error {err.message}, {err.details}")
+            logging.warn(
+                f"marking an error for transaction '{locust_name}' (id={signed_tx.id}): {err.message}, {err.details}"
+            )
             meta["exception"] = err
 
         meta["response_time"] = (time.perf_counter() -
@@ -359,6 +380,9 @@ class NearNodeProxy:
         self.request_event.fire(**meta)
         return meta
 
+    # It's ok to use a slightly out-of-date block hash and this avoids one additional RPC request on
+    # every transaction.
+    @cached(cache=TTLCache(maxsize=1, ttl=1))
     def final_block_hash(self):
         return base58.b58decode(
             self.node.get_final_block()['result']['header']['hash'])
@@ -382,8 +406,16 @@ class NearNodeProxy:
             "id": "dontcare",
             "jsonrpc": "2.0"
         }
-        return self.session.post(url="http://%s:%s" % self.node.rpc_addr(),
-                                 json=j)
+        try:
+            # Create a new session each time to allow parallel requests through the same node proxy.
+            session = Session(connection_timeout=6,
+                              network_timeout=9,
+                              max_retries=5,
+                              retry_delay=0.1)
+            return session.post(url="http://%s:%s" % self.node.rpc_addr(),
+                                json=j)
+        except Exception as e:
+            raise RpcError(details=e)
 
     @retry(wait_fixed=500,
            stop_max_delay=DEFAULT_TRANSACTION_TTL / timedelta(milliseconds=1),
@@ -541,22 +573,25 @@ class NearUser(User):
     def __init__(self, environment):
         super().__init__(environment)
         assert self.host is not None, "Near user requires the RPC node address"
-        self.node = NearNodeProxy(environment)
+        self.node = get_near_node_proxy(environment)
         self.id = NearUser.get_next_id()
-        user_suffix = f"{self.id}_run{environment.parsed_options.run_id}"
-        self.account_id = NearUser.generate_account_id(
-            environment.account_generator, user_suffix)
+        self.user_suffix = f"{self.id}_run{environment.parsed_options.run_id}"
+        self.account_generator = environment.account_generator
 
     def on_start(self):
         """
         Called once per user, creating the account on chain
         """
+        # Wait for NearUser.funding_account to be initialized.
+        INIT_DONE.wait()
+        self.account_id = NearUser.generate_account_id(self.account_generator,
+                                                       self.user_suffix)
         self.account = Account(key.Key.from_random(self.account_id))
         if not self.node.account_exists(self.account_id):
-            self.send_tx_retry(
-                CreateSubAccount(NearUser.funding_account,
-                                 self.account.key,
-                                 balance=NearUser.INIT_BALANCE))
+            self.send_tx_retry(CreateSubAccount(NearUser.funding_account,
+                                                self.account.key,
+                                                balance=NearUser.INIT_BALANCE),
+                               locust_name="Init NearUser")
         self.account.refresh_nonce(self.node.node)
 
     def send_tx(self, tx: Transaction, locust_name="generic send_tx"):
@@ -624,6 +659,38 @@ class InvalidNonceError(RpcError):
         self.ak_nonce = ak_nonce
 
 
+class ShardCongestedError(RpcError):
+
+    def __init__(
+        self,
+        shard_id,
+        congestion_level,
+    ):
+        super().__init__(
+            message="Shard congested",
+            details=
+            f"Shard {shard_id} is currently at congestion level {congestion_level} and rejects new transactions"
+        )
+        self.shard_id = shard_id
+        self.congestion_level = congestion_level
+
+
+class ShardStuckError(RpcError):
+
+    def __init__(
+        self,
+        shard_id,
+        missed_chunks,
+    ):
+        super().__init__(
+            message="Shard stuck",
+            details=
+            f"Shard {shard_id} missed {missed_chunks} chunks and rejects new transactions"
+        )
+        self.shard_id = shard_id
+        self.missed_chunks = missed_chunks
+
+
 class TxError(NearError):
 
     def __init__(self,
@@ -673,6 +740,14 @@ def evaluate_rpc_result(rpc_result):
                 raise InvalidNonceError(
                     err_description["InvalidNonce"]["tx_nonce"],
                     err_description["InvalidNonce"]["ak_nonce"])
+            elif "ShardCongested" in err_description:
+                raise ShardCongestedError(
+                    err_description["ShardCongested"]["shard_id"],
+                    err_description["ShardCongested"]["congestion_level"])
+            elif "ShardStuck" in err_description:
+                raise ShardStuckError(
+                    err_description["ShardStuck"]["shard_id"],
+                    err_description["ShardStuck"]["missed_chunks"])
         raise RpcError(details=rpc_result["error"])
 
     result = rpc_result["result"]
@@ -742,6 +817,7 @@ def init_account_generator(parsed_options):
     if parsed_options.shard_layout_file is not None:
         with open(parsed_options.shard_layout_file, 'r') as f:
             shard_layout = json.load(f)
+        shard_layout_version = "V1" if "V1" in shard_layout else "V0"
     elif parsed_options.shard_layout_chain_id is not None:
         if parsed_options.shard_layout_chain_id not in ['mainnet', 'testnet']:
             sys.exit(
@@ -757,8 +833,32 @@ def init_account_generator(parsed_options):
                 "shards_split_map": [[0, 1, 2, 3]],
                 "to_parent_shard_map": [0, 0, 0, 0],
                 "version": 1
+            },
+            "V2": {
+                "fixed_shards": [],
+                "boundary_accounts": [
+                    "aurora", "aurora-0", "kkuuue2akv_1630967379.near",
+                    "tge-lockup.sweat"
+                ],
+                "shards_split_map": [[0, 1, 2, 3, 4]],
+                "to_parent_shard_map": [0, 0, 0, 0, 0],
+                "version": 2
+            },
+            "V3": {
+                "fixed_shards": [],
+                "boundary_accounts": [
+                    "aurora",
+                    "aurora-0",
+                    "game.hot.tg",
+                    "kkuuue2akv_1630967379.near",
+                    "tge-lockup.sweat",
+                ],
+                "shards_split_map": [[0, 1, 2, 3, 4, 5]],
+                "to_parent_shard_map": [0, 0, 0, 0, 0, 0],
+                "version": 3
             }
         }
+        shard_layout_version = parsed_options.shard_layout_version.upper()
     else:
         shard_layout = {
             "V0": {
@@ -766,13 +866,13 @@ def init_account_generator(parsed_options):
                 "version": 0,
             },
         }
-
-    return AccountGenerator(shard_layout)
+        shard_layout_version = "V0"
+    return AccountGenerator(shard_layout, shard_layout_version)
 
 
 # called once per process before user initialization
 def do_on_locust_init(environment):
-    node = NearNodeProxy(environment)
+    node = get_near_node_proxy(environment)
 
     master_funding_key = key.Key.from_json_file(
         environment.parsed_options.funding_key)
@@ -790,17 +890,14 @@ def do_on_locust_init(environment):
     # every worker needs a funding account to create its users, eagerly create them in the master
     if isinstance(environment.runner, runners.MasterRunner):
         num_funding_accounts = environment.parsed_options.max_workers
-        funding_balance = 10000 * NearUser.INIT_BALANCE
+        funding_balance = 100000 * NearUser.INIT_BALANCE
 
-        def create_account(id):
-            account_id = f"funds_worker_{id}.{master_funding_account.key.account_id}"
-            return Account(key.Key.from_seed_testonly(account_id))
+        for index in range(num_funding_accounts):
+            account_id = f"funds_worker_{index}.{master_funding_account.key.account_id}"
+            account = Account(key.Key.from_seed_testonly(account_id))
+            node.prepare_account(account, master_funding_account,
+                                 funding_balance, "create funding account")
 
-        funding_accounts = [
-            create_account(id) for id in range(num_funding_accounts)
-        ]
-        node.prepare_accounts(funding_accounts, master_funding_account,
-                              funding_balance, "create funding account")
         funding_account = master_funding_account
     elif isinstance(environment.runner, runners.WorkerRunner):
         worker_id = environment.runner.worker_index
@@ -816,9 +913,6 @@ def do_on_locust_init(environment):
 
     NearUser.funding_account = funding_account
     environment.master_funding_account = master_funding_account
-
-
-INIT_DONE = threading.Event()
 
 
 @events.init.add_listener
@@ -849,6 +943,12 @@ def _(parser):
         required=False,
         help=
         "chain ID whose shard layout we should consult when generating account IDs. Convenience option to avoid using --shard-layout-file for mainnet and testnet"
+    )
+    parser.add_argument(
+        "--shard-layout-version",
+        required=False,
+        help=
+        "Version of the shard layout. Only works with --shard-layout-chain-id. Should be one of V0, V1, V2, or V3."
     )
     parser.add_argument(
         "--run-id",

@@ -65,7 +65,7 @@ fn view_request(env: &TestEnv, request: QueryRequest) -> QueryResponse {
         .unwrap()
 }
 
-fn view_balance(env: &TestEnv, account: &AccountIdRef) -> u128 {
+pub fn view_balance(env: &TestEnv, account: &AccountIdRef) -> u128 {
     let request = QueryRequest::ViewAccount { account_id: account.into() };
     match view_request(&env, request).kind {
         QueryResponseKind::ViewAccount(view) => view.amount,
@@ -100,7 +100,7 @@ fn test_eth_implicit_account_creation() {
         1,
         signer.account_id.clone(),
         eth_implicit_account_id.clone(),
-        &signer,
+        &signer.into(),
         0,
         *genesis_block.hash(),
     );
@@ -154,14 +154,14 @@ fn test_transaction_from_eth_implicit_account_fail() {
     let public_key = secret_key.public_key();
     let eth_implicit_account_id = derive_eth_implicit_account_id(public_key.unwrap_as_secp256k1());
     let eth_implicit_account_signer =
-        InMemorySigner::from_secret_key(eth_implicit_account_id.clone(), secret_key);
+        InMemorySigner::from_secret_key(eth_implicit_account_id.clone(), secret_key).into();
 
     // Send money to ETH-implicit account, invoking its creation.
     let send_money_tx = SignedTransaction::send_money(
         1,
         "test1".parse().unwrap(),
         eth_implicit_account_id.clone(),
-        &signer1,
+        &signer1.into(),
         deposit_for_account_creation,
         *genesis_block.hash(),
     );
@@ -272,7 +272,7 @@ fn test_wallet_contract_interaction() {
         nonce,
         relayer.clone(),
         eth_implicit_account.clone(),
-        &relayer_signer.signer,
+        &relayer_signer.signer.clone().into(),
         actions,
         block_hash,
         0,
@@ -333,7 +333,7 @@ fn test_wallet_contract_interaction() {
     assert!(wallet_balance_diff - transfer_amount < NEAR_BASE / 500);
 }
 
-fn create_rlp_execute_tx(
+pub fn create_rlp_execute_tx(
     target: &AccountIdRef,
     mut action: Action,
     nonce: u64,
@@ -395,16 +395,16 @@ fn create_rlp_execute_tx(
         nonce,
         near_signer.account_id.into(),
         eth_implicit_account.into(),
-        &near_signer.signer,
+        &near_signer.signer.clone().into(),
         actions,
         block_hash,
         0,
     )
 }
 
-struct NearSigner<'a> {
-    account_id: &'a AccountIdRef,
-    signer: InMemorySigner,
+pub struct NearSigner<'a> {
+    pub account_id: &'a AccountIdRef,
+    pub signer: InMemorySigner,
 }
 
 fn abi_encode(target: String, action: Action) -> Vec<u8> {

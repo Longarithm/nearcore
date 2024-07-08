@@ -1,4 +1,3 @@
-use crate::test_helpers::heavy_test;
 use actix::System;
 use futures::{future, FutureExt};
 use near_actix_test_utils::run_actix;
@@ -18,12 +17,12 @@ use near_o11y::WithSpanContextExt;
 use near_primitives::hash::CryptoHash;
 use near_primitives::transaction::SignedTransaction;
 use near_primitives::types::{AccountId, BlockId, BlockReference, EpochId};
-use near_primitives_core::checked_feature;
-use near_primitives_core::version::PROTOCOL_VERSION;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 use tracing::info;
+
+use crate::tests::test_helpers::heavy_test;
 
 /// Configuration for `test4` validator in tests.
 struct Test4Config {
@@ -43,18 +42,10 @@ struct Test {
 
 impl Test {
     fn run(self) {
-        // TODO(#10506): Fix test to handle stateless validation
-        if checked_feature!("stable", StatelessValidationV0, PROTOCOL_VERSION) {
-            return;
-        }
         heavy_test(move || run_actix(async move { self.run_impl(None) }))
     }
 
     fn run_with_chunk_distribution_network(self, config: ChunkDistributionNetworkConfig) {
-        // TODO(#10506): Fix test to handle stateless validation
-        if checked_feature!("stable", StatelessValidationV0, PROTOCOL_VERSION) {
-            return;
-        }
         heavy_test(move || run_actix(async move { self.run_impl(Some(config)) }))
     }
 
@@ -276,7 +267,7 @@ impl Test {
 
                     // Make sure epoch length actually corresponds to the desired epoch length
                     // The switches are expected at 0->1, 5->6 and 10->11
-                    let prev_epoch_id = height_to_epoch.get(&(h - 1)).unwrap().clone();
+                    let prev_epoch_id = *height_to_epoch.get(&(h - 1)).unwrap();
                     assert_eq!(EpochId(block.header.epoch_id) == prev_epoch_id, h % 5 != 1);
 
                     // Make sure that the blocks leading to the epoch switch have twice as
@@ -345,6 +336,7 @@ fn chunks_produced_and_distributed_all_in_all_shards() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "expensive_tests"), ignore)]
 fn chunks_produced_and_distributed_2_vals_per_shard() {
     Test {
         validator_groups: 2,
@@ -357,6 +349,7 @@ fn chunks_produced_and_distributed_2_vals_per_shard() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "expensive_tests"), ignore)]
 fn chunks_produced_and_distributed_one_val_per_shard() {
     Test {
         validator_groups: 4,
@@ -372,6 +365,7 @@ fn chunks_produced_and_distributed_one_val_per_shard() {
 // because we always fallback on the p2p mechanism. This test runs with a config
 // where `enabled: false`.
 #[test]
+#[cfg_attr(not(feature = "expensive_tests"), ignore)]
 fn chunks_produced_and_distributed_chunk_distribution_network_disabled() {
     let config = ChunkDistributionNetworkConfig {
         enabled: false,
@@ -391,6 +385,7 @@ fn chunks_produced_and_distributed_chunk_distribution_network_disabled() {
 // because we always fallback on the p2p mechanism. This test runs with a config
 // where the URIs are not real endpoints.
 #[test]
+#[cfg_attr(not(feature = "expensive_tests"), ignore)]
 fn chunks_produced_and_distributed_chunk_distribution_network_wrong_urls() {
     let config = ChunkDistributionNetworkConfig {
         enabled: false,
@@ -414,6 +409,7 @@ fn chunks_produced_and_distributed_chunk_distribution_network_wrong_urls() {
 // where the `get` URI points at a random http server (therefore it does not
 // return valid chunks).
 #[test]
+#[cfg_attr(not(feature = "expensive_tests"), ignore)]
 fn chunks_produced_and_distributed_chunk_distribution_network_incorrect_get_return() {
     let config = ChunkDistributionNetworkConfig {
         enabled: false,
@@ -443,6 +439,7 @@ fn chunks_produced_and_distributed_all_in_all_shards_should_succeed_even_without
 }
 
 #[test]
+#[cfg_attr(not(feature = "expensive_tests"), ignore)]
 fn chunks_produced_and_distributed_2_vals_per_shard_should_succeed_even_without_forwarding() {
     Test {
         validator_groups: 2,
@@ -455,6 +452,7 @@ fn chunks_produced_and_distributed_2_vals_per_shard_should_succeed_even_without_
 }
 
 #[test]
+#[cfg_attr(not(feature = "expensive_tests"), ignore)]
 fn chunks_produced_and_distributed_one_val_per_shard_should_succeed_even_without_forwarding() {
     Test {
         validator_groups: 4,
@@ -526,6 +524,7 @@ fn chunks_recovered_from_full() {
 
 /// Happy case -- each shard is handled by one cop and one block producers.
 #[test]
+#[cfg_attr(not(feature = "expensive_tests"), ignore)]
 fn chunks_produced_and_distributed_one_val_shard_cop() {
     Test {
         validator_groups: 4,

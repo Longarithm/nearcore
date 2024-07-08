@@ -313,7 +313,7 @@ pub(super) struct InitCmd {
     /// Genesis file to use when initializing testnet (including downloading).
     #[clap(long)]
     genesis: Option<String>,
-    /// Initialize boots nodes in <node_key>@<ip_addr> format seperated by commas
+    /// Initialize boots nodes in <node_key>@<ip_addr> format separated by commas
     /// to bootstrap the network and store them in config.json
     #[clap(long)]
     boot_nodes: Option<String>,
@@ -537,11 +537,7 @@ impl RunCmd {
                 o11y_opts,
                 near_config.client_config.chain_id.clone(),
                 near_config.network_config.node_key.public_key().clone(),
-                near_config
-                    .network_config
-                    .validator
-                    .as_ref()
-                    .map(|validator| validator.account_id()),
+                near_config.network_config.validator.account_id(),
             )
             .await
             .global();

@@ -1,10 +1,10 @@
-use near_async::time::Utc;
 use near_primitives::block::BlockValidityError;
 use near_primitives::challenge::{ChunkProofs, ChunkState};
 use near_primitives::errors::{EpochError, StorageError};
 use near_primitives::shard_layout::ShardLayoutError;
 use near_primitives::sharding::{ChunkHash, ShardChunkHeader};
 use near_primitives::types::{BlockHeight, EpochId, ShardId};
+use near_time::Utc;
 use std::io;
 
 #[derive(thiserror::Error, Debug)]
@@ -180,8 +180,8 @@ pub enum Error {
     #[error("Invalid Balance Burnt")]
     InvalidBalanceBurnt,
     /// Invalid Congestion Info
-    #[error("Invalid Congestion Info")]
-    InvalidCongestionInfo,
+    #[error("Invalid Congestion Info: {0}")]
+    InvalidCongestionInfo(String),
     /// Invalid shard id
     #[error("Shard id {0} does not exist")]
     InvalidShardId(ShardId),
@@ -198,8 +198,8 @@ pub enum Error {
     #[error("Invalid Split Shard Ids when resharding. shard_id: {0}, parent_shard_id: {1}")]
     InvalidSplitShardsIds(u64, u64),
     /// Someone is not a validator. Usually happens in signature verification
-    #[error("Not A Validator")]
-    NotAValidator,
+    #[error("Not A Validator: {0}")]
+    NotAValidator(String),
     /// Someone is not a chunk validator. Happens if we're asked to validate a chunk we're not
     /// supposed to validate, or to verify a chunk approval signed by a validator that isn't
     /// supposed to validate the chunk.
@@ -302,13 +302,13 @@ impl Error {
             | Error::InvalidGasPrice
             | Error::InvalidGasUsed
             | Error::InvalidBalanceBurnt
-            | Error::InvalidCongestionInfo
+            | Error::InvalidCongestionInfo(_)
             | Error::InvalidShardId(_)
             | Error::InvalidStateRequest(_)
             | Error::InvalidRandomnessBeaconOutput
             | Error::InvalidBlockMerkleRoot
             | Error::InvalidProtocolVersion
-            | Error::NotAValidator
+            | Error::NotAValidator(_)
             | Error::NotAChunkValidator
             | Error::InvalidChallengeRoot => true,
         }
@@ -378,13 +378,13 @@ impl Error {
             Error::InvalidGasPrice => "invalid_gas_price",
             Error::InvalidGasUsed => "invalid_gas_used",
             Error::InvalidBalanceBurnt => "invalid_balance_burnt",
-            Error::InvalidCongestionInfo => "invalid_congestion_info",
+            Error::InvalidCongestionInfo(_) => "invalid_congestion_info",
             Error::InvalidShardId(_) => "invalid_shard_id",
             Error::InvalidStateRequest(_) => "invalid_state_request",
             Error::InvalidRandomnessBeaconOutput => "invalid_randomness_beacon_output",
             Error::InvalidBlockMerkleRoot => "invalid_block_merkele_root",
             Error::InvalidProtocolVersion => "invalid_protocol_version",
-            Error::NotAValidator => "not_a_validator",
+            Error::NotAValidator(_) => "not_a_validator",
             Error::NotAChunkValidator => "not_a_chunk_validator",
             Error::InvalidChallengeRoot => "invalid_challenge_root",
         }
@@ -396,7 +396,9 @@ impl From<EpochError> for Error {
         match error {
             EpochError::EpochOutOfBounds(epoch_id) => Error::EpochOutOfBounds(epoch_id),
             EpochError::MissingBlock(h) => Error::DBNotFoundErr(format!("epoch block: {h}")),
-            EpochError::NotAValidator(_account_id, _epoch_id) => Error::NotAValidator,
+            EpochError::NotAValidator(account_id, epoch_id) => {
+                Error::NotAValidator(format!("account_id: {account_id}, epoch_id: {epoch_id:?}"))
+            }
             err => Error::ValidatorError(err.to_string()),
         }
     }

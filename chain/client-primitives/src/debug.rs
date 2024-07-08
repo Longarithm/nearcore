@@ -1,7 +1,7 @@
 //! Structs in this module are used for debug purposes, and might change at any time
 //! without backwards compatibility of JSON encoding.
 use crate::types::StatusError;
-use near_async::time::Utc;
+use near_primitives::congestion_info::CongestionInfo;
 use near_primitives::types::EpochId;
 use near_primitives::views::{
     CatchupStatusView, ChainProcessingInfo, EpochValidatorInfo, RequestedStatePartsView,
@@ -14,6 +14,7 @@ use near_primitives::{
     types::{AccountId, BlockHeight},
     views::ValidatorInfo,
 };
+use near_time::Utc;
 use std::collections::HashMap;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -24,6 +25,7 @@ pub struct TrackedShardsView {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct EpochInfoView {
+    pub epoch_height: u64,
     pub epoch_id: CryptoHash,
     pub height: BlockHeight,
     pub first_block: Option<(CryptoHash, Utc)>,
@@ -42,6 +44,12 @@ pub struct DebugChunkStatus {
     pub gas_used: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub processing_time_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub congestion_level: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub congestion_info: Option<CongestionInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endorsement_ratio: Option<f64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

@@ -17,7 +17,8 @@ from rc import gcloud
 
 import cluster
 from configured_logger import logger
-from transaction import sign_payment_tx
+import key
+import transaction
 
 
 class TxContext:
@@ -54,7 +55,7 @@ class TxContext:
             if self.expected_balances[from_] >= amt:
                 logger.info("Sending a tx from %s to %s for %s" %
                             (from_, to, amt))
-                tx = sign_payment_tx(
+                tx = transaction.sign_payment_tx(
                     self.nodes[from_].signer_key, 'test%s' % to, amt,
                     self.next_nonce,
                     base58.b58decode(last_block_hash.encode('utf8')))
@@ -418,7 +419,7 @@ def poll_blocks(node: cluster.LocalNode,
             sent to the node.
         kw: Keyword arguments passed to `BaseDone.get_latest_block` method.
     Yields:
-        A `cluster.BlockId` object for each each time node’s latest block
+        A `cluster.BlockId` object for each time node’s latest block
         changes including the first block when function starts.  Note that there
         is no guarantee that there will be no skipped blocks.
     Raises:

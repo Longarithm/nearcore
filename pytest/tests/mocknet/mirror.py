@@ -2,7 +2,7 @@
 """
 
 """
-from argparse import ArgumentParser, BooleanOptionalAction
+from argparse import ArgumentParser, Action
 import datetime
 import pathlib
 import json
@@ -11,6 +11,7 @@ from rc import pmap
 import re
 import sys
 import time
+import numpy as np
 
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[2] / 'lib'))
 
@@ -433,6 +434,13 @@ def update_binaries_cmd(args, traffic_generator, nodes):
          nodes + to_list(traffic_generator))
 
 
+def amend_binaries_cmd(args, traffic_generator, nodes):
+    pmap(
+        lambda node: node.neard_runner_update_binaries(
+            args.neard_binary_url, args.epoch_height, args.binary_idx),
+        nodes + to_list(traffic_generator))
+
+
 def run_remote_cmd(args, traffic_generator, nodes):
     targeted = nodes + to_list(traffic_generator)
     logger.info(f'Running cmd on {"".join([h.name() for h in targeted ])}')
@@ -466,7 +474,30 @@ def filter_hosts(args, traffic_generator, nodes):
         logger.error(f'No hosts selected. Change filters and try again.')
         exit(1)
 
+    if args.select_partition is not None:
+        i, n = args.select_partition
+
+        if len(nodes) < n and traffic_generator == None:
+            logger.error(
+                f'Partitioning {len(nodes)} nodes in {n} groups will result in empty groups.'
+            )
+            exit(1)
+        nodes.sort(key=lambda node: node.name())
+        nodes = np.array_split(nodes, n)[i - 1]
+
     return traffic_generator, nodes
+
+
+class ParseFraction(Action):
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        pattern = r"(\d+)/(\d+)"
+        match = re.match(pattern, values)
+        if not match:
+            parser.error(f"Invalid input '{values}'. Expected format 'i/n'.")
+        numerator = int(match.group(1))
+        denominator = int(match.group(2))
+        setattr(namespace, self.dest, (numerator, denominator))
 
 
 if __name__ == '__main__':
@@ -483,6 +514,15 @@ if __name__ == '__main__':
     parser.add_argument('--host-filter',
                         type=str,
                         help='Filter through the selected nodes using regex.')
+    parser.add_argument('--select-partition',
+                        action=ParseFraction,
+                        type=str,
+                        help='''
+                        Input should be in the form of "i/n" where 0 < i <= n.
+                        Select a group of hosts based on the division provided.
+                        For i/n, it will split the selected hosts into n groups and select the i-th group.
+                        Use this if you want to target just a partition of the hosts.'''
+                       )
 
     subparsers = parser.add_subparsers(title='subcommands',
                                        description='valid subcommands',
@@ -604,12 +644,42 @@ if __name__ == '__main__':
     # nearcore-release buildkite and urls in the following format without commit
     # but only with the branch name:
     # https://s3-us-west-1.amazonaws.com/build.nearprotocol.com/nearcore/Linux/<branch-name>/neard"
-    update_binaries_parser = subparsers.add_parser(
-        'update-binaries',
-        help=
-        'Update the neard binaries by re-downloading them. The same urls are used.'
-    )
+    update_binaries_parser = subparsers.add_parser('update-binaries',
+                                                   help='''
+        Update the neard binaries by re-downloading them. The same urls are used.
+        If you plan to restart the network multiple times, it is recommended to use
+        URLs that only depend on the branch name. This way, every time you build,
+        you will not need to amend the URL but just run update-binaries.''')
     update_binaries_parser.set_defaults(func=update_binaries_cmd)
+
+    amend_binaries_parsers = subparsers.add_parser('amend-binaries',
+                                                   help='''
+        Add or override the neard URLs by specifying the epoch height or index if you have multiple binaries.
+
+        If the network was started with 2 binaries, the epoch height for the second binary can be randomly assigned
+        on each host. Use caution when updating --epoch-height so that it will not add a binary in between the upgrade
+        window for another binary.''')
+
+    amend_binaries_parsers.add_argument('--neard-binary-url',
+                                        type=str,
+                                        required=True,
+                                        help='URL to the neard binary.')
+    group = amend_binaries_parsers.add_mutually_exclusive_group(required=True)
+    group.add_argument('--epoch-height',
+                       type=int,
+                       help='''
+        The epoch height where this binary will begin to run.
+        If a binary already exists on the host for this epoch height, the old one will be replaced.
+        Otherwise a new binary will be added with this epoch height.
+        ''')
+    group.add_argument('--binary-idx',
+                       type=int,
+                       help='''
+        0 based indexing.
+        The index in the binary list that you want to replace.
+        If the index does not exist on the host this operation will not do anything.
+        ''')
+    amend_binaries_parsers.set_defaults(func=amend_binaries_cmd)
 
     run_cmd_parser = subparsers.add_parser('run-cmd',
                                            help='''Run the cmd on the hosts.''')

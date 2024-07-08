@@ -172,6 +172,7 @@ export interface DebugChunkStatus {
 }
 
 export interface EpochInfoView {
+    epoch_height: number;
     epoch_id: string;
     height: number;
     first_block: null | [string, string];
@@ -203,6 +204,8 @@ export interface CurrentEpochValidatorInfo {
     num_expected_blocks: number;
     num_produced_chunks: number;
     num_expected_chunks: number;
+    num_produced_endorsements: number;
+    num_expected_endorsements: number;
 }
 
 export interface NextEpochValidatorInfo {

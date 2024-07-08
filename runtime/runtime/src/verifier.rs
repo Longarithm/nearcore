@@ -8,7 +8,6 @@ use near_primitives::action::delegate::SignedDelegateAction;
 use near_primitives::checked_feature;
 use near_primitives::errors::{
     ActionsValidationError, InvalidAccessKeyError, InvalidTxError, ReceiptValidationError,
-    RuntimeError,
 };
 use near_primitives::receipt::{ActionReceipt, DataReceipt, Receipt, ReceiptEnum};
 use near_primitives::transaction::DeleteAccountAction;
@@ -97,10 +96,10 @@ pub fn validate_transaction(
     signed_transaction: &SignedTransaction,
     verify_signature: bool,
     current_protocol_version: ProtocolVersion,
-) -> Result<TransactionCost, RuntimeError> {
+) -> Result<TransactionCost, InvalidTxError> {
     // Don't allow V1 currently. This will be changed when the new protocol version is introduced.
     if matches!(signed_transaction.transaction, near_primitives::transaction::Transaction::V1(_)) {
-        return Err(InvalidTxError::InvalidTransactionVersion.into());
+        return Err(InvalidTxError::InvalidTransactionVersion);
     }
     let transaction = &signed_transaction.transaction;
     let signer_id = transaction.signer_id();
@@ -110,7 +109,7 @@ pub fn validate_transaction(
             .signature
             .verify(signed_transaction.get_hash().as_ref(), transaction.public_key())
     {
-        return Err(InvalidTxError::InvalidSignature.into());
+        return Err(InvalidTxError::InvalidSignature);
     }
 
     let transaction_size = signed_transaction.get_size();
@@ -146,7 +145,7 @@ pub fn verify_and_charge_transaction(
     verify_signature: bool,
     block_height: Option<BlockHeight>,
     current_protocol_version: ProtocolVersion,
-) -> Result<VerificationResult, RuntimeError> {
+) -> Result<VerificationResult, InvalidTxError> {
     let _span = tracing::debug_span!(target: "runtime", "verify_and_charge_transaction").entered();
     let TransactionCost { gas_burnt, gas_remaining, receipt_gas_price, total_cost, burnt_amount } =
         validate_transaction(
@@ -163,7 +162,7 @@ pub fn verify_and_charge_transaction(
     let mut signer = match get_account(state_update, signer_id)? {
         Some(signer) => signer,
         None => {
-            return Err(InvalidTxError::SignerDoesNotExist { signer_id: signer_id.clone() }.into());
+            return Err(InvalidTxError::SignerDoesNotExist { signer_id: signer_id.clone() });
         }
     };
     let mut access_key = match get_access_key(state_update, signer_id, transaction.public_key())? {
@@ -235,7 +234,7 @@ pub fn verify_and_charge_transaction(
             .into())
         }
         Err(StorageStakingError::StorageError(err)) => {
-            return Err(RuntimeError::StorageError(StorageError::StorageInconsistentState(err)))
+            return Err(StorageError::StorageInconsistentState(err).into());
         }
     };
 
@@ -295,6 +294,15 @@ pub(crate) fn validate_receipt(
     receipt: &Receipt,
     current_protocol_version: ProtocolVersion,
 ) -> Result<(), ReceiptValidationError> {
+    let receipt_size: u64 =
+        borsh::to_vec(receipt).unwrap().len().try_into().expect("Can't convert usize to u64");
+    if receipt_size > limit_config.max_receipt_size {
+        return Err(ReceiptValidationError::ReceiptSizeExceeded {
+            size: receipt_size,
+            limit: limit_config.max_receipt_size,
+        });
+    }
+
     // We retain these checks here as to maintain backwards compatibility
     // with AccountId validation since we illegally parse an AccountId
     // in near-vm-logic/logic.rs#fn(VMLogic::read_and_parse_account_id)
@@ -611,7 +619,7 @@ mod tests {
         initial_balance: Balance,
         initial_locked: Balance,
         access_key: Option<AccessKey>,
-    ) -> (Arc<InMemorySigner>, TrieUpdate, Balance) {
+    ) -> (Arc<Signer>, TrieUpdate, Balance) {
         let access_keys = if let Some(key) = access_key { vec![key] } else { vec![] };
         setup_accounts(vec![(
             alice_account(),
@@ -627,16 +635,15 @@ mod tests {
         // two bools: first one is whether the account has a contract, second one is whether the
         // account has data
         accounts: Vec<(AccountId, Balance, Balance, Vec<AccessKey>, bool, bool)>,
-    ) -> (Arc<InMemorySigner>, TrieUpdate, Balance) {
+    ) -> (Arc<Signer>, TrieUpdate, Balance) {
         let tries = TestTriesBuilder::new().build();
         let root = MerkleHash::default();
 
         let account_id = alice_account();
-        let signer = Arc::new(InMemorySigner::from_seed(
-            account_id.clone(),
-            KeyType::ED25519,
-            account_id.as_ref(),
-        ));
+        let signer: Arc<Signer> = Arc::new(
+            InMemorySigner::from_seed(account_id.clone(), KeyType::ED25519, account_id.as_ref())
+                .into(),
+        );
 
         let mut initial_state = tries.new_trie_update(ShardUId::single_shard(), root);
         for (account_id, initial_balance, initial_locked, access_keys, has_contract, has_data) in
@@ -713,7 +720,7 @@ mod tests {
         state_update: &mut TrieUpdate,
         gas_price: Balance,
         signed_transaction: &SignedTransaction,
-        expected_err: RuntimeError,
+        expected_err: InvalidTxError,
     ) {
         assert_eq!(
             validate_transaction(config, gas_price, signed_transaction, true, PROTOCOL_VERSION)
@@ -907,7 +914,7 @@ mod tests {
             &mut state_update,
             gas_price,
             &tx,
-            RuntimeError::InvalidTxError(InvalidTxError::InvalidSignature),
+            InvalidTxError::InvalidSignature,
         );
     }
 
@@ -934,12 +941,10 @@ mod tests {
                 PROTOCOL_VERSION,
             )
             .expect_err("expected an error"),
-            RuntimeError::InvalidTxError(InvalidTxError::InvalidAccessKeyError(
-                InvalidAccessKeyError::AccessKeyNotFound {
-                    account_id: alice_account(),
-                    public_key: bad_signer.public_key().into(),
-                },
-            )),
+            InvalidTxError::InvalidAccessKeyError(InvalidAccessKeyError::AccessKeyNotFound {
+                account_id: alice_account(),
+                public_key: bad_signer.public_key().into(),
+            },),
         );
     }
 
@@ -949,7 +954,8 @@ mod tests {
         let (signer, mut state_update, gas_price) =
             setup_common(TESTING_INIT_BALANCE, 0, Some(AccessKey::full_access()));
 
-        config.wasm_config.limit_config.max_total_prepaid_gas = 100;
+        let wasm_config = Arc::make_mut(&mut config.wasm_config);
+        wasm_config.limit_config.max_total_prepaid_gas = 100;
 
         assert_err_both_validations(
             &config,
@@ -969,12 +975,10 @@ mod tests {
                 CryptoHash::default(),
                 0,
             ),
-            RuntimeError::InvalidTxError(InvalidTxError::ActionsValidation(
-                ActionsValidationError::TotalPrepaidGasExceeded {
-                    total_prepaid_gas: 200,
-                    limit: 100,
-                },
-            )),
+            InvalidTxError::ActionsValidation(ActionsValidationError::TotalPrepaidGasExceeded {
+                total_prepaid_gas: 200,
+                limit: 100,
+            }),
         );
     }
 
@@ -1002,9 +1006,7 @@ mod tests {
                 PROTOCOL_VERSION,
             )
             .expect_err("expected an error"),
-            RuntimeError::InvalidTxError(InvalidTxError::SignerDoesNotExist {
-                signer_id: bob_account()
-            }),
+            InvalidTxError::SignerDoesNotExist { signer_id: bob_account() },
         );
     }
 
@@ -1035,7 +1037,7 @@ mod tests {
                 PROTOCOL_VERSION,
             )
             .expect_err("expected an error"),
-            RuntimeError::InvalidTxError(InvalidTxError::InvalidNonce { tx_nonce: 1, ak_nonce: 2 }),
+            InvalidTxError::InvalidNonce { tx_nonce: 1, ak_nonce: 2 },
         );
     }
 
@@ -1057,7 +1059,7 @@ mod tests {
                 u128::max_value(),
                 CryptoHash::default(),
             ),
-            RuntimeError::InvalidTxError(InvalidTxError::CostOverflow),
+            InvalidTxError::CostOverflow,
         );
     }
 
@@ -1080,7 +1082,7 @@ mod tests {
                 CryptoHash::default(),
                 1,
             ),
-            RuntimeError::InvalidTxError(InvalidTxError::InvalidTransactionVersion),
+            InvalidTxError::InvalidTransactionVersion,
         );
     }
 
@@ -1107,12 +1109,7 @@ mod tests {
             PROTOCOL_VERSION,
         )
         .expect_err("expected an error");
-        if let RuntimeError::InvalidTxError(InvalidTxError::NotEnoughBalance {
-            signer_id,
-            balance,
-            cost,
-        }) = err
-        {
+        if let InvalidTxError::NotEnoughBalance { signer_id, balance, cost } = err {
             assert_eq!(signer_id, alice_account());
             assert_eq!(balance, TESTING_INIT_BALANCE);
             assert!(cost > balance);
@@ -1160,9 +1157,12 @@ mod tests {
             PROTOCOL_VERSION,
         )
         .expect_err("expected an error");
-        if let RuntimeError::InvalidTxError(InvalidTxError::InvalidAccessKeyError(
-            InvalidAccessKeyError::NotEnoughAllowance { account_id, public_key, allowance, cost },
-        )) = err
+        if let InvalidTxError::InvalidAccessKeyError(InvalidAccessKeyError::NotEnoughAllowance {
+            account_id,
+            public_key,
+            allowance,
+            cost,
+        }) = err
         {
             assert_eq!(account_id, alice_account());
             assert_eq!(*public_key, signer.public_key());
@@ -1179,7 +1179,8 @@ mod tests {
     #[test]
     fn test_validate_transaction_invalid_low_balance() {
         let mut config = RuntimeConfig::free();
-        config.fees.storage_usage_config.storage_amount_per_byte = 10_000_000;
+        let fees = Arc::make_mut(&mut config.fees);
+        fees.storage_usage_config.storage_amount_per_byte = 10_000_000;
         let initial_balance = 1_000_000_000;
         let transfer_amount = 950_000_000;
         let (signer, mut state_update, gas_price) =
@@ -1210,7 +1211,8 @@ mod tests {
     #[test]
     fn test_validate_transaction_invalid_low_balance_many_keys() {
         let mut config = RuntimeConfig::free();
-        config.fees.storage_usage_config.storage_amount_per_byte = 10_000_000;
+        let fees = Arc::make_mut(&mut config.fees);
+        fees.storage_usage_config.storage_amount_per_byte = 10_000_000;
         let initial_balance = 1_000_000_000;
         let transfer_amount = 950_000_000;
         let account_id = alice_account();
@@ -1245,11 +1247,11 @@ mod tests {
 
         assert_eq!(
             res,
-            RuntimeError::InvalidTxError(InvalidTxError::LackBalanceForState {
+            InvalidTxError::LackBalanceForState {
                 signer_id: account_id,
                 amount: Balance::from(account.storage_usage()) * config.storage_amount_per_byte()
                     - (initial_balance - transfer_amount)
-            })
+            }
         );
     }
 
@@ -1296,9 +1298,7 @@ mod tests {
                 PROTOCOL_VERSION,
             )
             .expect_err("expected an error"),
-            RuntimeError::InvalidTxError(InvalidTxError::InvalidAccessKeyError(
-                InvalidAccessKeyError::RequiresFullAccess
-            )),
+            InvalidTxError::InvalidAccessKeyError(InvalidAccessKeyError::RequiresFullAccess),
         );
 
         assert_eq!(
@@ -1320,9 +1320,7 @@ mod tests {
                 PROTOCOL_VERSION,
             )
             .expect_err("expected an error"),
-            RuntimeError::InvalidTxError(InvalidTxError::InvalidAccessKeyError(
-                InvalidAccessKeyError::RequiresFullAccess
-            )),
+            InvalidTxError::InvalidAccessKeyError(InvalidAccessKeyError::RequiresFullAccess),
         );
 
         assert_eq!(
@@ -1344,9 +1342,7 @@ mod tests {
                 PROTOCOL_VERSION,
             )
             .expect_err("expected an error"),
-            RuntimeError::InvalidTxError(InvalidTxError::InvalidAccessKeyError(
-                InvalidAccessKeyError::RequiresFullAccess
-            )),
+            InvalidTxError::InvalidAccessKeyError(InvalidAccessKeyError::RequiresFullAccess),
         );
     }
 
@@ -1390,12 +1386,10 @@ mod tests {
                 PROTOCOL_VERSION,
             )
             .expect_err("expected an error"),
-            RuntimeError::InvalidTxError(InvalidTxError::InvalidAccessKeyError(
-                InvalidAccessKeyError::ReceiverMismatch {
-                    tx_receiver: eve_dot_alice_account(),
-                    ak_receiver: bob_account().into()
-                }
-            )),
+            InvalidTxError::InvalidAccessKeyError(InvalidAccessKeyError::ReceiverMismatch {
+                tx_receiver: eve_dot_alice_account(),
+                ak_receiver: bob_account().into()
+            }),
         );
     }
 
@@ -1439,9 +1433,9 @@ mod tests {
                 PROTOCOL_VERSION,
             )
             .expect_err("expected an error"),
-            RuntimeError::InvalidTxError(InvalidTxError::InvalidAccessKeyError(
-                InvalidAccessKeyError::MethodNameMismatch { method_name: "hello".to_string() }
-            )),
+            InvalidTxError::InvalidAccessKeyError(InvalidAccessKeyError::MethodNameMismatch {
+                method_name: "hello".to_string()
+            }),
         );
     }
 
@@ -1485,9 +1479,7 @@ mod tests {
                 PROTOCOL_VERSION,
             )
             .expect_err("expected an error"),
-            RuntimeError::InvalidTxError(InvalidTxError::InvalidAccessKeyError(
-                InvalidAccessKeyError::DepositWithFunctionCall,
-            )),
+            InvalidTxError::InvalidAccessKeyError(InvalidAccessKeyError::DepositWithFunctionCall,),
         );
     }
 
@@ -1509,7 +1501,8 @@ mod tests {
 
         let mut config = RuntimeConfig::test();
         let max_transaction_size = transaction_size - 1;
-        config.wasm_config.limit_config.max_transaction_size = transaction_size - 1;
+        let wasm_config = Arc::make_mut(&mut config.wasm_config);
+        wasm_config.limit_config.max_transaction_size = transaction_size - 1;
 
         assert_eq!(
             verify_and_charge_transaction(
@@ -1522,13 +1515,14 @@ mod tests {
                 PROTOCOL_VERSION,
             )
             .expect_err("expected an error"),
-            RuntimeError::InvalidTxError(InvalidTxError::TransactionSizeExceeded {
+            InvalidTxError::TransactionSizeExceeded {
                 size: transaction_size,
                 limit: max_transaction_size
-            }),
+            },
         );
 
-        config.wasm_config.limit_config.max_transaction_size = transaction_size + 1;
+        let wasm_config = Arc::make_mut(&mut config.wasm_config);
+        wasm_config.limit_config.max_transaction_size = transaction_size + 1;
         verify_and_charge_transaction(
             &config,
             &mut state_update,
