@@ -20,7 +20,16 @@ serde_json = { workspace = true, features = ["preserve_order"] }
 inventory.workspace = true
 toml.workspace = true
 #rustc_version = "0.4.0"
-
+actix.workspace = true
+borsh.workspace = true
+chrono.workspace = true
+clap.workspace = true
+futures.workspace = true
+hex.workspace = true
+itertools.workspace = true
+openssl.workspace = true
+rand.workspace = true
+serde.workspace = true
 
 [features]
 default = [
