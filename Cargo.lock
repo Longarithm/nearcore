@@ -4762,6 +4762,7 @@ dependencies = [
  "hex",
  "insta",
  "itertools",
+ "memoffset 0.8.0",
  "near-crypto",
  "near-fmt",
  "near-parameters",
@@ -6361,7 +6362,6 @@ dependencies = [
  "near-primitives-core",
  "near-stable-hasher",
  "near-structs-checker-lib",
- "rustc_version 0.4.0",
  "serde_json",
  "toml",
 ]

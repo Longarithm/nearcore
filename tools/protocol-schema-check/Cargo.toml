@@ -19,10 +19,10 @@ near-stable-hasher.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
 inventory.workspace = true
 toml.workspace = true
-rustc_version = "0.4.0"
+#rustc_version = "0.4.0"
 
 [features]
 default = [
-    "near-primitives-core/protocol_schema",
-    "near-primitives/protocol_schema"
+  "near-primitives-core/protocol_schema",
+  "near-primitives/protocol_schema"
 ]
