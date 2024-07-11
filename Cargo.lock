@@ -6361,6 +6361,7 @@ dependencies = [
  "near-primitives-core",
  "near-stable-hasher",
  "near-structs-checker-lib",
+ "rustc_version 0.4.0",
  "serde_json",
  "toml",
 ]
