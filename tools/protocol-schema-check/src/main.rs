@@ -75,9 +75,9 @@ fn main() {
     println!("Optimization level: {:?}", std::env::var("OPT_LEVEL"));
     println!("Build date: {}", env!("CARGO_PKG_VERSION"));
     println!("Compile time: {:?}", std::env::var("VERGEN_BUILD_TIMESTAMP"));
-    println!("usize size: {} bytes", std::mem::size_of::<usize>());
-    println!("u64 size: {} bytes", std::mem::size_of::<u64>());
-    println!("pointer alignment: {} bytes", std::mem::align_of::<*const ()>());
+    // println!("usize size: {} bytes", std::mem::size_of::<usize>());
+    // println!("u64 size: {} bytes", std::mem::size_of::<u64>());
+    // println!("pointer alignment: {} bytes", std::mem::align_of::<*const ()>());
 
     let file_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("res").join("protocol_structs.toml");
 
