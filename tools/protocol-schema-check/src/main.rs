@@ -11,6 +11,7 @@ use std::env;
 #[allow(unused_imports)]
 use near_primitives::*;
 
+use near_primitives::types::ValidatorKickoutReason;
 use near_stable_hasher::StableHasher;
 use near_structs_checker_lib::ProtocolStructInfo;
 use std::any::TypeId;
@@ -101,6 +102,7 @@ fn main() {
         println!("{}: {:?}", info.name(), info.type_id());
         current_hashes.insert(info.name().to_string(), hash);
     }
+    println!("{:?}", TypeId::of::<ValidatorKickoutReason>());
 
     let mut has_changes = false;
     for (name, hash) in &current_hashes {
