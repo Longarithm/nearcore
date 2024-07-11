@@ -24,12 +24,12 @@ actix.workspace = true
 borsh.workspace = true
 chrono.workspace = true
 clap.workspace = true
-futures.workspace = true
-hex.workspace = true
-itertools.workspace = true
-openssl.workspace = true
-rand.workspace = true
-serde.workspace = true
+#futures.workspace = true
+#hex.workspace = true
+#itertools.workspace = true
+#openssl.workspace = true
+#rand.workspace = true
+#serde.workspace = true
 
 [features]
 default = [
