@@ -85,6 +85,7 @@ fn main() {
     let mut current_hashes: BTreeMap<String, u32> = Default::default();
     for info in inventory::iter::<ProtocolStructInfo> {
         let hash = compute_hash(info, &structs);
+        println!("{}: {:?}", info.name(), info.type_id());
         current_hashes.insert(info.name().to_string(), hash);
     }
 
