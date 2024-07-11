@@ -72,9 +72,9 @@ fn main() {
     println!("Family: {}", env::consts::FAMILY);
     println!("Rust version: {}", rustc_version::version().unwrap());
     println!("Debug: {}", cfg!(debug_assertions));
-    println!("Optimization level: {}", env!("OPT_LEVEL"));
+    println!("Optimization level: {:?}", std::env::var("OPT_LEVEL"));
     println!("Build date: {}", env!("CARGO_PKG_VERSION"));
-    println!("Compile time: {}", env!("VERGEN_BUILD_TIMESTAMP"));
+    println!("Compile time: {:?}", std::env::var("VERGEN_BUILD_TIMESTAMP"));
     println!("usize size: {} bytes", std::mem::size_of::<usize>());
     println!("u64 size: {} bytes", std::mem::size_of::<u64>());
     println!("pointer alignment: {} bytes", std::mem::align_of::<*const ()>());
