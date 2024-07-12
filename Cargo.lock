@@ -6356,11 +6356,18 @@ dependencies = [
 name = "protocol-schema-check"
 version = "0.0.0"
 dependencies = [
+ "actix",
+ "clap",
+ "futures",
+ "hex",
  "inventory",
+ "itertools",
  "near-primitives",
  "near-primitives-core",
  "near-stable-hasher",
  "near-structs-checker-lib",
+ "openssl",
+ "rustc_version 0.4.0",
  "serde_json",
  "toml",
 ]
