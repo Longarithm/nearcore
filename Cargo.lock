@@ -6357,6 +6357,8 @@ dependencies = [
 name = "protocol-schema-check"
 version = "0.0.0"
 dependencies = [
+ "actix",
+ "clap",
  "inventory",
  "near-primitives",
  "near-primitives-core",
