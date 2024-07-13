@@ -1077,10 +1077,10 @@ pub enum ValidatorKickoutReason {
         #[serde(with = "dec_format", rename = "threshold_u128")]
         threshold: Balance,
     },
-    /// Enough stake but is not chosen because of seat limits.
-    DidNotGetASeat,
     /// Validator didn't produce enough chunk endorsements.
     NotEnoughChunkEndorsements { produced: NumBlocks, expected: NumBlocks },
+    /// Enough stake but is not chosen because of seat limits.
+    DidNotGetASeat,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
