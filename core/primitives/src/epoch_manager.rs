@@ -621,6 +621,11 @@ pub struct ValidatorWeight(ValidatorId, u64);
 
 use near_structs_checker_lib::ProtocolStruct;
 
+#[derive(ProtocolStruct)]
+pub struct Foo {
+    pub bar: String,
+}
+
 // V3 -> V4: Add structures and methods for stateless validator assignment.
 #[derive(
     SmartDefault,

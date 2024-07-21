@@ -56,6 +56,41 @@ mod helper {
         TokenStream::from(expanded)
     }
 
+    const fn count_generics(type_name: &'static str) -> usize {
+        // let type_name = std::any::type_name::<T>();
+        let mut count = 0;
+        let mut depth = 0;
+        let mut in_angle_brackets = false;
+
+        let bytes = type_name.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'<' => {
+                    depth += 1;
+                    if depth == 1 {
+                        in_angle_brackets = true;
+                    }
+                }
+                b'>' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        in_angle_brackets = false;
+                    }
+                }
+                b',' if in_angle_brackets && depth == 1 => count += 1,
+                _ => {}
+            }
+            i += 1;
+        }
+
+        if in_angle_brackets {
+            count + 1
+        } else {
+            count
+        }
+    }
+
     fn extract_struct_fields(fields: &Fields) -> TokenStream2 {
         match fields {
             Fields::Named(FieldsNamed { named, .. }) => {
@@ -119,7 +154,8 @@ mod helper {
                         quote! {
                             {
                                 const ARRAY_REPEAT_VALUE: Option<std::any::TypeId> = None;
-                                let mut inner_types = [ARRAY_REPEAT_VALUE; 4];
+                                const LEN = count_generics("#type_name");
+                                let mut inner_types = [ARRAY_REPEAT_VALUE; LEN];
                                 #(#assignments)*
                                 (stringify!(#type_name), inner_types)
                             }
