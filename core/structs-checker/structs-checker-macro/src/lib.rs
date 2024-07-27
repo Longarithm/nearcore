@@ -12,6 +12,38 @@ mod helper {
     use quote::quote;
     use syn::{parse_macro_input, Data, DeriveInput, Fields, FieldsNamed, FieldsUnnamed, Variant};
 
+    fn count_generics(ty: &syn::Type) -> usize {
+        fn count_generic_args(args: &syn::PathArguments) -> usize {
+            match args {
+                syn::PathArguments::AngleBracketed(bracketed) => {
+                    bracketed.args.iter().filter(|arg| matches!(arg, syn::GenericArgument::Type(_))).count()
+                }
+                _ => 0,
+            }
+        }
+
+        fn count_type(ty: &syn::Type) -> usize {
+            match ty {
+                syn::Type::Path(type_path) => {
+                    type_path.path.segments.iter()
+                        .map(|seg| count_generic_args(&seg.arguments))
+                        .sum()
+                }
+                syn::Type::Tuple(tuple) => tuple.elems.iter().map(count_type).sum(),
+                syn::Type::Array(array) => count_type(&array.elem),
+                syn::Type::Ptr(ptr) => count_type(&ptr.elem),
+                syn::Type::Reference(reference) => count_type(&reference.elem),
+                syn::Type::Group(group) => count_type(&group.elem),
+                syn::Type::Paren(paren) => count_type(&paren.elem),
+                syn::Type::Slice(slice) => count_type(&slice.elem),
+                // Add other variants as needed
+                _ => 0,
+            }
+        }
+
+        count_type(ty)
+    }
+    
     pub fn protocol_struct_impl(input: TokenStream) -> TokenStream {
         let input = parse_macro_input!(input as DeriveInput);
         let name = &input.ident;
@@ -56,41 +88,6 @@ mod helper {
         TokenStream::from(expanded)
     }
 
-    const fn count_generics(type_name: &'static str) -> usize {
-        // let type_name = std::any::type_name::<T>();
-        let mut count = 0;
-        let mut depth = 0;
-        let mut in_angle_brackets = false;
-
-        let bytes = type_name.as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            match bytes[i] {
-                b'<' => {
-                    depth += 1;
-                    if depth == 1 {
-                        in_angle_brackets = true;
-                    }
-                }
-                b'>' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        in_angle_brackets = false;
-                    }
-                }
-                b',' if in_angle_brackets && depth == 1 => count += 1,
-                _ => {}
-            }
-            i += 1;
-        }
-
-        if in_angle_brackets {
-            count + 1
-        } else {
-            count
-        }
-    }
-
     fn extract_struct_fields(fields: &Fields) -> TokenStream2 {
         match fields {
             Fields::Named(FieldsNamed { named, .. }) => {
@@ -129,42 +126,48 @@ mod helper {
     fn extract_type_info(ty: &syn::Type) -> TokenStream2 {
         match ty {
             syn::Type::Path(type_path) => {
-                let type_name =
-                    quote::format_ident!("{}", type_path.path.segments.last().unwrap().ident);
-                let generic_params = &type_path.path.segments.last().unwrap().arguments;
-                match generic_params {
-                    syn::PathArguments::AngleBracketed(params) => {
-                        let inner_types: Vec<_> = params
-                            .args
-                            .iter()
-                            .take(4)
-                            .map(|arg| {
+                let type_name = quote::format_ident!("{}", type_path.path.segments.last().unwrap().ident);
+                let generic_count = count_generics(ty);
+
+                println!("Type: {}, Generic Count: {}", type_name, generic_count);
+
+                if generic_count > 0 {
+                    let generic_params = &type_path.path.segments.last().unwrap().arguments;
+                    if let syn::PathArguments::AngleBracketed(params) = generic_params {
+                        let type_ids = params.args.iter()
+                            .filter_map(|arg| {
                                 if let syn::GenericArgument::Type(ty) = arg {
-                                    quote! { Some(std::any::TypeId::of::<#ty>()) }
+                                    let type_id = quote! { std::any::TypeId::of::<#ty>() };
+                                    println!("  Generic Type: {}", type_id.to_string());
+                                    Some(type_id)
                                 } else {
-                                    quote! { None }
+                                    None
                                 }
                             })
-                            .collect();
-
-                        let assignments = inner_types.iter().enumerate().map(|(i, ty)| {
-                            quote! { inner_types[#i] = #ty; }
-                        });
+                            .collect::<Vec<_>>();
 
                         quote! {
-                            {
-                                const ARRAY_REPEAT_VALUE: Option<std::any::TypeId> = None;
-                                const LEN = count_generics("#type_name");
-                                let mut inner_types = [ARRAY_REPEAT_VALUE; LEN];
-                                #(#assignments)*
-                                (stringify!(#type_name), inner_types)
+                        {
+                            const GENERIC_COUNT: usize = #generic_count;
+                            const fn create_array() -> [std::any::TypeId; GENERIC_COUNT] {
+                                [#(#type_ids),*]
                             }
+                            (stringify!(#type_name), &create_array())
                         }
                     }
-                    _ => quote! { (stringify!(#type_name), [None; 4]) },
+                    } else {
+                        println!("  No angle-bracketed generic parameters found");
+                        quote! { (stringify!(#type_name), &[]) }
+                    }
+                } else {
+                    println!("  No generic parameters");
+                    quote! { (stringify!(#type_name), &[]) }
                 }
             }
-            _ => quote! { (stringify!(#ty), [None; 4]) },
+            _ => {
+                println!("Unsupported type: {:?}", ty);
+                quote! { (stringify!(#ty), &[]) }
+            },
         }
     }
 

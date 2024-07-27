@@ -6,7 +6,7 @@ pub type TypeName = &'static str;
 pub type FieldName = &'static str;
 pub type EnumVariant = Option<&'static [(FieldName, TypeId)]>;
 
-pub type TypeInfo = (&'static str, [Option<TypeId>; 4]);
+pub type TypeInfo = (&'static str, &'static [TypeId]);
 
 #[derive(Copy, Clone)]
 pub enum ProtocolStructInfo {

@@ -13,10 +13,22 @@ use near_primitives::*;
 use near_stable_hasher::StableHasher;
 use near_structs_checker_lib::{FieldName, ProtocolStructInfo, TypeInfo};
 use std::any::TypeId;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
+
+pub struct Bar<A, B, C, D> {
+    pub a: A,
+    pub b: B,
+    pub c: C,
+    pub d: D,
+}
+
+#[derive(near_structs_checker_lib::ProtocolStruct)]
+pub struct Foo {
+    pub bar: Bar<u64, String, u32, String>,
+}
 
 fn compute_hash(
     info: &ProtocolStructInfo,
@@ -51,7 +63,7 @@ fn compute_fields_hash(
     for (field_name, (type_name, generic_params)) in fields {
         field_name.hash(hasher);
         type_name.hash(hasher);
-        for &param_type_id in generic_params.iter().flatten() {
+        for &param_type_id in generic_params.iter() {
             compute_type_hash(param_type_id, structs, hasher);
         }
     }
