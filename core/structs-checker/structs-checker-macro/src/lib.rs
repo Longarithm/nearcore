@@ -146,8 +146,8 @@ mod helper {
         quote! {
             {
                 const GENERIC_COUNT: usize = #generic_count;
-                const fn create_array() -> [std::any::TypeId; 1 + GENERIC_COUNT] {
-                    [std::any::TypeId::of::<#ty>(), #(#type_ids),*]
+                const fn create_array() -> [std::any::TypeId; GENERIC_COUNT] {
+                    [#(#type_ids),*]
                 }
                 (stringify!(#type_name), &create_array())
             }
