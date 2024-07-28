@@ -16,7 +16,13 @@ mod helper {
         fn count_generic_args(args: &syn::PathArguments) -> usize {
             match args {
                 syn::PathArguments::AngleBracketed(bracketed) => {
-                    bracketed.args.iter().filter(|arg| matches!(arg, syn::GenericArgument::Type(_))).count()
+                    bracketed.args.iter().filter(|arg| {
+                        if let syn::GenericArgument::Type(ty) = arg {
+                            1 + count_type(ty)
+                        } else {
+                            0
+                        }
+                    }).sum()
                 }
                 _ => 0,
             }
