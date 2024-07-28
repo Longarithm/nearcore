@@ -11,43 +11,6 @@ mod helper {
     use proc_macro2::TokenStream as TokenStream2;
     use quote::quote;
     use syn::{parse_macro_input, Data, DeriveInput, Fields, FieldsNamed, FieldsUnnamed, Variant};
-
-    fn count_generics(ty: &syn::Type) -> usize {
-        fn count_generic_args(args: &syn::PathArguments) -> usize {
-            match args {
-                syn::PathArguments::AngleBracketed(bracketed) => {
-                    bracketed.args.iter().map(|arg| {
-                        if let syn::GenericArgument::Type(ty) = arg {
-                            count_type(ty)
-                        } else {
-                            0
-                        }
-                    }).sum()
-                }
-                _ => 0,
-            }
-        }
-
-        fn count_type(ty: &syn::Type) -> usize {
-            1 + match ty {
-                syn::Type::Path(type_path) => {
-                    type_path.path.segments.iter()
-                        .map(|seg| count_generic_args(&seg.arguments))
-                        .sum()
-                }
-                syn::Type::Tuple(tuple) => tuple.elems.iter().map(count_type).sum(),
-                syn::Type::Array(array) => count_type(&array.elem),
-                syn::Type::Ptr(ptr) => count_type(&ptr.elem),
-                syn::Type::Reference(reference) => count_type(&reference.elem),
-                syn::Type::Group(group) => count_type(&group.elem),
-                syn::Type::Paren(paren) => count_type(&paren.elem),
-                syn::Type::Slice(slice) => count_type(&slice.elem),
-                _ => 0,
-            }
-        }
-
-        count_type(ty)
-    }
     
     pub fn protocol_struct_impl(input: TokenStream) -> TokenStream {
         let input = parse_macro_input!(input as DeriveInput);
@@ -128,7 +91,10 @@ mod helper {
         quote! { &[#(#variants),*] }
     }
 
-    fn extract_typeid_with_generics(ty: &syn::Type) -> Vec<TokenStream2> {
+    /// Extracts type ids from the type and **all** its underlying generic
+    /// parameters, recursively.
+    /// For example, for `Vec<Vec<u32>>` it will return `[Vec, Vec, u32]`.
+    fn extract_type_ids_from_type(ty: &syn::Type) -> Vec<TokenStream2> {
         let mut result = vec![quote! { std::any::TypeId::of::<#ty>() }];
         let type_path = match ty {
             syn::Type::Path(type_path) => type_path,
@@ -142,7 +108,7 @@ mod helper {
         result.extend(params.args.iter()
             .map(|arg| {
                 if let syn::GenericArgument::Type(ty) = arg {
-                    extract_typeid_with_generics(ty)
+                    extract_type_ids_from_type(ty)
                 } else {
                     vec![]
                 }
@@ -174,13 +140,8 @@ mod helper {
         };
 
         let type_name = quote::format_ident!("{}", type_path.path.segments.last().unwrap().ident);
-        let generic_count = count_generics(ty);
-
-        if generic_count == 0 {
-            return quote! { (stringify!(#type_name), &[std::any::TypeId::of::<#ty>()]) };
-        }
-
-        let type_ids = extract_typeid_with_generics(ty);
+        let type_ids = extract_type_ids_from_type(ty);
+        let generic_count = type_ids.len();
         
         quote! {
             {

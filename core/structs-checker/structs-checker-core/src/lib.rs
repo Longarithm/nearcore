@@ -7,7 +7,11 @@ pub type FieldName = &'static str;
 pub type VariantName = &'static str;
 pub type Variant = Option<&'static [(FieldName, FieldTypeInfo)]>;
 
-/// Self type id and **all inner generic type ids, defined recursively**.
+/// Type name and its decomposition into type ids.
+/// Decomposition is defined recursively, starting from type id of the type 
+/// itself, followed by decompositions of its generic parameters, respectively.
+/// For example, for `Vec<Vec<u8>>` it will be `[TypeId::of::<Vec<Vec<u8>>>(),
+/// TypeId::of::<Vec<u8>>(), TypeId::of::<u8>()]`.
 pub type FieldTypeInfo = (TypeName, &'static [TypeId]);
 
 #[derive(Copy, Clone)]
@@ -46,7 +50,7 @@ inventory::collect!(ProtocolStructInfo);
 pub trait ProtocolStruct {}
 
 /// Implementation for primitive types.
-macro_rules! impl_for_int {
+macro_rules! primitive_impl {
     ($($t:ty),*) => {
         $(
             impl ProtocolStruct for $t {}
@@ -63,4 +67,4 @@ macro_rules! impl_for_int {
     }
 }
 
-impl_for_int!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
+primitive_impl!(bool, u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);

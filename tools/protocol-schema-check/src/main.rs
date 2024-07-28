@@ -18,6 +18,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
+use near_primitives_core::types::NumBlocks;
 
 fn compute_hash(
     info: &ProtocolStructInfo,
@@ -309,7 +310,7 @@ mod tests {
             #[derive(super::ProtocolStruct)]
             #[allow(unused)]
             pub struct Container {
-                a: Vec<u32>,
+                a: Vec<Vec<Vec<u32>>>,
             }
         }
         use inner::Container as VecContainer;
@@ -317,7 +318,7 @@ mod tests {
         #[derive(ProtocolStruct)]
         #[allow(unused)]
         struct Container {
-            a: Vec<i32>,
+            a: Vec<Vec<Vec<i32>>>,
         }
 
         check_types(
@@ -384,7 +385,7 @@ mod tests {
 
     /// Checks that if nested containers differ, this is not caught by hash 
     /// check.
-    /// Added to clarify limitations of current implementation.
+    /// Added to indicate limitations of implementation.
     #[test]
     fn test_nested_containers_different_containers_unsupported() {
         mod inner {
