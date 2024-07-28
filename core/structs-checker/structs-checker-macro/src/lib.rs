@@ -141,12 +141,12 @@ mod helper {
 
         let type_name = quote::format_ident!("{}", type_path.path.segments.last().unwrap().ident);
         let type_ids = extract_type_ids_from_type(ty);
-        let generic_count = type_ids.len();
+        let type_ids_count = type_ids.len();
         
         quote! {
             {
-                const GENERIC_COUNT: usize = #generic_count;
-                const fn create_array() -> [std::any::TypeId; GENERIC_COUNT] {
+                const TYPE_IDS_COUNT: usize = #type_ids_count;
+                const fn create_array() -> [std::any::TypeId; TYPE_IDS_COUNT] {
                     [#(#type_ids),*]
                 }
                 (stringify!(#type_name), &create_array())
