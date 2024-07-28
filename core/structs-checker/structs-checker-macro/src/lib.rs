@@ -36,7 +36,6 @@ mod helper {
                 syn::Type::Group(group) => count_type(&group.elem),
                 syn::Type::Paren(paren) => count_type(&paren.elem),
                 syn::Type::Slice(slice) => count_type(&slice.elem),
-                // Add other variants as needed
                 _ => 0,
             }
         }
@@ -47,6 +46,7 @@ mod helper {
     pub fn protocol_struct_impl(input: TokenStream) -> TokenStream {
         let input = parse_macro_input!(input as DeriveInput);
         let name = &input.ident;
+        println!("{name}");
         let info_name = quote::format_ident!("{}_INFO", name);
 
         let type_id = quote! { std::any::TypeId::of::<#name>() };
@@ -124,50 +124,58 @@ mod helper {
     }
 
     fn extract_type_info(ty: &syn::Type) -> TokenStream2 {
-        match ty {
-            syn::Type::Path(type_path) => {
-                let type_name = quote::format_ident!("{}", type_path.path.segments.last().unwrap().ident);
-                let generic_count = count_generics(ty);
-
-                println!("Type: {}, Generic Count: {}", type_name, generic_count);
-
-                if generic_count > 0 {
-                    let generic_params = &type_path.path.segments.last().unwrap().arguments;
-                    if let syn::PathArguments::AngleBracketed(params) = generic_params {
-                        let type_ids = params.args.iter()
-                            .filter_map(|arg| {
-                                if let syn::GenericArgument::Type(ty) = arg {
-                                    let type_id = quote! { std::any::TypeId::of::<#ty>() };
-                                    println!("  Generic Type: {}", type_id.to_string());
-                                    Some(type_id)
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect::<Vec<_>>();
-
-                        quote! {
-                        {
-                            const GENERIC_COUNT: usize = #generic_count;
-                            const fn create_array() -> [std::any::TypeId; GENERIC_COUNT] {
-                                [#(#type_ids),*]
-                            }
-                            (stringify!(#type_name), &create_array())
+        let type_path = match ty {
+            syn::Type::Path(type_path) => type_path,
+            syn::Type::Array(array) => {
+                let elem = &array.elem;
+                let len = &array.len;
+                return quote! { 
+                    {
+                        const fn create_array() -> [std::any::TypeId; 1] {
+                            [std::any::TypeId::of::<#elem>()]
                         }
+                        (stringify!([#elem; #len]), &create_array())
                     }
-                    } else {
-                        println!("  No angle-bracketed generic parameters found");
-                        quote! { (stringify!(#type_name), &[]) }
-                    }
-                } else {
-                    println!("  No generic parameters");
-                    quote! { (stringify!(#type_name), &[]) }
                 }
             }
             _ => {
                 println!("Unsupported type: {:?}", ty);
-                quote! { (stringify!(#ty), &[]) }
-            },
+                return quote! { (stringify!(#ty), &[std::any::TypeId::of::<#ty>()]) };
+            }
+        };
+
+        let type_name = quote::format_ident!("{}", type_path.path.segments.last().unwrap().ident);
+        let generic_count = count_generics(ty);
+
+        if generic_count == 0 {
+            return quote! { (stringify!(#type_name), &[std::any::TypeId::of::<#ty>()]) };
+        }
+
+        let generic_params = &type_path.path.segments.last().unwrap().arguments;
+        let params = match generic_params {
+            syn::PathArguments::AngleBracketed(params) => params,
+            _ => return quote! { (stringify!(#type_name), &[std::any::TypeId::of::<#ty>()]) },
+        };
+
+        let type_ids: Vec<_> = params.args.iter()
+            .filter_map(|arg| {
+                if let syn::GenericArgument::Type(ty) = arg {
+                    Some(quote! { std::any::TypeId::of::<#ty>() })
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        println!("{type_name} | {} {:?}", generic_count, type_ids);
+        quote! {
+            {
+                const GENERIC_COUNT: usize = #generic_count;
+                const fn create_array() -> [std::any::TypeId; 1 + GENERIC_COUNT] {
+                    [std::any::TypeId::of::<#ty>(), #(#type_ids),*]
+                }
+                (stringify!(#type_name), &create_array())
+            }
         }
     }
 

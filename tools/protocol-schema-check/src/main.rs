@@ -9,11 +9,12 @@
 // other crates.
 #[allow(unused_imports)]
 use near_primitives::*;
+use near_crypto::*;
 
 use near_stable_hasher::StableHasher;
-use near_structs_checker_lib::{FieldName, ProtocolStructInfo, TypeInfo};
+use near_structs_checker_lib::{FieldName, ProtocolStructInfo, FieldTypeInfo};
 use std::any::TypeId;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
@@ -34,6 +35,7 @@ fn compute_hash(
     info: &ProtocolStructInfo,
     structs: &BTreeMap<TypeId, &'static ProtocolStructInfo>,
 ) -> u32 {
+    // println!("COMPUTE HASH FOR {}", info.type_name());
     let mut hasher = StableHasher::new();
     match info {
         ProtocolStructInfo::Struct { name, type_id: _, fields } => {
@@ -56,11 +58,13 @@ fn compute_hash(
 }
 
 fn compute_fields_hash(
-    fields: &'static [(FieldName, TypeInfo)],
+    fields: &'static [(FieldName, FieldTypeInfo)],
     structs: &BTreeMap<TypeId, &'static ProtocolStructInfo>,
     hasher: &mut StableHasher,
 ) {
+    // println!("RECURSIVE COMPUTE");
     for (field_name, (type_name, generic_params)) in fields {
+        // println!("{}: {}", field_name, type_name);
         field_name.hash(hasher);
         type_name.hash(hasher);
         for &param_type_id in generic_params.iter() {
@@ -314,6 +318,32 @@ mod tests {
         );
     }
 
+    /// Checks that if hashes can differentiate generics in containers.
+    #[test]
+    fn test_different_container_generics() {
+        mod inner {
+            #[derive(super::ProtocolStruct)]
+            #[allow(unused)]
+            pub struct Container {
+                a: Vec<u32>,
+            }
+        }
+        use inner::Container as VecContainer;
+
+        #[derive(ProtocolStruct)]
+        #[allow(unused)]
+        struct Container {
+            a: Vec<i32>,
+        }
+
+        check_types(
+            TypeId::of::<Container>(),
+            TypeId::of::<VecContainer>(),
+            false,
+            &collect_structs(),
+        );
+    }
+
     /// Checks that if hashes can differentiate nested containers.
     #[test]
     fn test_different_nested_containers() {
@@ -329,7 +359,7 @@ mod tests {
         #[derive(ProtocolStruct)]
         #[allow(unused)]
         struct Container {
-            a: Vec<Vec<u32>>,
+            a: Vec<Vec<i32>>,
         }
 
         check_types(
