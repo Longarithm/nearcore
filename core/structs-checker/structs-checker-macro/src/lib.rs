@@ -16,9 +16,9 @@ mod helper {
         fn count_generic_args(args: &syn::PathArguments) -> usize {
             match args {
                 syn::PathArguments::AngleBracketed(bracketed) => {
-                    bracketed.args.iter().filter(|arg| {
+                    bracketed.args.iter().map(|arg| {
                         if let syn::GenericArgument::Type(ty) = arg {
-                            1 + count_type(ty)
+                            count_type(ty)
                         } else {
                             0
                         }
@@ -29,7 +29,7 @@ mod helper {
         }
 
         fn count_type(ty: &syn::Type) -> usize {
-            match ty {
+            1 + match ty {
                 syn::Type::Path(type_path) => {
                     type_path.path.segments.iter()
                         .map(|seg| count_generic_args(&seg.arguments))
@@ -52,7 +52,6 @@ mod helper {
     pub fn protocol_struct_impl(input: TokenStream) -> TokenStream {
         let input = parse_macro_input!(input as DeriveInput);
         let name = &input.ident;
-        println!("{name}");
         let info_name = quote::format_ident!("{}_INFO", name);
 
         let type_id = quote! { std::any::TypeId::of::<#name>() };
@@ -129,6 +128,30 @@ mod helper {
         quote! { &[#(#variants),*] }
     }
 
+    fn extract_typeid_with_generics(ty: &syn::Type) -> Vec<TokenStream2> {
+        let mut result = vec![quote! { std::any::TypeId::of::<#ty>() }];
+        let type_path = match ty {
+            syn::Type::Path(type_path) => type_path,
+            _ => return result,
+        };
+        let generic_params = &type_path.path.segments.last().unwrap().arguments;
+        let params = match generic_params {
+            syn::PathArguments::AngleBracketed(params) => params,
+            _ => return result,
+        };
+        result.extend(params.args.iter()
+            .map(|arg| {
+                if let syn::GenericArgument::Type(ty) = arg {
+                    extract_typeid_with_generics(ty)
+                } else {
+                    vec![]
+                }
+            })
+            .flatten()
+            .collect::<Vec<_>>());
+        result
+    }
+    
     fn extract_type_info(ty: &syn::Type) -> TokenStream2 {
         let type_path = match ty {
             syn::Type::Path(type_path) => type_path,
@@ -157,23 +180,8 @@ mod helper {
             return quote! { (stringify!(#type_name), &[std::any::TypeId::of::<#ty>()]) };
         }
 
-        let generic_params = &type_path.path.segments.last().unwrap().arguments;
-        let params = match generic_params {
-            syn::PathArguments::AngleBracketed(params) => params,
-            _ => return quote! { (stringify!(#type_name), &[std::any::TypeId::of::<#ty>()]) },
-        };
-
-        let type_ids: Vec<_> = params.args.iter()
-            .filter_map(|arg| {
-                if let syn::GenericArgument::Type(ty) = arg {
-                    Some(quote! { std::any::TypeId::of::<#ty>() })
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        println!("{type_name} | {} {:?}", generic_count, type_ids);
+        let type_ids = extract_typeid_with_generics(ty);
+        
         quote! {
             {
                 const GENERIC_COUNT: usize = #generic_count;

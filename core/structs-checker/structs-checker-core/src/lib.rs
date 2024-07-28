@@ -7,7 +7,7 @@ pub type FieldName = &'static str;
 pub type VariantName = &'static str;
 pub type Variant = Option<&'static [(FieldName, FieldTypeInfo)]>;
 
-// Self type id and inner generic type ids.
+/// Self type id and **all inner generic type ids, defined recursively**.
 pub type FieldTypeInfo = (TypeName, &'static [TypeId]);
 
 #[derive(Copy, Clone)]
