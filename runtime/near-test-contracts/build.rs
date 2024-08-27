@@ -23,7 +23,7 @@ fn try_main() -> Result<(), Error> {
 
     let test_features = &env::var(TEST_FEATURES_ENV);
     println!("cargo:rerun-if-env-changed={TEST_FEATURES_ENV}");
-    println!("debug: test_features = {test_features:?}");
+    eprintln!("debug: test_features = {test_features:?}");
     if test_features.is_ok() {
         test_contract_features.push("test_features");
     }
@@ -72,7 +72,7 @@ fn build_contract(dir: &str, args: &[&str], output: &str) -> Result<(), Error> {
     println!("cargo:rerun-if-changed=./{}/src/lib.rs", dir);
     println!("cargo:rerun-if-changed=./{}/Cargo.toml", dir);
 
-    println!("debug: from = {from:?}, to = {to:?}");
+    eprintln!("debug: from = {from:?}, to = {to:?}");
 
     Ok(())
 }
@@ -93,7 +93,7 @@ fn cargo_build_cmd(target_dir: &std::path::Path) -> Command {
 }
 
 fn check_status(mut cmd: Command) -> Result<(), Error> {
-    println!("debug: running command: {cmd:?}");
+    eprintln!("debug: running command: {cmd:?}");
     cmd.status()
         .map_err(|err| format!("command `{cmd:?}` failed to run: {err}"))
         .and_then(|status| {
