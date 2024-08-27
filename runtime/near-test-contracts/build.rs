@@ -13,17 +13,18 @@ const TEST_FEATURES_ENV: &str = "CARGO_FEATURE_TEST_FEATURES";
 
 fn main() {
     if let Err(err) = try_main() {
-        eprintln!("{}", err);
+        println!("{}", err);
         std::process::exit(1);
     }
 }
 
 fn try_main() -> Result<(), Error> {
+    println!("debug: hello");
     let mut test_contract_features = vec!["latest_protocol"];
 
     let test_features = &env::var(TEST_FEATURES_ENV);
     println!("cargo:rerun-if-env-changed={TEST_FEATURES_ENV}");
-    eprintln!("debug: test_features = {test_features:?}");
+    println!("debug: test_features = {test_features:?}");
     if test_features.is_ok() {
         test_contract_features.push("test_features");
     }
@@ -72,7 +73,7 @@ fn build_contract(dir: &str, args: &[&str], output: &str) -> Result<(), Error> {
     println!("cargo:rerun-if-changed=./{}/src/lib.rs", dir);
     println!("cargo:rerun-if-changed=./{}/Cargo.toml", dir);
 
-    eprintln!("debug: from = {from:?}, to = {to:?}");
+    println!("debug: from = {from:?}, to = {to:?}");
 
     Ok(())
 }
@@ -93,7 +94,7 @@ fn cargo_build_cmd(target_dir: &std::path::Path) -> Command {
 }
 
 fn check_status(mut cmd: Command) -> Result<(), Error> {
-    eprintln!("debug: running command: {cmd:?}");
+    println!("debug: running command: {cmd:?}");
     cmd.status()
         .map_err(|err| format!("command `{cmd:?}` failed to run: {err}"))
         .and_then(|status| {
