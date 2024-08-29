@@ -13,13 +13,12 @@ const TEST_FEATURES_ENV: &str = "CARGO_FEATURE_TEST_FEATURES";
 
 fn main() {
     if let Err(err) = try_main() {
-        println!("{}", err);
+        eprintln!("{}", err);
         std::process::exit(1);
     }
 }
 
 fn try_main() -> Result<(), Error> {
-    println!("debug: hello");
     let mut test_contract_features = vec!["latest_protocol"];
 
     let test_features = &env::var(TEST_FEATURES_ENV);
