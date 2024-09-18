@@ -85,14 +85,21 @@ assert 'SuccessValue' in res['result']['status']
 time.sleep(1)
 
 nodes[1].stop_checking_store()
+total_tx = 0
 
 while True:
+    block_id_0 = nodes[0].get_latest_block()
     block_id = nodes[1].get_latest_block()
+    block_hash = block_id.hash_bytes
+    print('see', block_id_0.height, block_id.height)
     if int(block_id.height) > TARGET_HEIGHT:
         break
     for i in range(1, 20):
+        if total_tx % 1000 == 0:
+            print('sent', total_tx)
+        total_tx += 1
         start = 0
-        block_hash = nodes[1].get_latest_block().hash_bytes
+        # block_hash = nodes[1].get_latest_block().hash_bytes
         args = start.to_bytes(8, 'little') + i.to_bytes(8, 'little')
         if random.random() > 0.5:
             tx = sign_function_call_tx(nodes[0].signer_key,
@@ -110,9 +117,14 @@ while True:
 
 # delete all keys
 for i in range(1, 20):
+    print('delete tx', i)
+    
     start = 0
     args = start.to_bytes(8, 'little') + i.to_bytes(8, 'little')
-    block_id = nodes[1].get_latest_block()
+    block_id = nodes[0].get_latest_block()
+    block_id_1 = nodes[1].get_latest_block()
+    print('see', block_id.height, block_id_1.height)
+
     tx = sign_function_call_tx(nodes[0].signer_key,
                                nodes[0].signer_key.account_id, 'delete_strings',
                                args, GAS, 0, nonce, block_id.hash_bytes)
