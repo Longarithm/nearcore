@@ -89,6 +89,7 @@ total_tx = 0
 
 while True:
     block_id = nodes[1].get_latest_block()
+    block_hash = block_id.hash_bytes
     print('see', block_id.height)
     if int(block_id.height) > TARGET_HEIGHT:
         break
@@ -97,7 +98,7 @@ while True:
             print('sent', total_tx)
         total_tx += 1
         start = 0
-        block_hash = nodes[1].get_latest_block().hash_bytes
+        # block_hash = nodes[1].get_latest_block().hash_bytes
         args = start.to_bytes(8, 'little') + i.to_bytes(8, 'little')
         if random.random() > 0.5:
             tx = sign_function_call_tx(nodes[0].signer_key,
