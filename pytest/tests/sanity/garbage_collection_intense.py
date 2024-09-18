@@ -117,9 +117,14 @@ while True:
 
 # delete all keys
 for i in range(1, 20):
+    print('delete tx', i)
+    
     start = 0
     args = start.to_bytes(8, 'little') + i.to_bytes(8, 'little')
-    block_id = nodes[1].get_latest_block()
+    block_id = nodes[0].get_latest_block()
+    block_id_1 = nodes[1].get_latest_block()
+    print('see', block_id.height, block_id_1.height)
+
     tx = sign_function_call_tx(nodes[0].signer_key,
                                nodes[0].signer_key.account_id, 'delete_strings',
                                args, GAS, 0, nonce, block_id.hash_bytes)
