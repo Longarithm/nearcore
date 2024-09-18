@@ -85,6 +85,7 @@ assert 'SuccessValue' in res['result']['status']
 time.sleep(1)
 
 nodes[1].stop_checking_store()
+total_tx = 0
 
 while True:
     block_id = nodes[1].get_latest_block()
@@ -92,7 +93,9 @@ while True:
     if int(block_id.height) > TARGET_HEIGHT:
         break
     for i in range(1, 20):
-        print('send tx', i)
+        if total_tx % 1000 == 0:
+            print('sent', total_tx)
+        total_tx += 1
         start = 0
         block_hash = nodes[1].get_latest_block().hash_bytes
         args = start.to_bytes(8, 'little') + i.to_bytes(8, 'little')
