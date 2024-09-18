@@ -88,9 +88,10 @@ nodes[1].stop_checking_store()
 total_tx = 0
 
 while True:
+    block_id_0 = nodes[0].get_latest_block()
     block_id = nodes[1].get_latest_block()
     block_hash = block_id.hash_bytes
-    print('see', block_id.height)
+    print('see', block_id_0.height, block_id.height)
     if int(block_id.height) > TARGET_HEIGHT:
         break
     for i in range(1, 20):
