@@ -1,6 +1,6 @@
 use super::ValidatorSchedule;
 use crate::types::{
-    ApplyChunkBlockContext, ApplyChunkResult, ApplyChunkShardContext, ApplyResultForResharding,
+    ApplyChunkBlockContext, ApplyChunkResult, ApplyChunkShardContext,
     PrepareTransactionsBlockContext, PrepareTransactionsChunkContext, PreparedTransactions,
     RuntimeAdapter, RuntimeStorageConfig,
 };
@@ -11,7 +11,6 @@ use near_async::time::Duration;
 use near_chain_configs::{ProtocolConfig, DEFAULT_GC_NUM_EPOCHS_TO_KEEP};
 use near_chain_primitives::Error;
 use near_crypto::{KeyType, PublicKey, SecretKey, Signature};
-use near_epoch_manager::types::BlockHeaderInfo;
 use near_epoch_manager::{EpochManagerAdapter, RngSeed};
 use near_parameters::RuntimeConfig;
 use near_pool::types::TransactionGroupIterator;
@@ -20,20 +19,23 @@ use near_primitives::apply::ApplyChunkReason;
 use near_primitives::block::Tip;
 use near_primitives::block_header::{Approval, ApprovalInner};
 use near_primitives::congestion_info::{CongestionInfo, ExtendedCongestionInfo};
-use near_primitives::epoch_manager::block_info::BlockInfo;
-use near_primitives::epoch_manager::epoch_info::EpochInfo;
+use near_primitives::epoch_block_info::BlockInfo;
+use near_primitives::epoch_info::EpochInfo;
 use near_primitives::epoch_manager::EpochConfig;
 use near_primitives::epoch_manager::ShardConfig;
 use near_primitives::epoch_manager::ValidatorSelectionConfig;
 use near_primitives::errors::{EpochError, InvalidTxError};
 use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::receipt::{ActionReceipt, Receipt, ReceiptEnum, ReceiptV0};
+use near_primitives::shard_layout;
 use near_primitives::shard_layout::{ShardLayout, ShardUId};
 use near_primitives::sharding::{ChunkHash, ShardChunkHeader};
 use near_primitives::state_part::PartId;
-use near_primitives::stateless_validation::{
-    ChunkEndorsement, ChunkValidatorAssignments, PartialEncodedStateWitness,
+use near_primitives::stateless_validation::chunk_endorsement::{
+    ChunkEndorsementV1, ChunkEndorsementV2,
 };
+use near_primitives::stateless_validation::partial_witness::PartialEncodedStateWitness;
+use near_primitives::stateless_validation::validator_assignment::ChunkValidatorAssignments;
 use near_primitives::transaction::{
     Action, ExecutionMetadata, ExecutionOutcome, ExecutionOutcomeWithId, ExecutionStatus,
     SignedTransaction, TransferAction,
@@ -41,14 +43,13 @@ use near_primitives::transaction::{
 use near_primitives::types::validator_stake::ValidatorStake;
 use near_primitives::types::{
     AccountId, ApprovalStake, Balance, BlockHeight, EpochHeight, EpochId, Nonce, NumShards,
-    ShardId, StateChangesForResharding, StateRoot, StateRootNode, ValidatorInfoIdentifier,
+    ShardId, StateRoot, StateRootNode, ValidatorInfoIdentifier,
 };
 use near_primitives::version::{ProtocolFeature, ProtocolVersion, PROTOCOL_VERSION};
 use near_primitives::views::{
     AccessKeyInfoView, AccessKeyList, CallResult, ContractCodeView, EpochValidatorInfo,
     QueryRequest, QueryResponse, QueryResponseKind, ViewStateResult,
 };
-use near_primitives::{checked_feature, shard_layout};
 use near_store::test_utils::TestTriesBuilder;
 use near_store::{
     set_genesis_hash, set_genesis_state_roots, DBCol, ShardTries, Store, StoreUpdate, Trie,
@@ -794,7 +795,8 @@ impl EpochManagerAdapter for MockEpochManager {
 
     fn add_validator_proposals(
         &self,
-        _block_header_info: BlockHeaderInfo,
+        _block_info: BlockInfo,
+        _random_value: CryptoHash,
     ) -> Result<StoreUpdate, EpochError> {
         Ok(self.store.store_update())
     }
@@ -829,8 +831,9 @@ impl EpochManagerAdapter for MockEpochManager {
         Ok(Default::default())
     }
 
-    fn epoch_sync_init_epoch_manager(
+    fn init_after_epoch_sync(
         &self,
+        _store_update: &mut StoreUpdate,
         _prev_epoch_first_block_info: BlockInfo,
         _prev_epoch_last_block_info: BlockInfo,
         _prev_epoch_prev_last_block_info: BlockInfo,
@@ -945,7 +948,14 @@ impl EpochManagerAdapter for MockEpochManager {
     fn verify_chunk_endorsement(
         &self,
         _chunk_header: &ShardChunkHeader,
-        _endorsement: &ChunkEndorsement,
+        _endorsement: &ChunkEndorsementV1,
+    ) -> Result<bool, Error> {
+        Ok(true)
+    }
+
+    fn verify_chunk_endorsement_signature(
+        &self,
+        _endorsement: &ChunkEndorsementV2,
     ) -> Result<bool, Error> {
         Ok(true)
     }
@@ -1043,18 +1053,6 @@ impl EpochManagerAdapter for MockEpochManager {
         Ok(vec)
     }
 
-    #[cfg(feature = "new_epoch_sync")]
-    fn get_all_epoch_hashes(
-        &self,
-        _last_block_info: &BlockInfo,
-        _hash_to_prev_hash: Option<&HashMap<CryptoHash, CryptoHash>>,
-    ) -> Result<Vec<CryptoHash>, EpochError> {
-        Ok(vec![])
-    }
-
-    #[cfg(feature = "new_epoch_sync")]
-    fn force_update_aggregator(&self, _epoch_id: &EpochId, _hash: &CryptoHash) {}
-
     fn get_epoch_all_validators(
         &self,
         _epoch_id: &EpochId,
@@ -1126,13 +1124,7 @@ impl RuntimeAdapter for KeyValueRuntime {
         while let Some(iter) = transaction_groups.next() {
             res.push(iter.next().unwrap());
         }
-        let storage_proof = if checked_feature!("stable", StatelessValidationV0, PROTOCOL_VERSION)
-            || cfg!(feature = "shadow_chunk_validation")
-        {
-            Some(Default::default())
-        } else {
-            None
-        };
+        let storage_proof = Some(Default::default());
         Ok(PreparedTransactions { transactions: res, limited_by: None, storage_proof })
     }
 
@@ -1282,13 +1274,7 @@ impl RuntimeAdapter for KeyValueRuntime {
         let state_root = hash(&data);
         self.state.write().unwrap().insert(state_root, state);
         self.state_size.write().unwrap().insert(state_root, state_size);
-        let storage_proof = if checked_feature!("stable", StatelessValidationV0, PROTOCOL_VERSION)
-            || cfg!(feature = "shadow_chunk_validation")
-        {
-            Some(Default::default())
-        } else {
-            None
-        };
+        let storage_proof = Some(Default::default());
         Ok(ApplyChunkResult {
             trie_changes: WrappedTrieChanges::new(
                 self.get_tries(),
@@ -1495,16 +1481,5 @@ impl RuntimeAdapter for KeyValueRuntime {
         _parent_hash: &CryptoHash,
     ) -> Result<bool, Error> {
         Ok(false)
-    }
-
-    fn apply_update_to_children_states(
-        &self,
-        _block_hash: &CryptoHash,
-        _block_height: BlockHeight,
-        _state_roots: HashMap<ShardUId, StateRoot>,
-        _next_shard_layout: &ShardLayout,
-        _state_changes: StateChangesForResharding,
-    ) -> Result<Vec<ApplyResultForResharding>, Error> {
-        Ok(vec![])
     }
 }

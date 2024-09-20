@@ -4,19 +4,17 @@ use crate::types::{ChainConfig, RuntimeStorageConfig};
 use crate::{Chain, ChainGenesis, ChainStoreAccess, DoomslugThresholdMode};
 use near_chain_configs::test_utils::{TESTING_INIT_BALANCE, TESTING_INIT_STAKE};
 use near_epoch_manager::shard_tracker::ShardTracker;
-use near_epoch_manager::types::BlockHeaderInfo;
 use near_epoch_manager::{EpochManager, RngSeed};
 use near_pool::{
     InsertTransactionResult, PoolIteratorWrapper, TransactionGroupIteratorWrapper, TransactionPool,
 };
 use near_primitives::action::FunctionCallAction;
 use near_primitives::apply::ApplyChunkReason;
-use near_primitives::checked_feature;
 use near_primitives::congestion_info::{BlockCongestionInfo, ExtendedCongestionInfo};
+use near_primitives::epoch_block_info::BlockInfo;
 use near_primitives::receipt::{ActionReceipt, ReceiptV1};
 use near_primitives::test_utils::create_test_signer;
 use near_primitives::types::validator_stake::{ValidatorStake, ValidatorStakeIter};
-use near_primitives::version::PROTOCOL_VERSION;
 use near_store::flat::{FlatStateChanges, FlatStateDelta, FlatStateDeltaMetadata};
 use near_store::genesis::initialize_genesis_state;
 use num_rational::Ratio;
@@ -167,20 +165,23 @@ impl TestEnv {
         }
 
         epoch_manager
-            .add_validator_proposals(BlockHeaderInfo {
-                prev_hash: CryptoHash::default(),
-                hash: genesis_hash,
-                random_value: [0; 32].as_ref().try_into().unwrap(),
-                height: 0,
-                last_finalized_height: 0,
-                last_finalized_block_hash: CryptoHash::default(),
-                proposals: vec![],
-                slashed_validators: vec![],
-                chunk_mask: vec![],
-                total_supply: genesis_total_supply,
-                latest_protocol_version: genesis_protocol_version,
-                timestamp_nanosec: 0,
-            })
+            .add_validator_proposals(
+                BlockInfo::new(
+                    genesis_hash,
+                    0,
+                    0,
+                    CryptoHash::default(),
+                    CryptoHash::default(),
+                    vec![],
+                    vec![],
+                    vec![],
+                    genesis_total_supply,
+                    genesis_protocol_version,
+                    0,
+                    None,
+                ),
+                [0; 32].as_ref().try_into().unwrap(),
+            )
             .unwrap()
             .commit()
             .unwrap();
@@ -333,20 +334,23 @@ impl TestEnv {
             self.last_shard_proposals.insert(shard_id, proposals);
         }
         self.epoch_manager
-            .add_validator_proposals(BlockHeaderInfo {
-                prev_hash: self.head.last_block_hash,
-                hash: new_hash,
-                random_value: [0; 32].as_ref().try_into().unwrap(),
-                height: self.head.height + 1,
-                last_finalized_height: self.head.height.saturating_sub(1),
-                last_finalized_block_hash: self.head.last_block_hash,
-                proposals: self.last_proposals.clone(),
-                slashed_validators: challenges_result,
-                chunk_mask,
-                total_supply: self.runtime.genesis_config.total_supply,
-                latest_protocol_version: self.runtime.genesis_config.protocol_version,
-                timestamp_nanosec: self.time + 10u64.pow(9),
-            })
+            .add_validator_proposals(
+                BlockInfo::new(
+                    new_hash,
+                    self.head.height + 1,
+                    self.head.height.saturating_sub(1),
+                    self.head.last_block_hash,
+                    self.head.last_block_hash,
+                    self.last_proposals.clone(),
+                    chunk_mask,
+                    challenges_result,
+                    self.runtime.genesis_config.total_supply,
+                    self.runtime.genesis_config.protocol_version,
+                    self.time + 10u64.pow(9),
+                    None,
+                ),
+                [0; 32].as_ref().try_into().unwrap(),
+            )
             .unwrap()
             .commit()
             .unwrap();
@@ -741,20 +745,23 @@ fn test_state_sync() {
         };
         new_env
             .epoch_manager
-            .add_validator_proposals(BlockHeaderInfo {
-                prev_hash,
-                hash: cur_hash,
-                random_value: [0; 32].as_ref().try_into().unwrap(),
-                height: i,
-                last_finalized_height: i.saturating_sub(2),
-                last_finalized_block_hash: prev_hash,
-                proposals: new_env.last_proposals,
-                slashed_validators: vec![],
-                chunk_mask: vec![true],
-                total_supply: new_env.runtime.genesis_config.total_supply,
-                latest_protocol_version: new_env.runtime.genesis_config.protocol_version,
-                timestamp_nanosec: new_env.time,
-            })
+            .add_validator_proposals(
+                BlockInfo::new(
+                    cur_hash,
+                    i,
+                    i.saturating_sub(2),
+                    prev_hash,
+                    prev_hash,
+                    new_env.last_proposals,
+                    vec![true],
+                    vec![],
+                    new_env.runtime.genesis_config.total_supply,
+                    new_env.runtime.genesis_config.protocol_version,
+                    new_env.time,
+                    None,
+                ),
+                [0; 32].as_ref().try_into().unwrap(),
+            )
             .unwrap()
             .commit()
             .unwrap();
@@ -1534,8 +1541,15 @@ fn test_genesis_hash() {
         StateSnapshotType::EveryEpoch,
     );
 
-    let block = Chain::make_genesis_block(epoch_manager.as_ref(), runtime.as_ref(), &chain_genesis)
-        .unwrap();
+    let state_roots =
+        get_genesis_state_roots(runtime.store()).unwrap().expect("genesis should be initialized.");
+    let (block, _chunks) = Chain::make_genesis_block(
+        epoch_manager.as_ref(),
+        runtime.as_ref(),
+        &chain_genesis,
+        state_roots,
+    )
+    .unwrap();
     assert_eq!(block.header().hash().to_string(), "EPnLgE7iEq9s7yTkos96M3cWymH5avBAPm3qx3NXqR8H");
 
     let epoch_manager = EpochManager::new_from_genesis_config(store, &genesis.config).unwrap();
@@ -1672,11 +1686,6 @@ fn prepare_transactions(
 /// Check that transactions validation works the same when using recorded storage proof instead of db.
 #[test]
 fn test_prepare_transactions_storage_proof() {
-    if !checked_feature!("stable", StatelessValidationV0, PROTOCOL_VERSION) {
-        println!("Test not applicable without StatelessValidation enabled");
-        return;
-    }
-
     let (env, chain, mut transaction_pool) = get_test_env_with_chain_and_pool();
     let transactions_count = transaction_pool.len();
 
@@ -1721,11 +1730,6 @@ fn test_prepare_transactions_storage_proof() {
 /// Check that transactions validation fails if provided empty storage proof.
 #[test]
 fn test_prepare_transactions_empty_storage_proof() {
-    if !checked_feature!("stable", StatelessValidationV0, PROTOCOL_VERSION) {
-        println!("Test not applicable without StatelessValidation enabled");
-        return;
-    }
-
     let (env, chain, mut transaction_pool) = get_test_env_with_chain_and_pool();
     let transactions_count = transaction_pool.len();
 
@@ -1769,9 +1773,6 @@ fn test_prepare_transactions_empty_storage_proof() {
 #[test]
 #[cfg_attr(not(feature = "test_features"), ignore)]
 fn test_storage_proof_garbage() {
-    if !checked_feature!("stable", StatelessValidationV0, PROTOCOL_VERSION) {
-        return;
-    }
     let shard_id = 0;
     let signer = create_test_signer("test1");
     let env = TestEnv::new(vec![vec![signer.validator_id().clone()]], 100, false);

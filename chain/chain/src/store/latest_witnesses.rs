@@ -8,7 +8,7 @@
 use std::io::ErrorKind;
 
 use near_primitives::hash::CryptoHash;
-use near_primitives::stateless_validation::ChunkStateWitness;
+use near_primitives::stateless_validation::state_witness::ChunkStateWitness;
 use near_primitives::types::EpochId;
 use near_store::DBCol;
 
@@ -19,6 +19,7 @@ use super::ChainStore;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use bytesize::ByteSize;
+use near_schema_checker_lib::ProtocolSchema;
 use near_store::db::LATEST_WITNESSES_INFO;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -81,8 +82,10 @@ impl LatestWitnessesKey {
 
 /// Keeps aggregate information about all witnesses stored in `DBCol::LatestChunkStateWitnesses`.
 /// Used for enforcing limits on the number of witnesses stored in the database.
-#[derive(Debug, Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Default)]
-struct LatestWitnessesInfo {
+#[derive(
+    Debug, Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Eq, Default, ProtocolSchema,
+)]
+pub struct LatestWitnessesInfo {
     pub count: u64,
     pub total_size: u64,
     pub lowest_index: u64,

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::num::NonZeroUsize;
 
 use crate::metrics;
-use crate::stateless_validation::chunk_endorsement_tracker::{
+use crate::stateless_validation::chunk_endorsement::{
     ChunkEndorsementTracker, ChunkEndorsementsState,
 };
 
@@ -110,7 +110,7 @@ impl ChunkInclusionTracker {
     pub fn prepare_chunk_headers_ready_for_inclusion(
         &mut self,
         prev_block_hash: &CryptoHash,
-        endorsement_tracker: &ChunkEndorsementTracker,
+        endorsement_tracker: &mut ChunkEndorsementTracker,
     ) -> Result<(), Error> {
         let Some(entry) = self.prev_block_to_chunk_hash_ready.get(prev_block_hash) else {
             return Ok(());
@@ -119,7 +119,7 @@ impl ChunkInclusionTracker {
         for chunk_hash in entry.values() {
             let chunk_info = self.chunk_hash_to_chunk_info.get_mut(chunk_hash).unwrap();
             chunk_info.endorsements =
-                endorsement_tracker.compute_chunk_endorsements(&chunk_info.chunk_header)?;
+                endorsement_tracker.collect_chunk_endorsements(&chunk_info.chunk_header)?;
         }
         Ok(())
     }

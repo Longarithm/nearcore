@@ -124,41 +124,23 @@ use utils::{
 use vm_estimator::{compile_single_contract_cost, compute_compile_cost_vm};
 
 static ALL_COSTS: &[(Cost, fn(&mut EstimatorContext) -> GasCost)] = &[
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381MapFpToG1Base, bls12381_map_fp_to_g1_base),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381MapFpToG1Element, bls12381_map_fp_to_g1_element),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381MapFp2ToG2Base, bls12381_map_fp2_to_g2_base),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381MapFp2ToG2Element, bls12381_map_fp2_to_g2_element),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381PairingBase, bls12381_pairing_base),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381PairingElement, bls12381_pairing_element),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381P1SumBase, bls12381_p1_sum_base),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381P1SumElement, bls12381_p1_sum_element),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381P2SumBase, bls12381_p2_sum_base),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381P2SumElement, bls12381_p2_sum_element),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381G1MultiexpBase, bls12381_g1_multiexp_base),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381G1MultiexpElement, bls12381_g1_multiexp_element),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381G2MultiexpBase, bls12381_g2_multiexp_base),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381G2MultiexpElement, bls12381_g2_multiexp_element),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381P1DecompressBase, bls12381_p1_decompress_base),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381P1DecompressElement, bls12381_p1_decompress_element),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381P2DecompressBase, bls12381_p2_decompress_base),
-    #[cfg(feature = "protocol_feature_bls12381")]
     (Cost::Bls12381P2DecompressElement, bls12381_p2_decompress_element),
     (Cost::ActionReceiptCreation, action_receipt_creation),
     (Cost::ActionSirReceiptCreation, action_sir_receipt_creation),
@@ -928,11 +910,12 @@ fn wasm_instruction(ctx: &mut EstimatorContext) -> GasCost {
     let cache = MockContractRuntimeCache::default();
 
     let mut run = || {
-        let context = create_context("cpu_ram_soak_test", vec![]);
+        let context = create_context(vec![]);
+        let gas_counter = context.make_gas_counter(&config);
         let vm_result = vm_kind
             .runtime(config.clone())
             .unwrap()
-            .prepare(&fake_external, &context, Some(&cache))
+            .prepare(&fake_external, Some(&cache), gas_counter, "cpu_ram_soak_test")
             .run(&mut fake_external, &context, Arc::clone(&fees))
             .expect("fatal_error");
         assert!(vm_result.aborted.is_some());
@@ -1101,62 +1084,50 @@ fn alt_bn128_pairing_check_element(ctx: &mut EstimatorContext) -> GasCost {
     )
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_p1_sum_base(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_p1_sum_0_100", ExtCosts::bls12381_p1_sum_base, 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_p1_sum_element(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_p1_sum_50_100", ExtCosts::bls12381_p1_sum_element, 5000)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_p2_sum_base(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_p2_sum_0_100", ExtCosts::bls12381_p2_sum_base, 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_p2_sum_element(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_p2_sum_50_100", ExtCosts::bls12381_p2_sum_element, 5000)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_g1_multiexp_base(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_g1_multiexp_0_100", ExtCosts::bls12381_g1_multiexp_base, 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_g1_multiexp_element(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_g1_multiexp_50_100", ExtCosts::bls12381_g1_multiexp_element, 50 * 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_g2_multiexp_base(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_g2_multiexp_0_100", ExtCosts::bls12381_g2_multiexp_base, 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_g2_multiexp_element(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_g2_multiexp_50_100", ExtCosts::bls12381_g2_multiexp_element, 50 * 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_map_fp_to_g1_base(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_map_fp_to_g1_0_100", ExtCosts::bls12381_map_fp_to_g1_base, 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_map_fp_to_g1_element(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_map_fp_to_g1_50_100", ExtCosts::bls12381_map_fp_to_g1_element, 50 * 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_map_fp2_to_g2_base(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_map_fp2_to_g2_0_100", ExtCosts::bls12381_map_fp2_to_g2_base, 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_map_fp2_to_g2_element(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(
         ctx,
@@ -1166,32 +1137,26 @@ fn bls12381_map_fp2_to_g2_element(ctx: &mut EstimatorContext) -> GasCost {
     )
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_pairing_base(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_pairing_0_100", ExtCosts::bls12381_pairing_base, 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_pairing_element(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_pairing_5_100", ExtCosts::bls12381_pairing_element, 5 * 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_p1_decompress_base(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_p1_decompress_0_100", ExtCosts::bls12381_p1_decompress_base, 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_p1_decompress_element(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_p1_decompress_50_100", ExtCosts::bls12381_p1_decompress_element, 5000)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_p2_decompress_base(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_p2_decompress_0_100", ExtCosts::bls12381_p2_decompress_base, 100)
 }
 
-#[cfg(feature = "protocol_feature_bls12381")]
 fn bls12381_p2_decompress_element(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost(ctx, "bls12381_p2_decompress_50_100", ExtCosts::bls12381_p2_decompress_element, 5000)
 }
@@ -1199,8 +1164,8 @@ fn bls12381_p2_decompress_element(ctx: &mut EstimatorContext) -> GasCost {
 fn storage_has_key_base(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost_with_setup(
         ctx,
-        "storage_write_10b_key_10b_value_1k",
-        "storage_has_key_10b_key_10b_value_1k",
+        "storage_write_10b_key_10kib_value_1k",
+        "storage_has_key_10b_key_1k",
         ExtCosts::storage_has_key_base,
         1000,
         0,
@@ -1209,8 +1174,8 @@ fn storage_has_key_base(ctx: &mut EstimatorContext) -> GasCost {
 fn storage_has_key_byte(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost_with_setup(
         ctx,
-        "storage_write_10kib_key_10b_value_1k",
-        "storage_has_key_10kib_key_10b_value_1k",
+        "storage_write_10kib_key_10kib_value_1k",
+        "storage_has_key_10kib_key_1k",
         ExtCosts::storage_has_key_byte,
         10 * 1024 * 1000,
         0,
@@ -1223,8 +1188,8 @@ fn storage_read_base(ctx: &mut EstimatorContext) -> GasCost {
     }
     let cost = fn_cost_with_setup(
         ctx,
-        "storage_write_10b_key_10b_value_1k",
-        "storage_read_10b_key_10b_value_1k",
+        "storage_write_10b_key_10kib_value_1k",
+        "storage_read_10b_key_1k",
         ExtCosts::storage_read_base,
         1000,
         0,
@@ -1234,8 +1199,8 @@ fn storage_read_base(ctx: &mut EstimatorContext) -> GasCost {
 fn storage_read_key_byte(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost_with_setup(
         ctx,
-        "storage_write_10kib_key_10b_value_1k",
-        "storage_read_10kib_key_10b_value_1k",
+        "storage_write_10kib_key_10kib_value_1k",
+        "storage_read_10kib_key_1k",
         ExtCosts::storage_read_key_byte,
         10 * 1024 * 1000,
         0,
@@ -1244,10 +1209,10 @@ fn storage_read_key_byte(ctx: &mut EstimatorContext) -> GasCost {
 fn storage_read_value_byte(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost_with_setup(
         ctx,
-        "storage_write_10b_key_10kib_value_1k",
-        "storage_read_10b_key_10kib_value_1k",
+        "storage_write_10b_key_100kib_value_1k",
+        "storage_read_10b_key_1k",
         ExtCosts::storage_read_value_byte,
-        10 * 1024 * 1000,
+        100 * 1024 * 1000,
         0,
     )
 }
@@ -1286,7 +1251,7 @@ fn storage_remove_base(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost_with_setup(
         ctx,
         "storage_write_10b_key_10b_value_1k",
-        "storage_remove_10b_key_10b_value_1k",
+        "storage_remove_10b_key_1k",
         ExtCosts::storage_remove_base,
         1000,
         0,
@@ -1296,7 +1261,7 @@ fn storage_remove_key_byte(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost_with_setup(
         ctx,
         "storage_write_10kib_key_10b_value_1k",
-        "storage_remove_10kib_key_10b_value_1k",
+        "storage_remove_10kib_key_1k",
         ExtCosts::storage_remove_key_byte,
         10 * 1024 * 1000,
         0,
@@ -1306,7 +1271,7 @@ fn storage_remove_ret_value_byte(ctx: &mut EstimatorContext) -> GasCost {
     fn_cost_with_setup(
         ctx,
         "storage_write_10b_key_10kib_value_1k",
-        "storage_remove_10b_key_10kib_value_1k",
+        "storage_remove_10b_key_1k",
         ExtCosts::storage_remove_ret_value_byte,
         10 * 1024 * 1000,
         0,

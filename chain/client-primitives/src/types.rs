@@ -3,7 +3,7 @@ use near_chain_configs::{ClientConfig, ProtocolConfigView};
 use near_primitives::hash::CryptoHash;
 use near_primitives::merkle::{MerklePath, PartialMerkleTree};
 use near_primitives::network::PeerId;
-use near_primitives::sharding::ChunkHash;
+use near_primitives::sharding::{ChunkHash, ShardChunk};
 use near_primitives::types::{
     AccountId, BlockHeight, BlockReference, EpochId, EpochReference, MaybeBlockId, ShardId,
     TransactionOrReceiptId,
@@ -271,6 +271,13 @@ impl std::fmt::Debug for StateSyncStatus {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct EpochSyncStatus {
+    pub source_peer_height: BlockHeight,
+    pub source_peer_id: PeerId,
+    pub attempt_time: near_time::Utc,
+}
+
 /// Various status sync can be in, whether it's fast sync or archival.
 #[derive(Clone, Debug, strum::AsRefStr)]
 pub enum SyncStatus {
@@ -279,9 +286,8 @@ pub enum SyncStatus {
     /// Not syncing / Done syncing.
     NoSync,
     /// Syncing using light-client headers to a recent epoch
-    // TODO #3488
-    // Bowen: why do we use epoch ordinal instead of epoch id?
-    EpochSync { epoch_ord: u64 },
+    EpochSync(EpochSyncStatus),
+    EpochSyncDone,
     /// Downloading block headers for fast sync.
     HeaderSync {
         /// Head height at the beginning. Not the header head height!
@@ -328,10 +334,11 @@ impl SyncStatus {
             SyncStatus::NoSync => 0,
             SyncStatus::AwaitingPeers => 1,
             SyncStatus::EpochSync { .. } => 2,
-            SyncStatus::HeaderSync { .. } => 3,
-            SyncStatus::StateSync(_) => 4,
-            SyncStatus::StateSyncDone => 5,
-            SyncStatus::BlockSync { .. } => 6,
+            SyncStatus::EpochSyncDone { .. } => 3,
+            SyncStatus::HeaderSync { .. } => 4,
+            SyncStatus::StateSync(_) => 5,
+            SyncStatus::StateSyncDone => 6,
+            SyncStatus::BlockSync { .. } => 7,
         }
     }
 
@@ -356,7 +363,12 @@ impl From<SyncStatus> for SyncStatusView {
         match status {
             SyncStatus::AwaitingPeers => SyncStatusView::AwaitingPeers,
             SyncStatus::NoSync => SyncStatusView::NoSync,
-            SyncStatus::EpochSync { epoch_ord } => SyncStatusView::EpochSync { epoch_ord },
+            SyncStatus::EpochSync(status) => SyncStatusView::EpochSync {
+                source_peer_height: status.source_peer_height,
+                source_peer_id: status.source_peer_id.to_string(),
+                attempt_time: status.attempt_time.to_string(),
+            },
+            SyncStatus::EpochSyncDone => SyncStatusView::EpochSyncDone,
             SyncStatus::HeaderSync { start_height, current_height, highest_height } => {
                 SyncStatusView::HeaderSync { start_height, current_height, highest_height }
             }
@@ -377,7 +389,7 @@ impl From<SyncStatus> for SyncStatusView {
 }
 
 /// Actor message requesting block by id, hash or sync state.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct GetBlock(pub BlockReference);
 
 #[derive(thiserror::Error, Debug)]
@@ -435,7 +447,7 @@ impl Message for GetBlockWithMerkleTree {
 }
 
 /// Actor message requesting a chunk by chunk hash and block hash + shard id.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum GetChunk {
     Height(BlockHeight, ShardId),
     BlockHash(CryptoHash, ShardId),
@@ -444,6 +456,20 @@ pub enum GetChunk {
 
 impl Message for GetChunk {
     type Result = Result<ChunkView, GetChunkError>;
+}
+
+/// Actor message requesting a chunk by chunk hash and block hash + shard id.
+/// The difference between this and `GetChunk` is that it returns the actual `ShardChunk`
+/// instead of a `ChunkView`
+#[derive(Debug)]
+pub enum GetShardChunk {
+    Height(BlockHeight, ShardId),
+    BlockHash(CryptoHash, ShardId),
+    ChunkHash(ChunkHash),
+}
+
+impl Message for GetShardChunk {
+    type Result = Result<ShardChunk, GetChunkError>;
 }
 
 #[derive(thiserror::Error, Debug)]

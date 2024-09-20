@@ -5,11 +5,13 @@ use crate::logic::errors::{
     CacheError, CompilationError, FunctionCallError, MethodResolveError, VMRunnerError, WasmTrap,
 };
 use crate::logic::gas_counter::FastGasCounter;
-use crate::logic::{Config, ExecutionResultState, External, VMContext, VMLogic, VMOutcome};
+use crate::logic::{
+    Config, ExecutionResultState, External, GasCounter, VMContext, VMLogic, VMOutcome,
+};
 use crate::near_vm_runner::{NearVmCompiler, NearVmEngine};
 use crate::runner::VMResult;
 use crate::{
-    get_contract_cache_key, imports, CompiledContract, ContractCode, ContractRuntimeCache,
+    get_contract_cache_key, imports, CompiledContract, Contract, ContractCode, ContractRuntimeCache,
 };
 use crate::{prepare, NoContractRuntimeCache};
 use memoffset::offset_of;
@@ -25,8 +27,9 @@ use near_vm_vm::{
     Artifact, ExportFunction, ExportFunctionMetadata, Instantiatable, LinearMemory, LinearTable,
     MemoryStyle, Resolver, TrapCode, VMFunction, VMFunctionKind, VMMemory,
 };
+use std::any::Any;
 use std::mem::size_of;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 type VMArtifact = Arc<UniversalArtifact>;
 
@@ -211,9 +214,10 @@ impl NearVM {
     fn with_compiled_and_loaded(
         self: Box<Self>,
         cache: &dyn ContractRuntimeCache,
-        ext: &dyn External,
-        context: &VMContext,
-        closure: impl FnOnce(ExecutionResultState, &VMArtifact, Box<Self>) -> VMResult<PreparedContract>,
+        contract: &dyn Contract,
+        mut gas_counter: GasCounter,
+        method: &str,
+        closure: impl FnOnce(GasCounter, &VMArtifact, Box<Self>) -> VMResult<PreparedContract>,
     ) -> VMResult<PreparedContract> {
         // (wasm code size, compilation result)
         type MemoryCacheType = (u64, Result<VMArtifact, CompilationError>);
@@ -221,9 +225,9 @@ impl NearVM {
         // To identify a cache hit from either in-memory and on-disk cache correctly, we first assume that we have a cache hit here,
         // and then we set it to false when we fail to find any entry and decide to compile (by calling compile_and_cache below).
         let mut is_cache_hit = true;
-        let code_hash = ext.code_hash();
+        let key = get_contract_cache_key(contract.hash(), &self.config);
         let (wasm_bytes, artifact_result) = cache.memory_cache().try_lookup(
-            code_hash,
+            key,
             || {
                 // `cache` stores compiled machine code in the database
                 //
@@ -232,10 +236,9 @@ impl NearVM {
                 // outcome). And `cache`, being a database, can fail with an `io::Error`.
                 let _span =
                     tracing::debug_span!(target: "vm", "NearVM::fetch_from_cache").entered();
-                let key = get_contract_cache_key(code_hash, &self.config);
                 let cache_record = cache.get(&key).map_err(CacheError::ReadError)?;
                 let Some(compiled_contract_info) = cache_record else {
-                    let Some(code) = ext.get_contract() else {
+                    let Some(code) = contract.get_code() else {
                         return Err(VMRunnerError::ContractCodeNotPresent);
                     };
                     let _span =
@@ -299,24 +302,26 @@ impl NearVM {
         )?;
 
         crate::metrics::record_compiled_contract_cache_lookup(is_cache_hit);
-
-        let mut result_state = ExecutionResultState::new(&context, Arc::clone(&self.config));
-        let result = result_state.before_loading_executable(&context.method, wasm_bytes);
+        let config = Arc::clone(&self.config);
+        let result = gas_counter.before_loading_executable(&config, &method, wasm_bytes);
         if let Err(e) = result {
-            return Ok(PreparedContract::Outcome(VMOutcome::abort(result_state, e)));
+            let result = PreparationResult::OutcomeAbort(e);
+            return Ok(PreparedContract { config, gas_counter, result });
         }
         match artifact_result {
             Ok(artifact) => {
-                let result = result_state.after_loading_executable(wasm_bytes);
+                let result = gas_counter.after_loading_executable(&config, wasm_bytes);
                 if let Err(e) = result {
-                    return Ok(PreparedContract::Outcome(VMOutcome::abort(result_state, e)));
+                    let result = PreparationResult::OutcomeAbort(e);
+                    return Ok(PreparedContract { config, gas_counter, result });
                 }
-                closure(result_state, &artifact, self)
+                closure(gas_counter, &artifact, self)
             }
-            Err(e) => Ok(PreparedContract::Outcome(VMOutcome::abort(
-                result_state,
-                FunctionCallError::CompilationError(e),
-            ))),
+            Err(e) => {
+                let e = FunctionCallError::CompilationError(e);
+                let result = PreparationResult::OutcomeAbort(e);
+                return Ok(PreparedContract { config, gas_counter, result });
+            }
         }
     }
 
@@ -341,7 +346,7 @@ impl NearVM {
             offset_of!(FastGasCounter, gas_limit),
             offset_of!(near_vm_types::FastGasCounter, gas_limit)
         );
-        let gas = import.vmlogic.gas_counter_pointer() as *mut near_vm_types::FastGasCounter;
+        let gas = import.vmlogic.gas_counter().fast_counter_raw_ptr();
         unsafe {
             let instance = {
                 let _span = tracing::debug_span!(target: "vm", "run_method/instantiate").entered();
@@ -360,7 +365,7 @@ impl NearVM {
                     // by the virtue of it being contained within `import` which lives for the
                     // entirety of this function.
                     InstanceConfig::with_stack_limit(self.config.limit_config.max_stack_height)
-                        .with_counter(gas),
+                        .with_counter(gas.cast()),
                 );
                 let handle = match maybe_handle {
                     Ok(handle) => handle,
@@ -410,6 +415,7 @@ impl NearVM {
                         function.address,
                         [].as_mut_ptr() as *mut _,
                     );
+                    lazy_drop(Box::new(instance));
                     if let Err(trap) = res {
                         let abort = translate_runtime_error(
                             near_vm_engine::RuntimeError::from_trap(trap),
@@ -423,15 +429,33 @@ impl NearVM {
             } else {
                 panic!("signature should've already been checked by `get_entrypoint_index`")
             }
-
-            {
-                let _span =
-                    tracing::debug_span!(target: "vm", "run_method/drop_instance").entered();
-                drop(instance)
-            }
         }
 
         Ok(Ok(()))
+    }
+}
+
+/// Drop something somewhat lazily.
+///
+/// The memory destruction is sorta expensive process, but not expensive enough to offload it into
+/// a thread for individual instances.
+///
+/// Instead this method will gather up a number of things before initiating a release in a thread,
+/// thus working in batches of sorts and amortizing the thread overhead.
+fn lazy_drop(what: Box<dyn Any + Send>) {
+    // TODO: this would benefit from a lock-free array (should be straightforward enough to
+    // implement too...) But for the time being this mutex is not really contended much so…
+    // whatever.
+    const CHUNK_SIZE: usize = 8;
+    static WAITLIST: OnceLock<Mutex<Vec<Box<dyn Any + Send>>>> = OnceLock::new();
+    let waitlist = WAITLIST.get_or_init(|| Mutex::new(Vec::with_capacity(CHUNK_SIZE)));
+    let mut waitlist = waitlist.lock().unwrap_or_else(|e| e.into_inner());
+    if waitlist.capacity() > waitlist.len() {
+        waitlist.push(Box::new(what));
+    }
+    if waitlist.capacity() == waitlist.len() {
+        let chunk = std::mem::replace(&mut *waitlist, Vec::with_capacity(CHUNK_SIZE));
+        rayon::spawn(move || drop(chunk));
     }
 }
 
@@ -574,34 +598,40 @@ impl<'a> finite_wasm::wasmparser::VisitOperator<'a> for GasCostCfg {
 impl crate::runner::VM for NearVM {
     fn prepare(
         self: Box<Self>,
-        ext: &dyn External,
-        context: &VMContext,
+        contract: &dyn Contract,
         cache: Option<&dyn ContractRuntimeCache>,
+        gas_counter: GasCounter,
+        method: &str,
     ) -> Box<dyn crate::PreparedContract> {
         let cache = cache.unwrap_or(&NoContractRuntimeCache);
-        let prepd =
-            self.with_compiled_and_loaded(cache, ext, context, |result_state, artifact, vm| {
+        let config = Arc::clone(&self.config);
+        let prepd = self.with_compiled_and_loaded(
+            cache,
+            contract,
+            gas_counter,
+            method,
+            |gas_counter, artifact, vm| {
                 let memory = NearVmMemory::new(
                     vm.config.limit_config.initial_memory_pages,
                     vm.config.limit_config.max_memory_pages,
                 )
                 .expect("Cannot create memory for a contract call");
-                let entrypoint = match get_entrypoint_index(&*artifact, &context.method) {
+                let entrypoint = match get_entrypoint_index(&*artifact, method) {
                     Ok(index) => index,
                     Err(e) => {
-                        return Ok(PreparedContract::Outcome(
-                            VMOutcome::abort_but_nop_outcome_in_old_protocol(result_state, e),
-                        ))
+                        let result = PreparationResult::OutcomeAbortButNopInOldProtocol(e);
+                        return Ok(PreparedContract { config, gas_counter, result });
                     }
                 };
-                Ok(PreparedContract::Ready(ReadyContract {
+                let result = PreparationResult::Ready(ReadyContract {
                     memory,
-                    result_state,
                     entrypoint,
                     artifact: Arc::clone(artifact),
                     vm,
-                }))
-            });
+                });
+                Ok(PreparedContract { config, gas_counter, result })
+            },
+        );
         Box::new(prepd)
     }
 
@@ -621,15 +651,21 @@ impl crate::runner::VM for NearVM {
 
 struct ReadyContract {
     memory: NearVmMemory,
-    result_state: ExecutionResultState,
     entrypoint: FunctionIndex,
     artifact: VMArtifact,
     vm: Box<NearVM>,
 }
 
+struct PreparedContract {
+    config: Arc<Config>,
+    gas_counter: GasCounter,
+    result: PreparationResult,
+}
+
 #[allow(clippy::large_enum_variant)]
-enum PreparedContract {
-    Outcome(VMOutcome),
+enum PreparationResult {
+    OutcomeAbortButNopInOldProtocol(FunctionCallError),
+    OutcomeAbort(FunctionCallError),
     Ready(ReadyContract),
 }
 
@@ -640,18 +676,27 @@ impl crate::PreparedContract for VMResult<PreparedContract> {
         context: &VMContext,
         fees_config: Arc<RuntimeFeesConfig>,
     ) -> VMResult {
-        let ReadyContract { memory, result_state, entrypoint, artifact, vm } = match (*self)? {
-            PreparedContract::Outcome(outcome) => return Ok(outcome),
-            PreparedContract::Ready(r) => r,
+        let PreparedContract { config, gas_counter, result } = (*self)?;
+        let result_state = ExecutionResultState::new(&context, gas_counter, config);
+        let ReadyContract { mut memory, entrypoint, artifact, vm } = match result {
+            PreparationResult::Ready(r) => r,
+            PreparationResult::OutcomeAbortButNopInOldProtocol(e) => {
+                return Ok(VMOutcome::abort_but_nop_outcome_in_old_protocol(result_state, e));
+            }
+            PreparationResult::OutcomeAbort(e) => {
+                return Ok(VMOutcome::abort(result_state, e));
+            }
         };
         let config = Arc::clone(&result_state.config);
         let vmmemory = memory.vm();
-        let mut logic = VMLogic::new(ext, context, fees_config, result_state, memory);
+        let mut logic = VMLogic::new(ext, context, fees_config, result_state, &mut memory);
         let import = build_imports(vmmemory, &mut logic, config, artifact.engine());
-        match vm.run_method(&artifact, import, entrypoint)? {
+        let result = match vm.run_method(&artifact, import, entrypoint)? {
             Ok(()) => Ok(VMOutcome::ok(logic.result_state)),
             Err(err) => Ok(VMOutcome::abort(logic.result_state, err)),
-        }
+        };
+        lazy_drop(Box::new(memory));
+        result
     }
 }
 

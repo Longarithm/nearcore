@@ -38,7 +38,6 @@ fn test_client_with_simple_test_loop() {
         false,
         true,
         false,
-        false,
     );
     let initial_balance = 10000 * ONE_NEAR;
     let accounts =
@@ -92,7 +91,7 @@ fn test_client_with_simple_test_loop() {
 
     let client = Client::new(
         test_loop.clock(),
-        client_config.clone(),
+        client_config,
         chain_genesis,
         epoch_manager.clone(),
         shard_tracker.clone(),
@@ -112,6 +111,7 @@ fn test_client_with_simple_test_loop() {
     let shards_manager = ShardsManagerActor::new(
         test_loop.clock(),
         validator_signer,
+        epoch_manager.clone(),
         epoch_manager,
         shard_tracker,
         noop().into_sender(),
@@ -126,7 +126,6 @@ fn test_client_with_simple_test_loop() {
         test_loop.clock(),
         client,
         client_adapter.as_multi_sender(),
-        client_config,
         PeerId::random(),
         noop().into_multi_sender(),
         noop().into_sender(),

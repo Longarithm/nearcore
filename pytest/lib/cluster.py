@@ -5,7 +5,7 @@ import json
 import os
 import pathlib
 import rc
-from geventhttpclient import Session
+from geventhttpclient import Session, useragent
 import shutil
 import signal
 import subprocess
@@ -24,6 +24,7 @@ import network
 from configured_logger import logger
 from key import Key
 from proxy import NodesProxy
+import state_sync_lib
 
 os.environ["ADVERSARY_CONSENT"] = "1"
 
@@ -232,12 +233,9 @@ class BaseNode(object):
         cmd = (os.path.join(near_root, binary_name), '--home', node_dir, 'run')
         return cmd + make_boot_nodes_arg(boot_node)
 
-    def get_command_for_subprogram(self,
-                                   cmd: tuple,
-                                   near_root,
-                                   node_dir,
-                                   binary_name='neard'):
-        return (os.path.join(near_root, binary_name), '--home', node_dir) + cmd
+    def get_command_for_subprogram(self, cmd: tuple):
+        return (os.path.join(self.near_root,
+                             self.binary_name), '--home', self.node_dir) + cmd
 
     def addr_with_pk(self) -> str:
         pk_hash = self.node_key.pk.split(':')[1]
@@ -403,7 +401,7 @@ class BaseNode(object):
 
     # Get the transaction status.
     #
-    # The default timeout is quite high - 15s - so that is is longer than the
+    # The default timeout is quite high - 15s - so that is longer than the
     # node's default polling_timeout. It's done this way to differentiate
     # between the case when the transaction is not found on the node and when
     # the node is dead or not responding.
@@ -434,17 +432,20 @@ class BaseNode(object):
 
     def check_store(self):
         if self.is_check_store:
-            res = self.json_rpc('adv_check_store', [])
-            if not 'result' in res:
-                # cannot check Storage Consistency for the node, possibly not Adversarial Mode is running
+            try:
+                res = self.json_rpc('adv_check_store', [])
+                if not 'result' in res:
+                    # cannot check Storage Consistency for the node, possibly not Adversarial Mode is running
+                    pass
+                else:
+                    if res['result'] == 0:
+                        logger.error(
+                            "Storage for %s:%s in inconsistent state, stopping"
+                            % self.addr())
+                        self.kill()
+                    self.store_tests += res['result']
+            except useragent.BadStatusCode:
                 pass
-            else:
-                if res['result'] == 0:
-                    logger.error(
-                        "Storage for %s:%s in inconsistent state, stopping" %
-                        self.addr())
-                    self.kill()
-                self.store_tests += res['result']
 
 
 class RpcNode(BaseNode):
@@ -519,7 +520,7 @@ class LocalNode(BaseNode):
     def output_logs(self):
         stdout = pathlib.Path(self.node_dir) / 'stdout'
         stderr = pathlib.Path(self.node_dir) / 'stderr'
-        if os.environ.get('BUILDKITE'):
+        if os.environ.get('CI_HACKS'):
             logger.info('=== stdout: ')
             logger.info(stdout.read_text('utf-8', 'replace'))
             logger.info('=== stderr: ')
@@ -607,6 +608,14 @@ class LocalNode(BaseNode):
         self.validator_key = new_key
         with open(os.path.join(self.node_dir, "validator_key.json"), 'w+') as f:
             json.dump(new_key.to_json(), f)
+
+    def remove_validator_key(self):
+        logger.info(
+            f"Removing validator_key.json file for node {self.ordinal}.")
+        self.validator_key = None
+        file_path = os.path.join(self.node_dir, "validator_key.json")
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
     def reset_node_key(self, new_key):
         self.node_key = new_key
@@ -837,6 +846,8 @@ def init_cluster(
     genesis_config_changes: GenesisConfigChanges,
     client_config_changes: ClientConfigChanges,
     prefix="test",
+    initialize_cold_storage=True,
+    extra_state_dumper=False,
 ) -> typing.Tuple[str, typing.List[str]]:
     """
     Create cluster configuration
@@ -853,6 +864,9 @@ def init_cluster(
     is_local = config['local']
     near_root = config['near_root']
     binary_name = config.get('binary_name', 'neard')
+
+    if extra_state_dumper:
+        num_observers += 1
 
     logger.info("Creating %s cluster configuration with %s nodes" %
                 ("LOCAL" if is_local else "REMOTE", num_nodes + num_observers))
@@ -891,6 +905,20 @@ def init_cluster(
 
     logger.info("Search for stdout and stderr in %s" % node_dirs)
 
+    # if extra_state_dumper is True, we added 1 to num_observers above and we will enable
+    # state dumping to a local tmp dir on the last node in node_dirs. The other nodes will have their
+    # state_sync configs point to this tmp dir
+    # TODO: remove this extra_state_dumper option when centralized state sync is no longer used
+    if extra_state_dumper:
+        (node_config_dump,
+         node_config_sync) = state_sync_lib.get_state_sync_configs_pair(
+             tracked_shards=None)
+        syncing_nodes = node_dirs[:-1]
+        dumper_node = node_dirs[-1]
+        for node_dir in syncing_nodes:
+            apply_config_changes(node_dir, node_config_sync)
+        apply_config_changes(dumper_node, node_config_dump)
+
     # apply config changes
     for i, node_dir in enumerate(node_dirs):
         apply_genesis_changes(node_dir, genesis_config_changes)
@@ -900,8 +928,9 @@ def init_cluster(
 
     # apply config changes for nodes marked as archival node.
     # for now, we do this only for local nodes (eg. nayduck tests).
-    for i, node_dir in enumerate(node_dirs):
-        configure_cold_storage_for_archival_node(node_dir)
+    if initialize_cold_storage:
+        for i, node_dir in enumerate(node_dirs):
+            configure_cold_storage_for_archival_node(node_dir)
 
     return near_root, node_dirs
 
@@ -1029,6 +1058,7 @@ def start_cluster(
     genesis_config_changes: GenesisConfigChanges,
     client_config_changes: ClientConfigChanges,
     message_handler=None,
+    extra_state_dumper=False,
 ) -> typing.List[BaseNode]:
     if not config:
         config = load_config()
@@ -1042,16 +1072,20 @@ def start_cluster(
             if name.startswith('test') and not name.endswith('_finished')
         ]
     else:
-        near_root, node_dirs = init_cluster(num_nodes, num_observers,
-                                            num_shards, config,
-                                            genesis_config_changes,
-                                            client_config_changes)
+        near_root, node_dirs = init_cluster(
+            num_nodes,
+            num_observers,
+            num_shards,
+            config,
+            genesis_config_changes,
+            client_config_changes,
+            extra_state_dumper=extra_state_dumper)
 
     proxy = NodesProxy(message_handler) if message_handler is not None else None
     ret = []
 
     def spin_up_node_and_push(i: int, boot_node: BootNode) -> BaseNode:
-        single_node = (num_nodes == 1) and (num_observers == 0)
+        single_node = len(node_dirs) == 1
         node = spin_up_node(
             config,
             near_root,
@@ -1068,7 +1102,7 @@ def start_cluster(
     boot_node = spin_up_node_and_push(0, None)
 
     handles = []
-    for i in range(1, num_nodes + num_observers):
+    for i in range(1, len(node_dirs)):
         handle = threading.Thread(target=spin_up_node_and_push,
                                   args=(i, boot_node))
         handle.start()

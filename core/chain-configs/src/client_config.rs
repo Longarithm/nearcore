@@ -152,10 +152,47 @@ pub struct StateSyncConfig {
     pub sync: SyncConfig,
 }
 
+impl StateSyncConfig {
+    pub fn gcs_default() -> Self {
+        Self {
+            dump: None,
+            sync: SyncConfig::ExternalStorage(ExternalStorageConfig {
+                location: GCS { bucket: "state-parts".to_string() },
+                num_concurrent_requests: DEFAULT_STATE_SYNC_NUM_CONCURRENT_REQUESTS_EXTERNAL,
+                num_concurrent_requests_during_catchup:
+                    DEFAULT_STATE_SYNC_NUM_CONCURRENT_REQUESTS_ON_CATCHUP_EXTERNAL,
+            }),
+        }
+    }
+}
+
 impl SyncConfig {
     /// Checks whether the object equals its default value.
     fn is_default(&self) -> bool {
         matches!(self, Self::Peers)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct EpochSyncConfig {
+    pub enabled: bool,
+    pub epoch_sync_horizon: BlockHeightDelta,
+    pub epoch_sync_accept_proof_max_horizon: BlockHeightDelta,
+    #[serde(with = "near_time::serde_duration_as_std")]
+    pub timeout_for_epoch_sync: Duration,
+}
+
+impl Default for EpochSyncConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            // Mainnet is 43200 blocks per epoch, so let's default to epoch sync if
+            // we're more than 5 epochs behind, and we accept proofs up to 2 epochs old.
+            // (Epoch sync should not be picking a target epoch more than 2 epochs old.)
+            epoch_sync_horizon: 216000,
+            epoch_sync_accept_proof_max_horizon: 86400,
+            timeout_for_epoch_sync: Duration::seconds(60),
+        }
     }
 }
 
@@ -253,6 +290,10 @@ pub fn default_sync_check_period() -> Duration {
     Duration::seconds(10)
 }
 
+pub fn default_sync_max_block_requests() -> usize {
+    10
+}
+
 pub fn default_sync_step_period() -> Duration {
     Duration::milliseconds(10)
 }
@@ -261,20 +302,8 @@ pub fn default_sync_height_threshold() -> u64 {
     1
 }
 
-pub fn default_epoch_sync_enabled() -> bool {
-    false
-}
-
-pub fn default_state_sync() -> Option<StateSyncConfig> {
-    Some(StateSyncConfig {
-        dump: None,
-        sync: SyncConfig::ExternalStorage(ExternalStorageConfig {
-            location: GCS { bucket: "state-parts".to_string() },
-            num_concurrent_requests: DEFAULT_STATE_SYNC_NUM_CONCURRENT_REQUESTS_EXTERNAL,
-            num_concurrent_requests_during_catchup:
-                DEFAULT_STATE_SYNC_NUM_CONCURRENT_REQUESTS_ON_CATCHUP_EXTERNAL,
-        }),
-    })
+pub fn default_epoch_sync() -> Option<EpochSyncConfig> {
+    Some(EpochSyncConfig::default())
 }
 
 pub fn default_state_sync_enabled() -> bool {
@@ -372,6 +401,8 @@ pub struct ClientConfig {
     pub sync_step_period: Duration,
     /// Sync height threshold: below this difference in height don't start syncing.
     pub sync_height_threshold: BlockHeightDelta,
+    /// Maximum number of block requests to send to peers to sync
+    pub sync_max_block_requests: usize,
     /// How much time to wait after initial header sync
     pub header_sync_initial_timeout: Duration,
     /// How much time to wait after some progress is made in header sync
@@ -427,8 +458,6 @@ pub struct ClientConfig {
     pub save_trie_changes: bool,
     /// Number of threads for ViewClientActor pool.
     pub view_client_threads: usize,
-    /// Run Epoch Sync on the start.
-    pub epoch_sync_enabled: bool,
     /// Number of seconds between state requests for view client.
     pub view_client_throttle_period: Duration,
     /// Upper bound of the byte size of contract state that is still viewable. None is no limit
@@ -450,6 +479,8 @@ pub struct ClientConfig {
     pub state_sync_enabled: bool,
     /// Options for syncing state.
     pub state_sync: StateSyncConfig,
+    /// Options for epoch sync.
+    pub epoch_sync: EpochSyncConfig,
     /// Limit of the size of per-shard transaction pool measured in bytes. If not set, the size
     /// will be unbounded.
     pub transaction_pool_size_limit: Option<u64>,
@@ -495,7 +526,6 @@ impl ClientConfig {
         num_block_producer_seats: NumSeats,
         archive: bool,
         save_trie_changes: bool,
-        epoch_sync_enabled: bool,
         state_sync_enabled: bool,
     ) -> Self {
         assert!(
@@ -520,6 +550,7 @@ impl ClientConfig {
             sync_check_period: Duration::milliseconds(100),
             sync_step_period: Duration::milliseconds(10),
             sync_height_threshold: 1,
+            sync_max_block_requests: 10,
             header_sync_initial_timeout: Duration::seconds(10),
             header_sync_progress_timeout: Duration::seconds(2),
             header_sync_stall_ban_timeout: Duration::seconds(30),
@@ -548,7 +579,6 @@ impl ClientConfig {
             save_trie_changes,
             log_summary_style: LogSummaryStyle::Colored,
             view_client_threads: 1,
-            epoch_sync_enabled,
             view_client_throttle_period: Duration::seconds(1),
             trie_viewer_state_size_limit: None,
             max_gas_burnt_view: None,
@@ -558,6 +588,7 @@ impl ClientConfig {
             flat_storage_creation_period: Duration::seconds(1),
             state_sync_enabled,
             state_sync: StateSyncConfig::default(),
+            epoch_sync: EpochSyncConfig::default(),
             transaction_pool_size_limit: None,
             enable_multiline_logging: false,
             resharding_config: MutableConfigValue::new(

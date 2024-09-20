@@ -3,9 +3,10 @@ use anyhow;
 use anyhow::Context;
 use borsh::BorshDeserialize;
 use clap;
+use near_chain_configs::GenesisValidationMode;
 use near_epoch_manager::{EpochManager, EpochManagerAdapter, EpochManagerHandle};
 use near_primitives::block::Tip;
-use near_primitives::epoch_manager::block_info::BlockInfo;
+use near_primitives::epoch_block_info::BlockInfo;
 use near_primitives::hash::CryptoHash;
 use near_store::cold_storage::{copy_all_data_to_cold, update_cold_db, update_cold_head};
 use near_store::metadata::DbKind;
@@ -43,7 +44,7 @@ enum SubCommand {
     /// the db and perform some sanity checks to make sure this db is suitable
     /// for migration to split storage.
     /// This command expects the following preconditions:
-    /// - config.store.path points to an existing database with kind Archive
+    /// - config.store.path points to an existing database with kind Hot or Archive
     /// - config.cold_store.path points to an existing database with kind Cold
     /// - store_relative_path points to an existing database with kind Rpc
     PrepareHot(PrepareHotCmd),
@@ -59,14 +60,15 @@ enum SubCommand {
 }
 
 impl ColdStoreCommand {
-    pub fn run(self, home_dir: &Path) -> anyhow::Result<()> {
+    pub fn run(
+        self,
+        home_dir: &Path,
+        genesis_validation: GenesisValidationMode,
+    ) -> anyhow::Result<()> {
         let mode =
             if self.readwrite { near_store::Mode::ReadWrite } else { near_store::Mode::ReadOnly };
-        let mut near_config = nearcore::config::load_config(
-            &home_dir,
-            near_chain_configs::GenesisValidationMode::Full,
-        )
-        .unwrap_or_else(|e| panic!("Error loading config: {:#}", e));
+        let mut near_config = nearcore::config::load_config(&home_dir, genesis_validation)
+            .unwrap_or_else(|e| panic!("Error loading config: {:#}", e));
 
         let opener = self.get_opener(home_dir, &mut near_config);
 
@@ -376,10 +378,9 @@ impl PrepareHotCmd {
         rpc_store: &Store,
     ) -> anyhow::Result<()> {
         let hot_db_kind = hot_store.get_db_kind()?;
-        if hot_db_kind != Some(DbKind::Archive) {
+        if hot_db_kind != Some(DbKind::Hot) && hot_db_kind != Some(DbKind::Archive) {
             return Err(anyhow::anyhow!(
-                "Unexpected hot_store DbKind, expected: {:?}, got: {:?}",
-                DbKind::Archive,
+                "Unexpected hot_store DbKind, expected: DbKind::Hot or DbKind::Archive, got: {:?}",
                 hot_db_kind,
             ));
         }
@@ -387,8 +388,7 @@ impl PrepareHotCmd {
         let cold_db_kind = cold_store.get_db_kind()?;
         if cold_db_kind != Some(DbKind::Cold) {
             return Err(anyhow::anyhow!(
-                "Unexpected cold_store DbKind, expected: {:?}, got: {:?}",
-                DbKind::Cold,
+                "Unexpected cold_store DbKind, expected: DbKind::Cold, got: {:?}",
                 cold_db_kind,
             ));
         }
@@ -396,8 +396,7 @@ impl PrepareHotCmd {
         let rpc_db_kind = rpc_store.get_db_kind()?;
         if rpc_db_kind != Some(DbKind::RPC) {
             return Err(anyhow::anyhow!(
-                "Unexpected rpc_store DbKind, expected: {:?}, got: {:?}",
-                DbKind::RPC,
+                "Unexpected rpc_store DbKind, expected: DbKind::RPC, got: {:?}",
                 rpc_db_kind,
             ));
         }

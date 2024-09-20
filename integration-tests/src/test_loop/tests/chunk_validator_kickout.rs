@@ -1,23 +1,16 @@
 use crate::test_loop::builder::TestLoopBuilder;
 use crate::test_loop::env::TestLoopEnv;
+use crate::test_loop::utils::validators::get_epoch_all_validators;
 use crate::test_loop::utils::ONE_NEAR;
 use itertools::Itertools;
 use near_async::test_loop::data::TestLoopData;
 use near_async::time::Duration;
 use near_chain_configs::test_genesis::TestGenesisBuilder;
-use near_client::Client;
 use near_o11y::testonly::init_test_logger;
 use near_primitives::types::AccountId;
-use near_primitives_core::checked_feature;
-use near_primitives_core::version::PROTOCOL_VERSION;
 use std::string::ToString;
 
 fn run_test_chunk_validator_kickout(select_chunk_validator_only: bool) {
-    if !checked_feature!("stable", StatelessValidationV0, PROTOCOL_VERSION) {
-        println!("Test not applicable without StatelessValidation enabled");
-        return;
-    }
-
     init_test_logger();
     let builder = TestLoopBuilder::new();
 
@@ -99,14 +92,6 @@ fn run_test_chunk_validator_kickout(select_chunk_validator_only: bool) {
 
     TestLoopEnv { test_loop, datas: node_datas, tempdir }
         .shutdown_and_drain_remaining_events(Duration::seconds(20));
-}
-
-/// Get all validator account names for the latest epoch.
-fn get_epoch_all_validators(client: &Client) -> Vec<String> {
-    let tip = client.chain.head().unwrap();
-    let epoch_id = tip.epoch_id;
-    let all_validators = client.epoch_manager.get_epoch_all_validators(&epoch_id).unwrap();
-    all_validators.into_iter().map(|vs| vs.account_id().to_string()).collect()
 }
 
 /// Checks that chunk validator with low endorsement stats is kicked out.

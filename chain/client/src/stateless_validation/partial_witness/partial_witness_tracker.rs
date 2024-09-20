@@ -8,16 +8,18 @@ use near_chain::chain::ChunkStateWitnessMessage;
 use near_chain::Error;
 use near_epoch_manager::EpochManagerAdapter;
 use near_o11y::log_assert_fail;
-use near_primitives::stateless_validation::{
-    ChunkProductionKey, ChunkStateWitness, ChunkStateWitnessSize, EncodedChunkStateWitness,
-    PartialEncodedStateWitness,
+use near_primitives::stateless_validation::partial_witness::PartialEncodedStateWitness;
+use near_primitives::stateless_validation::state_witness::{
+    ChunkStateWitness, ChunkStateWitnessSize, EncodedChunkStateWitness,
 };
+use near_primitives::stateless_validation::ChunkProductionKey;
 use time::ext::InstantExt as _;
 
 use crate::client_actor::ClientSenderForPartialWitness;
 use crate::metrics;
 
 use super::encoding::{WitnessEncoder, WitnessEncoderCache, WitnessPart};
+use near_primitives::utils::compression::CompressedData;
 
 /// Max number of chunks to keep in the witness tracker cache. We reach here only after validation
 /// of the partial_witness so the LRU cache size need not be too large.
@@ -59,8 +61,8 @@ impl CacheEntry {
         &mut self,
         partial_witness: PartialEncodedStateWitness,
     ) -> Option<std::io::Result<EncodedChunkStateWitness>> {
-        let shard_id = partial_witness.shard_id();
-        let height_created = partial_witness.height_created();
+        let ChunkProductionKey { shard_id, height_created, .. } =
+            partial_witness.chunk_production_key();
         let (part_ord, part, encoded_length) = partial_witness.decompose();
 
         // Check if the part is already present.
@@ -184,13 +186,11 @@ impl PartialEncodedStateWitnessTracker {
 
     fn get_num_parts(&self, partial_witness: &PartialEncodedStateWitness) -> Result<usize, Error> {
         // The expected number of parts for the Reed Solomon encoding is the number of chunk validators.
+        let ChunkProductionKey { shard_id, epoch_id, height_created } =
+            partial_witness.chunk_production_key();
         Ok(self
             .epoch_manager
-            .get_chunk_validator_assignments(
-                partial_witness.epoch_id(),
-                partial_witness.shard_id(),
-                partial_witness.height_created(),
-            )?
+            .get_chunk_validator_assignments(&epoch_id, shard_id, height_created)?
             .len())
     }
 
@@ -206,9 +206,7 @@ impl PartialEncodedStateWitnessTracker {
             return Ok(());
         }
         let num_parts = self.get_num_parts(&partial_witness)?;
-        let protocol_version =
-            self.epoch_manager.get_epoch_protocol_version(partial_witness.epoch_id())?;
-        let new_entry = CacheEntry::new(self.encoders.entry(num_parts, protocol_version));
+        let new_entry = CacheEntry::new(self.encoders.entry(num_parts));
         if let Some((evicted_key, evicted_entry)) = self.parts_cache.push(key, new_entry) {
             tracing::warn!(
                 target: "client",

@@ -13,8 +13,8 @@ use near_store::{has_promise_yield_receipt, KeyLookupMode, TrieUpdate, TrieUpdat
 use near_vm_runner::logic::errors::{AnyError, VMLogicError};
 use near_vm_runner::logic::types::ReceiptIndex;
 use near_vm_runner::logic::{External, StorageGetMode, ValuePtr};
-use near_vm_runner::ContractCode;
-use near_wallet_contract::{wallet_contract, wallet_contract_magic_bytes};
+use near_vm_runner::{Contract, ContractCode};
+use near_wallet_contract::wallet_contract;
 use std::sync::Arc;
 
 pub struct RuntimeExt<'a> {
@@ -359,22 +359,50 @@ impl<'a> External for RuntimeExt<'a> {
     fn get_receipt_receiver(&self, receipt_index: ReceiptIndex) -> &AccountId {
         self.receipt_manager.get_receipt_receiver(receipt_index)
     }
+}
 
-    fn code_hash(&self) -> CryptoHash {
+pub(crate) struct RuntimeContractExt<'a> {
+    pub(crate) trie_update: &'a TrieUpdate,
+    pub(crate) account_id: &'a AccountId,
+    pub(crate) account: &'a Account,
+    pub(crate) current_protocol_version: ProtocolVersion,
+}
+
+impl<'a> Contract for RuntimeContractExt<'a> {
+    fn hash(&self) -> CryptoHash {
+        // For eth implicit accounts return the wallet contract code hash.
+        // The account.code_hash() contains hash of the magic bytes, not the contract hash.
+        if checked_feature!("stable", EthImplicitAccounts, self.current_protocol_version)
+            && self.account_id.get_account_type() == AccountType::EthImplicitAccount
+        {
+            // There are old eth implicit accounts without magic bytes in the code hash.
+            // Result can be None and it's a valid option. See https://github.com/near/nearcore/pull/11606
+            if let Some(wallet_contract) = wallet_contract(self.account.code_hash()) {
+                return *wallet_contract.hash();
+            }
+        }
+
         self.account.code_hash()
     }
 
-    fn get_contract(&self) -> Option<Arc<ContractCode>> {
-        let account_id = self.account_id();
-        let code_hash = self.code_hash();
+    fn get_code(&self) -> Option<Arc<ContractCode>> {
+        let account_id = self.account_id;
+        let code_hash = self.account.code_hash();
         let version = self.current_protocol_version;
-        let chain_id = self.chain_id();
-        if checked_feature!("stable", EthImplicitAccounts, self.current_protocol_version)
+
+        if checked_feature!("stable", EthImplicitAccounts, version)
             && account_id.get_account_type() == AccountType::EthImplicitAccount
-            && &code_hash == wallet_contract_magic_bytes(&chain_id).hash()
         {
-            return Some(wallet_contract(&chain_id));
+            // Accounts that look like eth implicit accounts and have existed prior to the
+            // eth-implicit accounts protocol change (these accounts are discussed in the
+            // description of #11606) may have something else deployed to them. Only return
+            // something here if the accounts have a wallet contract hash. Otherwise use the
+            // regular path to grab the deployed contract.
+            if let Some(wc) = wallet_contract(code_hash) {
+                return Some(wc);
+            }
         }
+
         let mode = match checked_feature!("stable", ChunkNodesCache, version) {
             true => Some(TrieCacheMode::CachingShard),
             false => None,

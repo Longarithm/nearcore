@@ -1,6 +1,7 @@
 use crate::commands::*;
 use crate::congestion_control::CongestionControlCmd;
 use crate::contract_accounts::ContractAccountFilter;
+use crate::replay_headers::replay_headers;
 use crate::rocksdb_stats::get_rocksdb_stats;
 use crate::trie_iteration_benchmark::TrieIterationBenchmarkCmd;
 
@@ -76,8 +77,8 @@ pub enum StateViewerSubCommand {
     PartialChunks(PartialChunksCmd),
     /// Looks up a certain receipt.
     Receipts(ReceiptsCmd),
-    /// Replay headers from chain.
-    Replay(ReplayCmd),
+    /// Replay block headers from chain.
+    ReplayHeaders(ReplayHeadersCmd),
     /// Dump stats for the RocksDB storage.
     #[clap(name = "rocksdb-stats", alias = "rocksdb_stats")]
     RocksDBStats(RocksDBStatsCmd),
@@ -98,6 +99,9 @@ pub enum StateViewerSubCommand {
     /// View head of the storage.
     #[clap(alias = "view_chain")]
     ViewChain(ViewChainCmd),
+    /// View genesis block and chunks built from the config and in the store.
+    #[clap(alias = "view_genesis")]
+    ViewGenesis(ViewGenesisCmd),
     /// View trie structure.
     #[clap(alias = "view_trie")]
     ViewTrie(ViewTrieCmd),
@@ -146,9 +150,11 @@ impl StateViewerSubCommand {
         };
 
         match self {
-            StateViewerSubCommand::Apply(cmd) => cmd.run(home_dir, near_config, store),
+            StateViewerSubCommand::Apply(cmd) => cmd.run(home_dir, near_config, store, storage),
             StateViewerSubCommand::ApplyChunk(cmd) => cmd.run(home_dir, near_config, store),
-            StateViewerSubCommand::ApplyRange(cmd) => cmd.run(home_dir, near_config, store),
+            StateViewerSubCommand::ApplyRange(cmd) => {
+                cmd.run(home_dir, near_config, store, storage)
+            }
             StateViewerSubCommand::ApplyReceipt(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::ApplyTx(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::Chain(cmd) => cmd.run(near_config, store),
@@ -165,7 +171,7 @@ impl StateViewerSubCommand {
             StateViewerSubCommand::EpochAnalysis(cmd) => cmd.run(near_config, store),
             StateViewerSubCommand::PartialChunks(cmd) => cmd.run(near_config, store),
             StateViewerSubCommand::Receipts(cmd) => cmd.run(near_config, store),
-            StateViewerSubCommand::Replay(cmd) => cmd.run(near_config, store),
+            StateViewerSubCommand::ReplayHeaders(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::RocksDBStats(cmd) => cmd.run(store_opener.path()),
             StateViewerSubCommand::ScanDbColumn(cmd) => cmd.run(store),
             StateViewerSubCommand::State => state(home_dir, near_config, store),
@@ -173,6 +179,7 @@ impl StateViewerSubCommand {
             StateViewerSubCommand::StateParts(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::StateStats(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::ViewChain(cmd) => cmd.run(near_config, store),
+            StateViewerSubCommand::ViewGenesis(cmd) => cmd.run(home_dir, near_config, store),
             StateViewerSubCommand::ViewTrie(cmd) => cmd.run(store),
             StateViewerSubCommand::TrieIterationBenchmark(cmd) => cmd.run(near_config, store),
             StateViewerSubCommand::StateWitness(cmd) => cmd.run(home_dir, near_config, store),
@@ -201,6 +208,14 @@ impl StorageSource {
     }
 }
 
+#[derive(clap::ValueEnum, Debug, Clone, Copy)]
+pub enum SaveTrieTemperature {
+    // The logic in `crate::commands::maybe_save_trie_changes` is not guaranteed to work correctly when writing
+    // trie nodes in the hot storage.
+    // Hot,
+    Cold,
+}
+
 #[derive(clap::Parser)]
 pub struct ApplyCmd {
     #[clap(long)]
@@ -209,10 +224,19 @@ pub struct ApplyCmd {
     shard_id: ShardId,
     #[clap(long, default_value = "trie")]
     storage: StorageSource,
+    /// Modifies the DB column 'State' and writes the missing trie nodes generated as a result of applying the block.
+    #[clap(long)]
+    save_state: Option<SaveTrieTemperature>,
 }
 
 impl ApplyCmd {
-    pub fn run(self, home_dir: &Path, near_config: NearConfig, store: Store) {
+    pub fn run(
+        self,
+        home_dir: &Path,
+        near_config: NearConfig,
+        store: Store,
+        node_storage: NodeStorage,
+    ) {
         apply_block_at_height(
             self.height,
             self.shard_id,
@@ -220,6 +244,7 @@ impl ApplyCmd {
             home_dir,
             near_config,
             store,
+            self.save_state.map(|temperature| initialize_write_store(temperature, node_storage)),
         )
         .unwrap();
     }
@@ -275,10 +300,22 @@ pub struct ApplyRangeCmd {
     storage: StorageSource,
     #[clap(subcommand)]
     mode: ApplyRangeMode,
+    /// Modifies the DB column 'State' and writes the missing trie nodes generated as a result of applying the blocks.
+    #[clap(long)]
+    save_state: Option<SaveTrieTemperature>,
 }
 
 impl ApplyRangeCmd {
-    pub fn run(self, home_dir: &Path, near_config: NearConfig, store: Store) {
+    pub fn run(
+        self,
+        home_dir: &Path,
+        near_config: NearConfig,
+        store: Store,
+        node_storage: NodeStorage,
+    ) {
+        if matches!(self.mode, ApplyRangeMode::Benchmarking) && self.save_state.is_some() {
+            panic!("Persisting trie nodes in storage is not compatible with benchmark mode!");
+        }
         apply_range(
             self.mode,
             self.start_index,
@@ -289,6 +326,7 @@ impl ApplyRangeCmd {
             home_dir,
             near_config,
             store,
+            self.save_state.map(|temperature| initialize_write_store(temperature, node_storage)),
             self.only_contracts,
             self.storage,
         );
@@ -579,16 +617,16 @@ impl ReceiptsCmd {
 }
 
 #[derive(clap::Parser)]
-pub struct ReplayCmd {
+pub struct ReplayHeadersCmd {
     #[clap(long)]
-    start_index: BlockHeight,
+    start_index: Option<BlockHeight>,
     #[clap(long)]
-    end_index: BlockHeight,
+    end_index: Option<BlockHeight>,
 }
 
-impl ReplayCmd {
-    pub fn run(self, near_config: NearConfig, store: Store) {
-        replay_chain(self.start_index, self.end_index, near_config, store);
+impl ReplayHeadersCmd {
+    pub fn run(self, home_dir: &Path, near_config: NearConfig, store: Store) {
+        replay_headers(self.start_index, self.end_index, home_dir, near_config, store);
     }
 }
 
@@ -734,6 +772,31 @@ pub struct ViewChainCmd {
 impl ViewChainCmd {
     pub fn run(self, near_config: NearConfig, store: Store) {
         view_chain(self.height, self.block, self.chunk, near_config, store);
+    }
+}
+
+#[derive(clap::Parser)]
+pub struct ViewGenesisCmd {
+    /// If true, displays the genesis block built from nearcore code that combines the
+    /// contents of the genesis config (JSON) file with some hard-coded logic to set some
+    /// fields of the genesis block. At any given time, the block built this way should match
+    /// the genesis block recorded in the store (to be displayed with the --store option).
+    #[clap(long)]
+    config: bool,
+    /// If true, displays the genesis block saved in the store, when the genesis block is built
+    /// for the first time. At any given time, this saved block should match the genesis block
+    /// built by the code (to be displayed with the --config option).
+    #[clap(long)]
+    store: bool,
+    /// If true, compares the contents of the genesis block saved in the store with
+    /// the genesis block built from the genesis config (JSON) file.
+    #[clap(long, default_value = "false")]
+    compare: bool,
+}
+
+impl ViewGenesisCmd {
+    pub fn run(self, home_dir: &Path, near_config: NearConfig, store: Store) {
+        view_genesis(home_dir, near_config, store, self.config, self.store, self.compare);
     }
 }
 
@@ -887,5 +950,13 @@ impl ViewTrieCmd {
                 .unwrap();
             }
         }
+    }
+}
+
+fn initialize_write_store(temperature: SaveTrieTemperature, node_storage: NodeStorage) -> Store {
+    match temperature {
+        SaveTrieTemperature::Cold => node_storage
+            .get_recovery_store()
+            .expect("recovery store must be present if explicitly requested"),
     }
 }

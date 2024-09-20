@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+#![cfg_attr(enable_const_type_id, feature(const_type_id))]
 
 mod cache;
 mod code;
@@ -36,7 +37,7 @@ pub use code::ContractCode;
 #[cfg(feature = "metrics")]
 pub use metrics::{report_metrics, reset_metrics};
 pub use profile::ProfileDataV3;
-pub use runner::{run, PreparedContract, VM};
+pub use runner::{prepare, run, Contract, PreparedContract, VM};
 
 /// This is public for internal experimentation use only, and should otherwise be considered an
 /// implementation detail of `near-vm-runner`.

@@ -1,5 +1,5 @@
 use crate::types::{
-    ApplyChunkBlockContext, ApplyChunkResult, ApplyChunkShardContext, ApplyResultForResharding,
+    ApplyChunkBlockContext, ApplyChunkResult, ApplyChunkShardContext,
     PrepareTransactionsBlockContext, PrepareTransactionsChunkContext, PrepareTransactionsLimit,
     PreparedTransactions, RuntimeAdapter, RuntimeStorageConfig, StorageDataSource, Tip,
 };
@@ -16,7 +16,6 @@ use near_parameters::{ActionCosts, ExtCosts, RuntimeConfig, RuntimeConfigStore};
 use near_pool::types::TransactionGroupIterator;
 use near_primitives::account::{AccessKey, Account};
 use near_primitives::apply::ApplyChunkReason;
-use near_primitives::checked_feature;
 use near_primitives::congestion_info::{
     CongestionControl, ExtendedCongestionInfo, RejectTransactionReason, ShardAcceptsTransactions,
 };
@@ -25,15 +24,13 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::receipt::{DelayedReceiptIndices, Receipt};
 use near_primitives::runtime::migration_data::{MigrationData, MigrationFlags};
 use near_primitives::sandbox::state_patch::SandboxStatePatch;
-use near_primitives::shard_layout::{
-    account_id_to_shard_id, account_id_to_shard_uid, ShardLayout, ShardUId,
-};
+use near_primitives::shard_layout::{account_id_to_shard_id, ShardUId};
 use near_primitives::state_part::PartId;
 use near_primitives::transaction::SignedTransaction;
 use near_primitives::trie_key::TrieKey;
 use near_primitives::types::{
     AccountId, Balance, BlockHeight, EpochHeight, EpochId, EpochInfoProvider, Gas, MerkleHash,
-    ShardId, StateChangeCause, StateChangesForResharding, StateRoot, StateRootNode,
+    ShardId, StateChangeCause, StateRoot, StateRootNode,
 };
 use near_primitives::version::{ProtocolFeature, ProtocolVersion};
 use near_primitives::views::{
@@ -536,13 +533,19 @@ impl NightshadeRuntime {
         let kind = self.store.get_db_kind()?;
         let cold_head = self.store.get_ser::<Tip>(DBCol::BlockMisc, COLD_HEAD_KEY)?;
 
-        if let (Some(DbKind::Hot), Some(cold_head)) = (kind, cold_head) {
-            let cold_head_hash = cold_head.last_block_hash;
-            let cold_epoch_first_block =
-                *epoch_manager.get_block_info(&cold_head_hash)?.epoch_first_block();
-            let cold_epoch_first_block_info =
-                epoch_manager.get_block_info(&cold_epoch_first_block)?;
-            return Ok(std::cmp::min(epoch_start_height, cold_epoch_first_block_info.height()));
+        if let Some(DbKind::Hot) = kind {
+            if let Some(cold_head) = cold_head {
+                let cold_head_hash = cold_head.last_block_hash;
+                let cold_epoch_first_block =
+                    *epoch_manager.get_block_info(&cold_head_hash)?.epoch_first_block();
+                let cold_epoch_first_block_info =
+                    epoch_manager.get_block_info(&cold_epoch_first_block)?;
+                return Ok(std::cmp::min(epoch_start_height, cold_epoch_first_block_info.height()));
+            } else {
+                // If kind is DbKind::Hot but cold_head is not set, it means the initial cold storage
+                // migration has not finished yet, in which case we should not garbage collect anything.
+                return Ok(self.genesis_config.genesis_height);
+            }
         }
         Ok(epoch_start_height)
     }
@@ -759,11 +762,10 @@ impl RuntimeAdapter for NightshadeRuntime {
                 storage_config.use_flat_storage,
             ),
         };
-        // We need to start recording reads if the stateless validation is
-        // enabled in the next epoch. We need to save the state transition data
-        // in the current epoch to be able to produce the state witness in the
-        // next epoch.
-        if checked_feature!("stable", StateWitnessSizeLimit, next_protocol_version)
+        // StateWitnessSizeLimit: We need to start recording reads if the stateless validation is
+        // enabled in the next epoch. We need to save the state transition data in the current epoch
+        // to be able to produce the state witness in the next epoch.
+        if ProtocolFeature::StatelessValidation.enabled(next_protocol_version)
             || cfg!(feature = "shadow_chunk_validation")
         {
             trie = trie.recording_reads();
@@ -838,7 +840,8 @@ impl RuntimeAdapter for NightshadeRuntime {
                 }
             }
 
-            if checked_feature!("stable", WitnessTransactionLimits, protocol_version)
+            // Checking feature WitnessTransactionLimits
+            if ProtocolFeature::StatelessValidation.enabled(protocol_version)
                 && state_update.trie.recorded_storage_size()
                     > runtime_config
                         .witness_config
@@ -850,8 +853,8 @@ impl RuntimeAdapter for NightshadeRuntime {
 
             // Take a single transaction from this transaction group
             while let Some(tx_peek) = transaction_group_iter.peek_next() {
-                // Stop adding transactions if the size limit would be exceeded
-                if checked_feature!("stable", WitnessTransactionLimits, protocol_version)
+                // WitnessTransactionLimits: Stop adding transactions if the size limit would be exceeded
+                if ProtocolFeature::StatelessValidation.enabled(protocol_version)
                     && total_size.saturating_add(tx_peek.get_size()) > size_limit as u64
                 {
                     result.limited_by = Some(PrepareTransactionsLimit::Size);
@@ -956,8 +959,9 @@ impl RuntimeAdapter for NightshadeRuntime {
         transactions: &[SignedTransaction],
     ) -> Result<ApplyChunkResult, Error> {
         let shard_id = chunk.shard_id;
-        let _timer =
-            metrics::APPLYING_CHUNKS_TIME.with_label_values(&[&shard_id.to_string()]).start_timer();
+        let _timer = metrics::APPLYING_CHUNKS_TIME
+            .with_label_values(&[&apply_reason.to_string(), &shard_id.to_string()])
+            .start_timer();
 
         let mut trie = match storage_config.source {
             StorageDataSource::Db => self.get_trie_for_shard(
@@ -990,11 +994,10 @@ impl RuntimeAdapter for NightshadeRuntime {
         let next_protocol_version =
             self.epoch_manager.get_epoch_protocol_version(&next_epoch_id)?;
 
-        // We need to start recording reads if the stateless validation is
-        // enabled in the next epoch. We need to save the state transition data
-        // in the current epoch to be able to produce the state witness in the
-        // next epoch.
-        if checked_feature!("stable", StateWitnessSizeLimit, next_protocol_version)
+        // StateWitnessSizeLimit: We need to start recording reads if the stateless validation is
+        // enabled in the next epoch. We need to save the state transition data in the current epoch
+        // to be able to produce the state witness in the next epoch.
+        if ProtocolFeature::StatelessValidation.enabled(next_protocol_version)
             || cfg!(feature = "shadow_chunk_validation")
         {
             trie = trie.recording_reads();
@@ -1218,49 +1221,6 @@ impl RuntimeAdapter for NightshadeRuntime {
         }
     }
 
-    fn apply_update_to_children_states(
-        &self,
-        block_hash: &CryptoHash,
-        block_height: BlockHeight,
-        state_roots: HashMap<ShardUId, StateRoot>,
-        next_epoch_shard_layout: &ShardLayout,
-        state_changes_for_resharding: StateChangesForResharding,
-    ) -> Result<Vec<ApplyResultForResharding>, Error> {
-        let trie_updates = self.tries.apply_state_changes_to_children_states(
-            &state_roots,
-            state_changes_for_resharding,
-            &|account_id| account_id_to_shard_uid(account_id, next_epoch_shard_layout),
-        )?;
-
-        let mut applied_resharding_results: Vec<_> = vec![];
-        for (shard_uid, trie_update) in trie_updates {
-            let (_, trie_changes, state_changes) = trie_update.finalize()?;
-            // All state changes that are related to resharding should have StateChangeCause as Resharding
-            // We do not want to commit the state_changes from resharding as they are already handled while
-            // processing parent shard
-            debug_assert!(state_changes.iter().all(|raw_state_changes| raw_state_changes
-                .changes
-                .iter()
-                .all(|state_change| state_change.cause == StateChangeCause::Resharding)));
-            let new_root = trie_changes.new_root;
-            let wrapped_trie_changes = WrappedTrieChanges::new(
-                self.get_tries(),
-                shard_uid,
-                trie_changes,
-                state_changes,
-                *block_hash,
-                block_height,
-            );
-            applied_resharding_results.push(ApplyResultForResharding {
-                shard_uid,
-                new_root,
-                trie_changes: wrapped_trie_changes,
-            });
-        }
-
-        Ok(applied_resharding_results)
-    }
-
     fn apply_state_part(
         &self,
         shard_id: ShardId,
@@ -1431,7 +1391,8 @@ fn calculate_transactions_size_limit(
     last_chunk_transactions_size: usize,
     transactions_gas_limit: Gas,
 ) -> u64 {
-    if checked_feature!("stable", WitnessTransactionLimits, protocol_version) {
+    // Checking feature WitnessTransactionLimits
+    if ProtocolFeature::StatelessValidation.enabled(protocol_version) {
         // Sum of transactions in the previous and current chunks should not exceed the limit.
         // Witness keeps transactions from both previous and current chunk, so we have to limit the sum of both.
         runtime_config

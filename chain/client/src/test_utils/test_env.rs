@@ -23,11 +23,12 @@ use near_o11y::testonly::TracingCapture;
 use near_parameters::RuntimeConfig;
 use near_primitives::action::delegate::{DelegateAction, NonDelegateAction, SignedDelegateAction};
 use near_primitives::block::Block;
-use near_primitives::epoch_manager::RngSeed;
+use near_primitives::epoch_info::RngSeed;
 use near_primitives::errors::InvalidTxError;
 use near_primitives::hash::CryptoHash;
 use near_primitives::sharding::{ChunkHash, PartialEncodedChunk};
-use near_primitives::stateless_validation::{ChunkEndorsement, ChunkStateWitness};
+use near_primitives::stateless_validation::chunk_endorsement::ChunkEndorsement;
+use near_primitives::stateless_validation::state_witness::ChunkStateWitness;
 use near_primitives::test_utils::create_test_signer;
 use near_primitives::transaction::{Action, FunctionCallAction, SignedTransaction};
 use near_primitives::types::{AccountId, Balance, BlockHeight, EpochId, NumSeats, ShardId};
@@ -128,6 +129,7 @@ impl TestEnv {
                     .unwrap();
             }
         }
+        self.propagate_chunk_state_witnesses_and_endorsements(false);
     }
 
     /// Produces block by given client, which may kick off chunk production.
@@ -435,25 +437,29 @@ impl TestEnv {
         &mut self,
         client_idx: usize,
         chunk_hash: &ChunkHash,
-    ) -> Result<ChunkEndorsement, TimeoutError> {
+    ) -> Result<(), TimeoutError> {
         let start_time = Instant::now();
         let network_adapter = self.network_adapters[client_idx].clone();
+        let mut endorsement_found = false;
         loop {
-            let mut endorsement_opt = None;
             network_adapter.handle_filtered(|request| {
                 match &request {
                     PeerManagerMessageRequest::NetworkRequests(
-                        NetworkRequests::ChunkEndorsement(_receiver_account_id, endorsement),
-                    ) if endorsement.chunk_hash() == chunk_hash => {
-                        endorsement_opt = Some(endorsement.clone());
+                        NetworkRequests::ChunkEndorsement(_, endorsement),
+                    ) => {
+                        let endorsement_chunk_hash = match endorsement {
+                            ChunkEndorsement::V1(endorsement) => endorsement.chunk_hash(),
+                            ChunkEndorsement::V2(endorsement) => endorsement.chunk_hash(),
+                        };
+                        endorsement_found = endorsement_chunk_hash == chunk_hash;
                     }
                     _ => {}
                 };
                 Some(request)
             });
 
-            if let Some(endorsement) = endorsement_opt {
-                return Ok(endorsement);
+            if endorsement_found {
+                return Ok(());
             }
 
             let elapsed_since_start = Instant::now().signed_duration_since(start_time);

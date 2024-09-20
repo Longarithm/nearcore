@@ -383,6 +383,11 @@ pub struct ExtCostsConfigView {
     /// Storage trie read value cost per byte cost
     pub storage_read_value_byte: Gas,
 
+    /// Storage trie read key overhead base cost, when doing large reads
+    pub storage_large_read_overhead_base: Gas,
+    /// Storage trie read key overhead  per-byte cost, when doing large reads
+    pub storage_large_read_overhead_byte: Gas,
+
     /// Remove key from trie base cost
     pub storage_remove_base: Gas,
     /// Remove key from trie per byte cost
@@ -464,41 +469,23 @@ pub struct ExtCostsConfigView {
     pub yield_resume_base: Gas,
     /// Per byte cost of resume payload.
     pub yield_resume_byte: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_p1_sum_base: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_p1_sum_element: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_p2_sum_base: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_p2_sum_element: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_g1_multiexp_base: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_g1_multiexp_element: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_g2_multiexp_base: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_g2_multiexp_element: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_map_fp_to_g1_base: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_map_fp_to_g1_element: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_map_fp2_to_g2_base: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_map_fp2_to_g2_element: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_pairing_base: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_pairing_element: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_p1_decompress_base: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_p1_decompress_element: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_p2_decompress_base: Gas,
-    #[cfg(feature = "protocol_feature_bls12381")]
     pub bls12381_p2_decompress_element: Gas,
 }
 
@@ -540,6 +527,10 @@ impl From<crate::ExtCostsConfig> for ExtCostsConfigView {
             storage_read_base: config.gas_cost(ExtCosts::storage_read_base),
             storage_read_key_byte: config.gas_cost(ExtCosts::storage_read_key_byte),
             storage_read_value_byte: config.gas_cost(ExtCosts::storage_read_value_byte),
+            storage_large_read_overhead_base: config
+                .gas_cost(ExtCosts::storage_large_read_overhead_base),
+            storage_large_read_overhead_byte: config
+                .gas_cost(ExtCosts::storage_large_read_overhead_byte),
             storage_remove_base: config.gas_cost(ExtCosts::storage_remove_base),
             storage_remove_key_byte: config.gas_cost(ExtCosts::storage_remove_key_byte),
             storage_remove_ret_value_byte: config.gas_cost(ExtCosts::storage_remove_ret_value_byte),
@@ -574,43 +565,25 @@ impl From<crate::ExtCostsConfig> for ExtCostsConfigView {
             yield_create_byte: config.gas_cost(ExtCosts::yield_create_byte),
             yield_resume_base: config.gas_cost(ExtCosts::yield_resume_base),
             yield_resume_byte: config.gas_cost(ExtCosts::yield_resume_byte),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_p1_sum_base: config.gas_cost(ExtCosts::bls12381_p1_sum_base),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_p1_sum_element: config.gas_cost(ExtCosts::bls12381_p1_sum_element),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_p2_sum_base: config.gas_cost(ExtCosts::bls12381_p2_sum_base),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_p2_sum_element: config.gas_cost(ExtCosts::bls12381_p2_sum_element),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_g1_multiexp_base: config.gas_cost(ExtCosts::bls12381_g1_multiexp_base),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_g1_multiexp_element: config.gas_cost(ExtCosts::bls12381_g1_multiexp_element),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_g2_multiexp_base: config.gas_cost(ExtCosts::bls12381_g2_multiexp_base),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_g2_multiexp_element: config.gas_cost(ExtCosts::bls12381_g2_multiexp_element),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_map_fp_to_g1_base: config.gas_cost(ExtCosts::bls12381_map_fp_to_g1_base),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_map_fp_to_g1_element: config.gas_cost(ExtCosts::bls12381_map_fp_to_g1_element),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_map_fp2_to_g2_base: config.gas_cost(ExtCosts::bls12381_map_fp2_to_g2_base),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_map_fp2_to_g2_element: config
                 .gas_cost(ExtCosts::bls12381_map_fp2_to_g2_element),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_pairing_base: config.gas_cost(ExtCosts::bls12381_pairing_base),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_pairing_element: config.gas_cost(ExtCosts::bls12381_pairing_element),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_p1_decompress_base: config.gas_cost(ExtCosts::bls12381_p1_decompress_base),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_p1_decompress_element: config
                 .gas_cost(ExtCosts::bls12381_p1_decompress_element),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_p2_decompress_base: config.gas_cost(ExtCosts::bls12381_p2_decompress_base),
-            #[cfg(feature = "protocol_feature_bls12381")]
             bls12381_p2_decompress_element: config
                 .gas_cost(ExtCosts::bls12381_p2_decompress_element),
             // removed parameters
@@ -658,6 +631,8 @@ impl From<ExtCostsConfigView> for crate::ExtCostsConfig {
                 ExtCosts::storage_read_base => view.storage_read_base,
                 ExtCosts::storage_read_key_byte => view.storage_read_key_byte,
                 ExtCosts::storage_read_value_byte => view.storage_read_value_byte,
+                ExtCosts::storage_large_read_overhead_base => view.storage_large_read_overhead_base,
+                ExtCosts::storage_large_read_overhead_byte => view.storage_large_read_overhead_byte,
                 ExtCosts::storage_remove_base => view.storage_remove_base,
                 ExtCosts::storage_remove_key_byte => view.storage_remove_key_byte,
                 ExtCosts::storage_remove_ret_value_byte => view.storage_remove_ret_value_byte,
@@ -688,41 +663,23 @@ impl From<ExtCostsConfigView> for crate::ExtCostsConfig {
                 ExtCosts::yield_create_byte => view.yield_create_byte,
                 ExtCosts::yield_resume_base => view.yield_resume_base,
                 ExtCosts::yield_resume_byte => view.yield_resume_byte,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_p1_sum_base => view.bls12381_p1_sum_base,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_p1_sum_element => view.bls12381_p1_sum_element,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_p2_sum_base => view.bls12381_p2_sum_base,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_p2_sum_element => view.bls12381_p2_sum_element,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_g1_multiexp_base => view.bls12381_g1_multiexp_base,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_g1_multiexp_element => view.bls12381_g1_multiexp_element,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_g2_multiexp_base => view.bls12381_g2_multiexp_base,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_g2_multiexp_element => view.bls12381_g2_multiexp_element,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_map_fp_to_g1_base => view.bls12381_map_fp_to_g1_base,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_map_fp_to_g1_element => view.bls12381_map_fp_to_g1_element,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_map_fp2_to_g2_base => view.bls12381_map_fp2_to_g2_base,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_map_fp2_to_g2_element => view.bls12381_map_fp2_to_g2_element,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_pairing_base => view.bls12381_pairing_base,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_pairing_element => view.bls12381_pairing_element,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_p1_decompress_base => view.bls12381_p1_decompress_base,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_p1_decompress_element => view.bls12381_p1_decompress_element,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_p2_decompress_base => view.bls12381_p2_decompress_base,
-                #[cfg(feature = "protocol_feature_bls12381")]
                 ExtCosts::bls12381_p2_decompress_element => view.bls12381_p2_decompress_element,
         }
         .map(|_, value| ParameterCost { gas: value, compute: value });
@@ -860,7 +817,6 @@ impl From<CongestionControlConfigView> for CongestionControlConfig {
 
 #[cfg(test)]
 #[cfg(not(feature = "nightly"))]
-#[cfg(not(feature = "statelessnet_protocol"))]
 mod tests {
     /// The JSON representation used in RPC responses must not remove or rename
     /// fields, only adding fields is allowed or we risk breaking clients.

@@ -16,14 +16,16 @@ use near_async::time;
 use near_crypto::PublicKey;
 use near_primitives::block::{ApprovalMessage, Block, GenesisId};
 use near_primitives::challenge::Challenge;
+use near_primitives::epoch_sync::CompressedEpochSyncProof;
 use near_primitives::hash::CryptoHash;
 use near_primitives::network::{AnnounceAccount, PeerId};
 use near_primitives::sharding::PartialEncodedChunkWithArcReceipts;
-use near_primitives::stateless_validation::{
-    ChunkEndorsement, ChunkStateWitnessAck, PartialEncodedStateWitness,
-};
+use near_primitives::stateless_validation::chunk_endorsement::ChunkEndorsement;
+use near_primitives::stateless_validation::partial_witness::PartialEncodedStateWitness;
+use near_primitives::stateless_validation::state_witness::ChunkStateWitnessAck;
 use near_primitives::transaction::SignedTransaction;
 use near_primitives::types::{AccountId, BlockHeight, EpochHeight, ShardId};
+use near_schema_checker_lib::ProtocolSchema;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::net::SocketAddr;
@@ -52,7 +54,16 @@ pub struct KnownProducer {
 }
 
 /// Ban reason.
-#[derive(borsh::BorshSerialize, borsh::BorshDeserialize, Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(
+    borsh::BorshSerialize,
+    borsh::BorshDeserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Copy,
+    ProtocolSchema,
+)]
 #[borsh(use_discriminant = false)]
 pub enum ReasonForBan {
     None = 0,
@@ -271,6 +282,10 @@ pub enum NetworkRequests {
     PartialEncodedStateWitness(Vec<(AccountId, PartialEncodedStateWitness)>),
     /// Message from chunk validator to all other chunk validators to forward state witness part.
     PartialEncodedStateWitnessForward(Vec<AccountId>, PartialEncodedStateWitness),
+    /// Requests an epoch sync
+    EpochSyncRequest { peer_id: PeerId },
+    /// Response to an epoch sync request
+    EpochSyncResponse { route_back: CryptoHash, proof: CompressedEpochSyncProof },
 }
 
 /// Combines peer address info, chain.

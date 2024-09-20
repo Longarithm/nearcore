@@ -30,6 +30,7 @@ use near_o11y::{handler_debug_span, handler_trace_span, WithSpanContext};
 use near_performance_metrics_macros::perf;
 use near_primitives::block::GenesisId;
 use near_primitives::network::{AnnounceAccount, PeerId};
+use near_primitives::stateless_validation::chunk_endorsement::ChunkEndorsement;
 use near_primitives::views::{
     ConnectionInfoView, EdgeView, KnownPeerStateView, NetworkGraphView, PeerStoreView,
     RecentOutboundConnectionsView, SnapshotHostInfoView, SnapshotHostsView,
@@ -980,11 +981,13 @@ impl PeerManagerActor {
                 NetworkResponses::NoResponse
             }
             NetworkRequests::ChunkEndorsement(target, endorsement) => {
-                self.state.send_message_to_account(
-                    &self.clock,
-                    &target,
-                    RoutedMessageBody::ChunkEndorsement(endorsement),
-                );
+                let msg = match endorsement {
+                    ChunkEndorsement::V1(endorsement) => {
+                        RoutedMessageBody::ChunkEndorsement(endorsement)
+                    }
+                    _ => RoutedMessageBody::VersionedChunkEndorsement(endorsement),
+                };
+                self.state.send_message_to_account(&self.clock, &target, msg);
                 NetworkResponses::NoResponse
             }
             NetworkRequests::PartialEncodedStateWitness(validator_witness_tuple) => {
@@ -1011,6 +1014,44 @@ impl PeerManagerActor {
                     );
                 }
                 NetworkResponses::NoResponse
+            }
+            NetworkRequests::EpochSyncRequest { peer_id } => {
+                if self.state.send_message_to_peer(
+                    &self.clock,
+                    tcp::Tier::T2,
+                    self.state.sign_message(
+                        &self.clock,
+                        RawRoutedMessage {
+                            target: PeerIdOrHash::PeerId(peer_id),
+                            body: RoutedMessageBody::EpochSyncRequest,
+                        },
+                    ),
+                ) {
+                    NetworkResponses::NoResponse
+                } else {
+                    NetworkResponses::RouteNotFound
+                }
+            }
+            NetworkRequests::EpochSyncResponse { route_back, proof } => {
+                if self.state.send_message_to_peer(
+                    &self.clock,
+                    tcp::Tier::T2,
+                    self.state.sign_message(
+                        &self.clock,
+                        RawRoutedMessage {
+                            target: PeerIdOrHash::Hash(route_back),
+                            body: RoutedMessageBody::EpochSyncResponse(proof),
+                        },
+                    ),
+                ) {
+                    NetworkResponses::NoResponse
+                } else {
+                    tracing::info!(
+                        "Failed to send EpochSyncResponse to {}, route not found",
+                        route_back
+                    );
+                    NetworkResponses::RouteNotFound
+                }
             }
         }
     }

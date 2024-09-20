@@ -1,3 +1,5 @@
+use near_schema_checker_lib::ProtocolSchema;
+
 use crate::errors::ContractPrecompilatonResult;
 use crate::logic::errors::{CacheError, CompilationError};
 use crate::logic::Config;
@@ -13,7 +15,7 @@ use std::io::{Read, Write};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 
-#[derive(Debug, Clone, BorshSerialize)]
+#[derive(Debug, Clone, BorshSerialize, ProtocolSchema)]
 enum ContractCacheKey {
     _Version1,
     _Version2,
@@ -88,8 +90,8 @@ pub trait ContractRuntimeCache: Send + Sync {
     fn handle(&self) -> Box<dyn ContractRuntimeCache>;
     fn memory_cache(&self) -> &AnyCache {
         // This method returns a reference, so we need to store an instance somewhere.
-        static ZERO_ANY_CACHE: once_cell::sync::Lazy<AnyCache> =
-            once_cell::sync::Lazy::new(|| AnyCache::new(0));
+        static ZERO_ANY_CACHE: std::sync::LazyLock<AnyCache> =
+            std::sync::LazyLock::new(|| AnyCache::new(0));
         &ZERO_ANY_CACHE
     }
     fn put(&self, key: &CryptoHash, value: CompiledContractInfo) -> std::io::Result<()>;
