@@ -14,10 +14,10 @@ use num_rational::{Ratio, Rational32};
 
 use crate::{
     Genesis, GenesisConfig, BLOCK_PRODUCER_KICKOUT_THRESHOLD, CHUNK_PRODUCER_KICKOUT_THRESHOLD,
-    CHUNK_VALIDATOR_ONLY_KICKOUT_THRESHOLD, FISHERMEN_THRESHOLD, GAS_PRICE_ADJUSTMENT_RATE,
-    INITIAL_GAS_LIMIT, MAX_INFLATION_RATE, MIN_GAS_PRICE, NEAR_BASE, NUM_BLOCKS_PER_YEAR,
-    PROTOCOL_REWARD_RATE, PROTOCOL_TREASURY_ACCOUNT, PROTOCOL_UPGRADE_STAKE_THRESHOLD,
-    TRANSACTION_VALIDITY_PERIOD,
+    CHUNK_VALIDATOR_ONLY_KICKOUT_THRESHOLD, FAST_EPOCH_LENGTH, FISHERMEN_THRESHOLD,
+    GAS_PRICE_ADJUSTMENT_RATE, INITIAL_GAS_LIMIT, MAX_INFLATION_RATE, MIN_GAS_PRICE, NEAR_BASE,
+    NUM_BLOCKS_PER_YEAR, PROTOCOL_REWARD_RATE, PROTOCOL_TREASURY_ACCOUNT,
+    PROTOCOL_UPGRADE_STAKE_THRESHOLD, TRANSACTION_VALIDITY_PERIOD,
 };
 
 /// Initial balance used in tests.
@@ -77,7 +77,8 @@ impl Genesis {
             );
         }
         add_protocol_account(&mut records);
-        let epoch_config = Self::test_epoch_config(num_validator_seats, shard_layout);
+        let epoch_config =
+            Self::test_epoch_config(num_validator_seats, shard_layout, FAST_EPOCH_LENGTH);
         let config = GenesisConfig {
             protocol_version: PROTOCOL_VERSION,
             genesis_time: from_timestamp(clock.now_utc().unix_timestamp_nanos() as u64),

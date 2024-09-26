@@ -757,9 +757,10 @@ impl Genesis {
     pub fn test_epoch_config(
         num_block_producer_seats: NumSeats,
         shard_layout: ShardLayout,
+        epoch_length: BlockHeightDelta,
     ) -> EpochConfig {
         EpochConfig {
-            epoch_length: FAST_EPOCH_LENGTH,
+            epoch_length,
             num_block_producer_seats,
             num_block_producer_seats_per_shard: vec![
                 num_block_producer_seats;
