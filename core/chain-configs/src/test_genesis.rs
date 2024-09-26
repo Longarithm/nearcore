@@ -308,7 +308,25 @@ impl TestGenesisBuilder {
             tracing::warn!("Genesis protocol_version not explicitly set, defaulting to latest protocol version {:?}.", default);
             default
         });
-        let epoch_config = self.epoch_config_mut().clone();
+        let validator_specs = self.validators.clone().unwrap_or_else(|| {
+            let default = ValidatorsSpec::DesiredRoles {
+                block_and_chunk_producers: vec!["validator0".to_string()],
+                chunk_validators_only: vec![],
+            };
+            tracing::warn!(
+                "Genesis validators not explicitly set, defaulting to a single validator setup {:?}.",
+                default
+            );
+            default
+        });
+        let derived_validator_setup = derive_validator_setup(validator_specs);
+
+        let mut epoch_config = self.epoch_config_mut().clone();
+        epoch_config.num_block_producer_seats = derived_validator_setup.num_block_producer_seats;
+        epoch_config.validator_selection_config.num_chunk_producer_seats =
+            derived_validator_setup.num_chunk_producer_seats;
+        epoch_config.validator_selection_config.num_chunk_validator_seats =
+            derived_validator_setup.num_chunk_validator_seats;
         let epoch_config_store = EpochConfigStore::test(BTreeMap::from_iter(vec![(
             protocol_version,
             Arc::new(epoch_config.clone()),
@@ -360,18 +378,7 @@ impl TestGenesisBuilder {
             );
             default
         });
-        let validator_specs = self.validators.clone().unwrap_or_else(|| {
-            let default = ValidatorsSpec::DesiredRoles {
-                block_and_chunk_producers: vec!["validator0".to_string()],
-                chunk_validators_only: vec![],
-            };
-            tracing::warn!(
-                "Genesis validators not explicitly set, defaulting to a single validator setup {:?}.",
-                default
-            );
-            default
-        });
-        let derived_validator_setup = derive_validator_setup(validator_specs);
+
         // let minimum_validators_per_shard = self.minimum_validators_per_shard.unwrap_or_else(|| {
         //     let default = 1;
         //     tracing::warn!(
