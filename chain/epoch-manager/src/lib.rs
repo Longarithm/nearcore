@@ -2,13 +2,12 @@
 
 use crate::metrics::{PROTOCOL_VERSION_NEXT, PROTOCOL_VERSION_VOTES};
 use near_cache::SyncLruCache;
-use near_chain_configs::GenesisConfig;
+use near_chain_configs::{Genesis, GenesisConfig};
 use near_primitives::block::{BlockHeader, Tip};
 use near_primitives::epoch_block_info::{BlockInfo, SlashState};
 use near_primitives::epoch_info::EpochInfo;
 use near_primitives::epoch_manager::{
-    AllEpochConfig, AllEpochConfigTestOverrides, EpochConfig, EpochConfigStore, EpochSummary,
-    ShardConfig, AGGREGATOR_KEY,
+    AllEpochConfig, EpochConfig, EpochConfigStore, EpochSummary, ShardConfig, AGGREGATOR_KEY,
 };
 use near_primitives::errors::EpochError;
 use near_primitives::hash::CryptoHash;
@@ -194,19 +193,47 @@ impl EpochManager {
     /// Constructor should accept either chain id or `EpochConfigStore`.
     /// BOLD ASSUMPTION: we can use chain id
     pub fn new_arc_handle(store: Store, genesis_config: &GenesisConfig) -> Arc<EpochManagerHandle> {
-        let reward_calculator = RewardCalculator::new(genesis_config, genesis_config.epoch_length);
-        let all_epoch_config = Self::new_all_epoch_config(genesis_config);
-        Arc::new(
-            Self::new(
-                store,
-                all_epoch_config,
-                genesis_config.protocol_version,
-                reward_calculator,
-                genesis_config.validators(),
-            )
-            .unwrap()
-            .into_handle(),
-        )
+        let chain_id = genesis_config.chain_id.as_str();
+        match chain_id {
+            near_primitives::chains::MAINNET | near_primitives::chains::TESTNET => {
+                let epoch_config_store = EpochConfigStore::for_chain_id(chain_id).unwrap();
+                Self::new_arc_handle_from_epoch_config_store(
+                    store,
+                    genesis_config,
+                    epoch_config_store,
+                )
+            }
+            _ => {
+                let epoch_config = Genesis::test_epoch_config(
+                    genesis_config.num_block_producer_seats,
+                    genesis_config.shard_layout.clone(),
+                );
+                let epoch_config_store = EpochConfigStore::test(BTreeMap::from_iter(vec![(
+                    genesis_config.protocol_version,
+                    Arc::new(epoch_config),
+                )]));
+                Self::new_arc_handle_from_epoch_config_store(
+                    store,
+                    genesis_config,
+                    epoch_config_store,
+                )
+            } // _ => {
+              //     let reward_calculator =
+              //         RewardCalculator::new(genesis_config, genesis_config.epoch_length);
+              //     let all_epoch_config = Self::new_all_epoch_config(genesis_config);
+              //     Arc::new(
+              //         Self::new(
+              //             store,
+              //             all_epoch_config,
+              //             genesis_config.protocol_version,
+              //             reward_calculator,
+              //             genesis_config.validators(),
+              //         )
+              //         .unwrap()
+              //         .into_handle(),
+              //     )
+              // }
+        }
     }
 
     /// SHOULD BE USED EVERYWHERE.
