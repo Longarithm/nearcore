@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use near_async::time::Duration;
 use near_chain_configs::test_genesis::TestGenesisBuilder;
 use near_o11y::testonly::init_test_logger;
 use near_primitives::shard_layout::ShardLayout;
@@ -33,4 +34,7 @@ fn test_resharding_v3() {
 
     let TestLoopEnv { mut test_loop, datas: node_datas, tempdir } =
         builder.genesis(genesis).clients(clients).build();
+
+    TestLoopEnv { test_loop, datas: node_datas, tempdir }
+        .shutdown_and_drain_remaining_events(Duration::seconds(20));
 }

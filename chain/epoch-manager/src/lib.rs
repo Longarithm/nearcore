@@ -179,17 +179,8 @@ impl EpochManager {
         store: Store,
         genesis_config: &GenesisConfig,
     ) -> Result<Self, EpochError> {
-        Self::new_from_genesis_config_with_test_overrides(store, genesis_config, None)
-    }
-
-    pub fn new_from_genesis_config_with_test_overrides(
-        store: Store,
-        genesis_config: &GenesisConfig,
-        test_overrides: Option<AllEpochConfigTestOverrides>,
-    ) -> Result<Self, EpochError> {
         let reward_calculator = RewardCalculator::new(genesis_config, genesis_config.epoch_length);
-        let all_epoch_config =
-            Self::new_all_epoch_config_with_test_overrides(genesis_config, test_overrides);
+        let all_epoch_config = Self::new_all_epoch_config(genesis_config);
         Self::new(
             store,
             all_epoch_config,
@@ -202,7 +193,19 @@ impl EpochManager {
     /// DEPRECATED.
     /// Constructor should accept either chain id or `EpochConfigStore`.
     pub fn new_arc_handle(store: Store, genesis_config: &GenesisConfig) -> Arc<EpochManagerHandle> {
-        Self::new_arc_handle_with_test_overrides(store, genesis_config, None)
+        let reward_calculator = RewardCalculator::new(genesis_config, genesis_config.epoch_length);
+        let all_epoch_config = Self::new_all_epoch_config(genesis_config);
+        Arc::new(
+            Self::new(
+                store,
+                all_epoch_config,
+                genesis_config.protocol_version,
+                reward_calculator,
+                genesis_config.validators(),
+            )
+            .unwrap()
+            .into_handle(),
+        )
     }
 
     /// SHOULD BE USED EVERYWHERE.
@@ -229,33 +232,13 @@ impl EpochManager {
         )
     }
 
-    pub fn new_arc_handle_with_test_overrides(
-        store: Store,
-        genesis_config: &GenesisConfig,
-        test_overrides: Option<AllEpochConfigTestOverrides>,
-    ) -> Arc<EpochManagerHandle> {
-        Arc::new(
-            Self::new_from_genesis_config_with_test_overrides(
-                store,
-                genesis_config,
-                test_overrides,
-            )
-            .unwrap()
-            .into_handle(),
-        )
-    }
-
-    fn new_all_epoch_config_with_test_overrides(
-        genesis_config: &GenesisConfig,
-        test_overrides: Option<AllEpochConfigTestOverrides>,
-    ) -> AllEpochConfig {
+    fn new_all_epoch_config(genesis_config: &GenesisConfig) -> AllEpochConfig {
         let initial_epoch_config = EpochConfig::from(genesis_config);
-        let epoch_config = AllEpochConfig::new_with_test_overrides(
+        let epoch_config = AllEpochConfig::new(
             genesis_config.use_production_config(),
             genesis_config.protocol_version,
             initial_epoch_config,
             &genesis_config.chain_id,
-            test_overrides,
         );
         epoch_config
     }
