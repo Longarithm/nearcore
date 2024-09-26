@@ -4,7 +4,7 @@ use near_chain_configs::test_genesis::TestGenesisBuilder;
 use near_o11y::testonly::init_test_logger;
 use near_primitives::shard_layout::ShardLayout;
 use near_primitives::types::AccountId;
-use near_primitives::version::ProtocolFeature;
+use near_primitives::version::{ProtocolFeature, PROTOCOL_VERSION};
 
 use crate::test_loop::builder::TestLoopBuilder;
 use crate::test_loop::env::TestLoopEnv;
@@ -12,6 +12,10 @@ use crate::test_loop::utils::ONE_NEAR;
 
 #[test]
 fn test_resharding_v3() {
+    if !ProtocolFeature::SimpleNightshadeV4.enabled(PROTOCOL_VERSION) {
+        return;
+    }
+
     init_test_logger();
     let builder = TestLoopBuilder::new();
 
