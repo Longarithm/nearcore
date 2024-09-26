@@ -207,6 +207,7 @@ impl EpochManager {
                 let epoch_config = Genesis::test_epoch_config(
                     genesis_config.num_block_producer_seats,
                     genesis_config.shard_layout.clone(),
+                    genesis_config.epoch_length,
                 );
                 let epoch_config_store = EpochConfigStore::test(BTreeMap::from_iter(vec![(
                     genesis_config.protocol_version,
