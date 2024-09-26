@@ -17,7 +17,7 @@ use near_epoch_manager::{EpochManager, EpochManagerAdapter, EpochManagerHandle};
 use near_network::test_utils::MockPeerManagerAdapter;
 use near_parameters::RuntimeConfigStore;
 use near_primitives::epoch_info::RngSeed;
-use near_primitives::epoch_manager::{AllEpochConfigTestOverrides, EpochConfigStore};
+use near_primitives::epoch_manager::{AllEpochConfigTestOverrides, EpochConfig, EpochConfigStore};
 use near_primitives::test_utils::create_test_signer;
 use near_primitives::types::{AccountId, NumShards};
 use near_store::config::StateSnapshotType;
@@ -257,11 +257,7 @@ impl TestEnvBuilder {
         );
         let ret = self.ensure_stores();
 
-        let base_epoch_config_store = EpochConfigStore::for_chain_id("mainnet").unwrap();
-        let mut base_epoch_config = base_epoch_config_store
-            .get_config(ret.genesis_config.protocol_version)
-            .as_ref()
-            .clone();
+        let mut base_epoch_config: EpochConfig = (&ret.genesis_config).into();
         if let Some(block_producer_kickout_threshold) =
             test_overrides.block_producer_kickout_threshold
         {
