@@ -192,6 +192,7 @@ impl EpochManager {
 
     /// DEPRECATED.
     /// Constructor should accept either chain id or `EpochConfigStore`.
+    /// BOLD ASSUMPTION: we can use chain id
     pub fn new_arc_handle(store: Store, genesis_config: &GenesisConfig) -> Arc<EpochManagerHandle> {
         let reward_calculator = RewardCalculator::new(genesis_config, genesis_config.epoch_length);
         let all_epoch_config = Self::new_all_epoch_config(genesis_config);

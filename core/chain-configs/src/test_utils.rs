@@ -54,7 +54,10 @@ impl Genesis {
         EpochConfig {
             epoch_length: FAST_EPOCH_LENGTH,
             num_block_producer_seats,
-            num_block_producer_seats_per_shard: vec![],
+            num_block_producer_seats_per_shard: vec![
+                num_block_producer_seats;
+                shard_layout.num_shards()
+            ],
             avg_hidden_validator_seats_per_shard: vec![],
             target_validator_mandates_per_shard: 68,
             validator_max_kickout_stake_perc: 100,
