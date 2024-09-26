@@ -8,7 +8,7 @@ use crate::types::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use near_primitives_core::checked_feature;
 use near_primitives_core::hash::CryptoHash;
-use near_primitives_core::version::ProtocolFeature;
+use near_primitives_core::version::{ProtocolFeature, PROTOCOL_VERSION};
 use near_schema_checker_lib::ProtocolSchema;
 use smart_default::SmartDefault;
 use std::collections::{BTreeMap, HashMap};
@@ -120,6 +120,19 @@ impl AllEpochConfig {
         )
     }
 
+    pub fn from_epoch_config_store(epoch_config_store: EpochConfigStore) -> Self {
+        let genesis_epoch_config = epoch_config_store.get_config(PROTOCOL_VERSION).as_ref().clone();
+        Self {
+            config_store: Some(epoch_config_store),
+            // The fields below SHOULD NOT be used.
+            use_production_config: false,
+            genesis_epoch_config,
+            chain_id: String::new(),
+            test_overrides: AllEpochConfigTestOverrides::default(),
+        }
+    }
+
+    /// DEPRECATED.
     pub fn new_with_test_overrides(
         use_production_config: bool,
         genesis_protocol_version: ProtocolVersion,
@@ -457,10 +470,14 @@ impl EpochConfigStore {
         }
     }
 
+    pub fn test(store: BTreeMap<ProtocolVersion, Arc<EpochConfig>>) -> Self {
+        Self { store }
+    }
+
     /// Returns the EpochConfig for the given protocol version.
     /// This panics if no config is found for the given version, thus the initialization via `for_chain_id` should
     /// only be performed for chains with some configs stored in files.
-    fn get_config(&self, protocol_version: ProtocolVersion) -> &Arc<EpochConfig> {
+    pub fn get_config(&self, protocol_version: ProtocolVersion) -> &Arc<EpochConfig> {
         self.store
             .range((Bound::Unbounded, Bound::Included(protocol_version)))
             .next_back()

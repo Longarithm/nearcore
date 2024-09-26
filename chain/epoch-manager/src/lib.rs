@@ -7,8 +7,8 @@ use near_primitives::block::{BlockHeader, Tip};
 use near_primitives::epoch_block_info::{BlockInfo, SlashState};
 use near_primitives::epoch_info::EpochInfo;
 use near_primitives::epoch_manager::{
-    AllEpochConfig, AllEpochConfigTestOverrides, EpochConfig, EpochSummary, ShardConfig,
-    AGGREGATOR_KEY,
+    AllEpochConfig, AllEpochConfigTestOverrides, EpochConfig, EpochConfigStore, EpochSummary,
+    ShardConfig, AGGREGATOR_KEY,
 };
 use near_primitives::errors::EpochError;
 use near_primitives::hash::CryptoHash;
@@ -187,7 +187,7 @@ impl EpochManager {
         genesis_config: &GenesisConfig,
         test_overrides: Option<AllEpochConfigTestOverrides>,
     ) -> Result<Self, EpochError> {
-        let reward_calculator = RewardCalculator::new(genesis_config);
+        let reward_calculator = RewardCalculator::new(genesis_config, genesis_config.epoch_length);
         let all_epoch_config =
             Self::new_all_epoch_config_with_test_overrides(genesis_config, test_overrides);
         Self::new(
@@ -199,8 +199,34 @@ impl EpochManager {
         )
     }
 
+    /// DEPRECATED.
+    /// Constructor should accept either chain id or `EpochConfigStore`.
     pub fn new_arc_handle(store: Store, genesis_config: &GenesisConfig) -> Arc<EpochManagerHandle> {
         Self::new_arc_handle_with_test_overrides(store, genesis_config, None)
+    }
+
+    /// SHOULD BE USED EVERYWHERE.
+    pub fn new_arc_handle_from_epoch_config_store(
+        store: Store,
+        genesis_config: &GenesisConfig,
+        epoch_config_store: EpochConfigStore,
+    ) -> Arc<EpochManagerHandle> {
+        let genesis_protocol_version = genesis_config.protocol_version;
+        let epoch_length =
+            epoch_config_store.get_config(genesis_protocol_version).epoch_length.clone();
+        let reward_calculator = RewardCalculator::new(genesis_config, epoch_length);
+        let all_epoch_config = AllEpochConfig::from_epoch_config_store(epoch_config_store);
+        Arc::new(
+            Self::new(
+                store,
+                all_epoch_config,
+                genesis_protocol_version,
+                reward_calculator,
+                genesis_config.validators(),
+            )
+            .unwrap()
+            .into_handle(),
+        )
     }
 
     pub fn new_arc_handle_with_test_overrides(

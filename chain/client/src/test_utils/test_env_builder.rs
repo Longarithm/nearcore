@@ -17,14 +17,14 @@ use near_epoch_manager::{EpochManager, EpochManagerAdapter, EpochManagerHandle};
 use near_network::test_utils::MockPeerManagerAdapter;
 use near_parameters::RuntimeConfigStore;
 use near_primitives::epoch_info::RngSeed;
-use near_primitives::epoch_manager::AllEpochConfigTestOverrides;
+use near_primitives::epoch_manager::{AllEpochConfigTestOverrides, EpochConfigStore};
 use near_primitives::test_utils::create_test_signer;
 use near_primitives::types::{AccountId, NumShards};
 use near_store::config::StateSnapshotType;
 use near_store::test_utils::create_test_store;
 use near_store::{NodeStorage, ShardUId, Store, StoreConfig, TrieConfig};
 use near_vm_runner::{ContractRuntimeCache, FilesystemContractRuntimeCache};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -256,12 +256,33 @@ impl TestEnvBuilder {
             "Cannot set both num_shards and epoch_managers at the same time"
         );
         let ret = self.ensure_stores();
+
+        let base_epoch_config_store = EpochConfigStore::for_chain_id("mainnet").unwrap();
+        let mut base_epoch_config = base_epoch_config_store
+            .get_config(ret.genesis_config.protocol_version)
+            .as_ref()
+            .clone();
+        if let Some(block_producer_kickout_threshold) =
+            test_overrides.block_producer_kickout_threshold
+        {
+            base_epoch_config.block_producer_kickout_threshold = block_producer_kickout_threshold;
+        }
+        if let Some(chunk_producer_kickout_threshold) =
+            test_overrides.chunk_producer_kickout_threshold
+        {
+            base_epoch_config.chunk_producer_kickout_threshold = chunk_producer_kickout_threshold;
+        }
+        let epoch_config_store = EpochConfigStore::test(BTreeMap::from_iter(vec![(
+            ret.genesis_config.protocol_version,
+            Arc::new(base_epoch_config),
+        )]));
+
         let epoch_managers = (0..ret.clients.len())
             .map(|i| {
-                EpochManager::new_arc_handle_with_test_overrides(
+                EpochManager::new_arc_handle_from_epoch_config_store(
                     ret.stores.as_ref().unwrap()[i].clone(),
                     &ret.genesis_config,
-                    Some(test_overrides.clone()),
+                    epoch_config_store.clone(),
                 )
             })
             .collect();
