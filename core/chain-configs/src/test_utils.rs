@@ -26,8 +26,6 @@ pub const TESTING_INIT_BALANCE: Balance = 1_000_000_000 * NEAR_BASE;
 /// Validator's stake used in tests.
 pub const TESTING_INIT_STAKE: Balance = 50_000_000 * NEAR_BASE;
 
-pub const FAST_EPOCH_LENGTH: BlockHeightDelta = 60;
-
 impl GenesisConfig {
     pub fn test(clock: Clock) -> Self {
         GenesisConfig {
