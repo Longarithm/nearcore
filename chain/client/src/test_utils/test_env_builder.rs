@@ -47,6 +47,7 @@ impl EpochManagerKind {
 pub struct TestEnvBuilder {
     clock: Option<Clock>,
     genesis_config: GenesisConfig,
+    epoch_config_store: Option<EpochConfigStore>,
     clients: Vec<AccountId>,
     validators: Vec<AccountId>,
     home_dirs: Option<Vec<PathBuf>>,
@@ -78,6 +79,7 @@ impl TestEnvBuilder {
         Self {
             clock: None,
             genesis_config,
+            epoch_config_store: None,
             clients,
             validators,
             home_dirs: None,
@@ -111,6 +113,12 @@ impl TestEnvBuilder {
         assert!(self.runtimes.is_none(), "Cannot set clients after runtimes");
         assert!(self.network_adapters.is_none(), "Cannot set clients after network_adapters");
         self.clients = clients;
+        self
+    }
+
+    pub fn epoch_config_store(mut self, epoch_config_store: EpochConfigStore) -> Self {
+        assert!(self.epoch_config_store.is_none(), "Cannot set epoch_config_store twice");
+        self.epoch_config_store = Some(epoch_config_store);
         self
     }
 
@@ -293,6 +301,18 @@ impl TestEnvBuilder {
         let ret = self.ensure_stores();
         if ret.epoch_managers.is_some() {
             return ret;
+        }
+        if let Some(epoch_config_store) = &ret.epoch_config_store {
+            let epoch_managers = (0..ret.clients.len())
+                .map(|i| {
+                    EpochManager::new_arc_handle_from_epoch_config_store(
+                        ret.stores.as_ref().unwrap()[i].clone(),
+                        &ret.genesis_config,
+                        epoch_config_store.clone(),
+                    )
+                })
+                .collect();
+            return ret.epoch_managers(epoch_managers);
         }
         ret.epoch_managers_with_test_overrides(AllEpochConfigTestOverrides::default())
     }

@@ -525,6 +525,7 @@ impl TestGenesisBuilder {
             chain_id,
             genesis_time,
             genesis_height,
+            epoch_length: epoch_config.epoch_length, // yeah, unfortunately we init it on chain from genesis
             min_gas_price,
             max_gas_price,
             gas_limit,

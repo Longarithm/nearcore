@@ -474,12 +474,13 @@ fn test_in_memory_trie_consistency_with_state_sync_base_case(track_all_shards: b
     for account in &accounts {
         genesis_builder.add_user_account_simple(account.clone(), initial_balance);
     }
-    let (genesis, _) = genesis_builder.build();
-
+    let (genesis, epoch_config_store) = genesis_builder.build();
+    println!("{}", genesis.config.genesis_height);
     let stores = (0..NUM_VALIDATORS).map(|_| create_test_store()).collect::<Vec<_>>();
     let mut env = TestEnv::builder(&genesis.config)
         .clock(clock.clock())
         .clients((0..NUM_VALIDATORS).map(|i| format!("account{}", i).parse().unwrap()).collect())
+        .epoch_config_store(epoch_config_store)
         .stores(stores)
         .maybe_track_all_shards(track_all_shards)
         .nightshade_runtimes_with_trie_config(
