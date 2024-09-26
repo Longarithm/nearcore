@@ -257,6 +257,9 @@ impl TestEnvBuilder {
         );
         let ret = self.ensure_stores();
 
+        // TODO(#11265): consider initialising epoch config separately as it
+        // should be decoupled from the genesis config.
+        // However, there are a lot of tests which only initialise genesis.
         let mut base_epoch_config: EpochConfig = (&ret.genesis_config).into();
         if let Some(block_producer_kickout_threshold) =
             test_overrides.block_producer_kickout_threshold
