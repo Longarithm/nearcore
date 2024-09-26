@@ -1,23 +1,18 @@
 use near_crypto::{InMemorySigner, KeyType, PublicKey};
 use near_primitives::account::{AccessKey, Account};
-use near_primitives::epoch_manager::{EpochConfig, ValidatorSelectionConfig};
 use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardLayout;
 use near_primitives::state_record::StateRecord;
-use near_primitives::types::{
-    AccountId, AccountInfo, Balance, BlockHeightDelta, NumSeats, NumShards,
-};
+use near_primitives::types::{AccountId, AccountInfo, Balance, NumSeats, NumShards};
 use near_primitives::utils::{from_timestamp, generate_random_string};
 use near_primitives::version::PROTOCOL_VERSION;
 use near_time::Clock;
-use num_rational::{Ratio, Rational32};
+use num_rational::Ratio;
 
 use crate::{
-    Genesis, GenesisConfig, BLOCK_PRODUCER_KICKOUT_THRESHOLD, CHUNK_PRODUCER_KICKOUT_THRESHOLD,
-    CHUNK_VALIDATOR_ONLY_KICKOUT_THRESHOLD, FAST_EPOCH_LENGTH, FISHERMEN_THRESHOLD,
-    GAS_PRICE_ADJUSTMENT_RATE, INITIAL_GAS_LIMIT, MAX_INFLATION_RATE, MIN_GAS_PRICE, NEAR_BASE,
-    NUM_BLOCKS_PER_YEAR, PROTOCOL_REWARD_RATE, PROTOCOL_TREASURY_ACCOUNT,
-    PROTOCOL_UPGRADE_STAKE_THRESHOLD, TRANSACTION_VALIDITY_PERIOD,
+    Genesis, GenesisConfig, FAST_EPOCH_LENGTH, GAS_PRICE_ADJUSTMENT_RATE, INITIAL_GAS_LIMIT,
+    MAX_INFLATION_RATE, MIN_GAS_PRICE, NEAR_BASE, NUM_BLOCKS_PER_YEAR, PROTOCOL_REWARD_RATE,
+    PROTOCOL_TREASURY_ACCOUNT, TRANSACTION_VALIDITY_PERIOD,
 };
 
 /// Initial balance used in tests.

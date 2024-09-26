@@ -34,10 +34,12 @@ fn test_resharding_v3() {
     for account in &accounts {
         genesis_builder.add_user_account_simple(account.clone(), initial_balance);
     }
-    let genesis = genesis_builder.build();
+    let genesis_and_epoch_config_store = genesis_builder.build();
 
-    let TestLoopEnv { mut test_loop, datas: node_datas, tempdir } =
-        builder.genesis(genesis).clients(clients).build();
+    let TestLoopEnv { mut test_loop, datas: node_datas, tempdir } = builder
+        .genesis_and_epoch_config_store(genesis_and_epoch_config_store)
+        .clients(clients)
+        .build();
 
     TestLoopEnv { test_loop, datas: node_datas, tempdir }
         .shutdown_and_drain_remaining_events(Duration::seconds(20));

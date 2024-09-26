@@ -5,8 +5,8 @@ use bytesize::ByteSize;
 use near_async::time::{Clock, Duration};
 use near_chain::runtime::NightshadeRuntime;
 use near_chain_configs::test_utils::{
-    add_account_with_key, add_protocol_account, random_chain_id, FAST_EPOCH_LENGTH,
-    TESTING_INIT_BALANCE, TESTING_INIT_STAKE,
+    add_account_with_key, add_protocol_account, random_chain_id, TESTING_INIT_BALANCE,
+    TESTING_INIT_STAKE,
 };
 use near_chain_configs::{
     default_enable_multiline_logging, default_epoch_sync,

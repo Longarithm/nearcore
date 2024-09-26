@@ -1,8 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::Arc;
 
 use near_crypto::PublicKey;
 use near_primitives::account::{AccessKey, Account};
-use near_primitives::epoch_manager::EpochConfig;
+use near_primitives::epoch_manager::{EpochConfig, EpochConfigStore};
 use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardLayout;
 use near_primitives::state_record::StateRecord;
@@ -44,7 +45,7 @@ pub struct TestGenesisBuilder {
     // minimum_validators_per_shard: Option<NumSeats>,
     // target_validator_mandates_per_shard: Option<NumSeats>,
     protocol_treasury_account: Option<String>,
-    shuffle_shard_assignment_for_chunk_producers: Option<bool>,
+    // shuffle_shard_assignment_for_chunk_producers: Option<bool>,
     // kickouts_config: Option<KickoutsConfig>,
     // minimum_stake_ratio: Option<Rational32>,
     max_inflation_rate: Option<Rational32>,
@@ -66,12 +67,12 @@ enum ValidatorsSpec {
     },
 }
 
-#[derive(Debug, Clone)]
-struct KickoutsConfig {
-    block_producer_kickout_threshold: u8,
-    chunk_producer_kickout_threshold: u8,
-    chunk_validator_only_kickout_threshold: u8,
-}
+// #[derive(Debug, Clone)]
+// struct KickoutsConfig {
+//     block_producer_kickout_threshold: u8,
+//     chunk_producer_kickout_threshold: u8,
+//     chunk_validator_only_kickout_threshold: u8,
+// }
 
 #[derive(Debug, Clone)]
 struct UserAccount {
@@ -296,12 +297,23 @@ impl TestGenesisBuilder {
         self
     }
 
-    pub fn build(&self) -> Genesis {
+    pub fn build(mut self) -> (Genesis, EpochConfigStore) {
         let chain_id = self.chain_id.clone().unwrap_or_else(|| {
             let default = "test".to_string();
             tracing::warn!("Genesis chain_id not explicitly set, defaulting to {:?}.", default);
             default
         });
+        let protocol_version = self.protocol_version.unwrap_or_else(|| {
+            let default = PROTOCOL_VERSION;
+            tracing::warn!("Genesis protocol_version not explicitly set, defaulting to latest protocol version {:?}.", default);
+            default
+        });
+        let epoch_config = self.epoch_config_mut().clone();
+        let epoch_config_store = EpochConfigStore::test(BTreeMap::from_iter(vec![(
+            protocol_version,
+            Arc::new(epoch_config.clone()),
+        )]));
+
         let genesis_time = self.genesis_time.unwrap_or_else(|| {
             let default = chrono::Utc::now();
             tracing::warn!(
@@ -310,11 +322,7 @@ impl TestGenesisBuilder {
             );
             default
         });
-        let protocol_version = self.protocol_version.unwrap_or_else(|| {
-            let default = PROTOCOL_VERSION;
-            tracing::warn!("Genesis protocol_version not explicitly set, defaulting to latest protocol version {:?}.", default);
-            default
-        });
+
         let genesis_height = self.genesis_height.unwrap_or_else(|| {
             let default = 1;
             tracing::warn!(
@@ -531,18 +539,19 @@ impl TestGenesisBuilder {
             total_supply,
             max_kickout_stake_perc: 100,
             validators: derived_validator_setup.validators,
+            shard_layout: epoch_config.shard_layout.clone(),
             num_block_producer_seats: derived_validator_setup.num_block_producer_seats,
+            num_block_producer_seats_per_shard: epoch_config
+                .shard_layout
+                .shard_ids()
+                .map(|_| derived_validator_setup.num_block_producer_seats)
+                .collect(),
             num_chunk_only_producer_seats: 0,
             // minimum_stake_ratio,
             // minimum_validators_per_shard,
             minimum_stake_divisor: 10,
             // shuffle_shard_assignment_for_chunk_producers,
-            // num_block_producer_seats_per_shard: shard_layout
-            //     .shard_ids()
-            //     .map(|_| minimum_validators_per_shard)
-            //     .collect(),
             // avg_hidden_validator_seats_per_shard: Vec::new(),
-            // shard_layout,
             max_inflation_rate,
             protocol_upgrade_stake_threshold: Rational32::new(8, 10),
             // Hack to ensure that `FixMinStakeRatio` is tested.
@@ -555,10 +564,13 @@ impl TestGenesisBuilder {
             ..Default::default()
         };
 
-        Genesis {
-            config: genesis_config,
-            contents: GenesisContents::Records { records: GenesisRecords(records) },
-        }
+        (
+            Genesis {
+                config: genesis_config,
+                contents: GenesisContents::Records { records: GenesisRecords(records) },
+            },
+            epoch_config_store,
+        )
     }
 }
 

@@ -67,7 +67,7 @@ fn test_in_memory_trie_node_consistency() {
     for account in &accounts {
         genesis_builder.add_user_account_simple(account.clone(), initial_balance);
     }
-    let genesis = genesis_builder.build();
+    let (genesis, _) = genesis_builder.build();
 
     // Create two stores, one for each node. We'll be reusing the stores later
     // to emulate node restarts.
@@ -474,7 +474,7 @@ fn test_in_memory_trie_consistency_with_state_sync_base_case(track_all_shards: b
     for account in &accounts {
         genesis_builder.add_user_account_simple(account.clone(), initial_balance);
     }
-    let genesis = genesis_builder.build();
+    let (genesis, _) = genesis_builder.build();
 
     let stores = (0..NUM_VALIDATORS).map(|_| create_test_store()).collect::<Vec<_>>();
     let mut env = TestEnv::builder(&genesis.config)
