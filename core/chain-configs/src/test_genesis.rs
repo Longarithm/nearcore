@@ -88,8 +88,12 @@ impl TestGenesisBuilder {
 
     pub fn epoch_config_mut(&mut self) -> &mut EpochConfig {
         if self.epoch_config.is_none() {
-            self.epoch_config =
-                Some(Genesis::test_epoch_config(1, ShardLayout::v0_single_shard(), 100));
+            let mut epoch_config =
+                Genesis::test_epoch_config(1, ShardLayout::v0_single_shard(), 100);
+            epoch_config.block_producer_kickout_threshold = 0;
+            epoch_config.chunk_producer_kickout_threshold = 0;
+            epoch_config.chunk_validator_only_kickout_threshold = 0;
+            self.epoch_config = Some(epoch_config);
         }
         self.epoch_config.as_mut().unwrap()
     }

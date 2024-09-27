@@ -78,7 +78,7 @@ impl ShardConfig {
 
 /// Testing overrides to apply to the EpochConfig returned by the `for_protocol_version`.
 /// All fields should be optional and the default should be a no-op.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct AllEpochConfigTestOverrides {
     pub block_producer_kickout_threshold: Option<u8>,
     pub chunk_producer_kickout_threshold: Option<u8>,
@@ -87,7 +87,7 @@ pub struct AllEpochConfigTestOverrides {
 /// AllEpochConfig manages protocol configs that might be changing throughout epochs (hence EpochConfig).
 /// The main function in AllEpochConfig is ::for_protocol_version which takes a protocol version
 /// and returns the EpochConfig that should be used for this protocol version.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AllEpochConfig {
     /// Store for EpochConfigs, provides configs per protocol version.
     /// Initialized only for production, ie. when `use_protocol_version` is true.
@@ -120,14 +120,14 @@ impl AllEpochConfig {
         )
     }
 
-    pub fn from_epoch_config_store(epoch_config_store: EpochConfigStore) -> Self {
+    pub fn from_epoch_config_store(chain_id: &str, epoch_config_store: EpochConfigStore) -> Self {
         let genesis_epoch_config = epoch_config_store.get_config(PROTOCOL_VERSION).as_ref().clone();
         Self {
             config_store: Some(epoch_config_store),
+            chain_id: chain_id.to_string(),
             // The fields below SHOULD NOT be used.
             use_production_config: false,
             genesis_epoch_config,
-            chain_id: String::new(),
             test_overrides: AllEpochConfigTestOverrides::default(),
         }
     }
@@ -442,7 +442,7 @@ static CONFIGS: &[(&str, ProtocolVersion, &str)] = &[
 ];
 
 /// Store for `[EpochConfig]` per protocol version.`
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct EpochConfigStore {
     store: BTreeMap<ProtocolVersion, Arc<EpochConfig>>,
 }
@@ -478,13 +478,16 @@ impl EpochConfigStore {
     /// This panics if no config is found for the given version, thus the initialization via `for_chain_id` should
     /// only be performed for chains with some configs stored in files.
     pub fn get_config(&self, protocol_version: ProtocolVersion) -> &Arc<EpochConfig> {
-        self.store
+        let c = self
+            .store
             .range((Bound::Unbounded, Bound::Included(protocol_version)))
             .next_back()
             .unwrap_or_else(|| {
                 panic!("Failed to find EpochConfig for protocol version {}", protocol_version)
             })
-            .1
+            .1;
+        // println!("{:?}", c);
+        c
     }
 }
 
