@@ -475,7 +475,6 @@ fn test_in_memory_trie_consistency_with_state_sync_base_case(track_all_shards: b
         genesis_builder.add_user_account_simple(account.clone(), initial_balance);
     }
     let (genesis, epoch_config_store) = genesis_builder.build();
-    println!("{}", genesis.config.genesis_height);
     let stores = (0..NUM_VALIDATORS).map(|_| create_test_store()).collect::<Vec<_>>();
     let mut env = TestEnv::builder(&genesis.config)
         .clock(clock.clock())
