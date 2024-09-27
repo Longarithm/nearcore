@@ -263,9 +263,10 @@ impl TestLoopBuilder {
         // Configure tracked shards.
         // * single shard tracking for validators
         // * all shard tracking for non-validators (RPCs and archival)
-        let num_block_producer = genesis.config.num_block_producer_seats;
-        let num_chunk_producer = genesis.config.num_chunk_producer_seats;
-        let num_chunk_validator = genesis.config.num_chunk_validator_seats;
+        let epoch_config = epoch_config_store.get_config(genesis.config.protocol_version);
+        let num_block_producer = epoch_config.num_block_producer_seats;
+        let num_chunk_producer = epoch_config.validator_selection_config.num_chunk_producer_seats;
+        let num_chunk_validator = epoch_config.validator_selection_config.num_chunk_validator_seats;
         let validator_num =
             num_block_producer.max(num_chunk_producer).max(num_chunk_validator) as usize;
         if idx < validator_num {

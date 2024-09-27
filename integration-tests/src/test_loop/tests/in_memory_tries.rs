@@ -48,8 +48,10 @@ fn test_load_memtrie_after_empty_chunks() {
     }
     let genesis_and_epoch_config_store = genesis_builder.build();
 
-    let TestLoopEnv { mut test_loop, datas: node_datas, tempdir } =
-        builder.genesis_and_epoch_config_store(genesis_and_epoch_config_store).clients(client_accounts).build();
+    let TestLoopEnv { mut test_loop, datas: node_datas, tempdir } = builder
+        .genesis_and_epoch_config_store(genesis_and_epoch_config_store)
+        .clients(client_accounts)
+        .build();
 
     execute_money_transfers(&mut test_loop, &node_datas, &accounts);
 
@@ -81,6 +83,7 @@ fn test_load_memtrie_after_empty_chunks() {
     // Unload memtrie and load it back, check that it doesn't panic.
     let tip = clients[idx].chain.head().unwrap();
     let shard_layout = clients[idx].epoch_manager.get_shard_layout(&tip.epoch_id).unwrap();
+    println!("shard layout: {:?}", shard_layout);
     clients[idx]
         .runtime_adapter
         .get_tries()
