@@ -147,6 +147,8 @@ impl TestGenesisBuilder {
         self
     }
 
+    // TODO(#11265): move this and relevant methods to epoch config builder.
+    // In dynamic resharding world, shard layout will not be static.
     pub fn shard_layout(&mut self, shard_layout: ShardLayout) -> &mut Self {
         self.epoch_config_mut().shard_layout = shard_layout;
         self
