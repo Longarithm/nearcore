@@ -250,7 +250,6 @@ impl EpochManager {
     ) -> Arc<EpochManagerHandle> {
         let genesis_protocol_version = genesis_config.protocol_version;
         let epoch_length = genesis_config.epoch_length;
-        // epoch_config_store.get_config(genesis_protocol_version).epoch_length.clone();
         let reward_calculator = RewardCalculator::new(genesis_config, epoch_length);
         let all_epoch_config = AllEpochConfig::from_epoch_config_store(
             genesis_config.chain_id.as_str(),
@@ -314,13 +313,6 @@ impl EpochManager {
             epoch_info_aggregator_loop_counter: Default::default(),
             largest_final_height: 0,
         };
-        println!(
-            "EM {:?} {:?} {:?} {:?}",
-            epoch_manager.config,
-            epoch_manager.reward_calculator,
-            epoch_manager.genesis_protocol_version,
-            epoch_manager.genesis_num_block_producer_seats
-        );
         let genesis_epoch_id = EpochId::default();
         if !epoch_manager.has_epoch_info(&genesis_epoch_id)? {
             // Missing genesis epoch, means that there is no validator initialize yet.
