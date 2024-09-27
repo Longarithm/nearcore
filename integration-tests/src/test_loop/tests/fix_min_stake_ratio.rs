@@ -61,13 +61,13 @@ fn test_fix_min_stake_ratio() {
     let mut genesis_builder = TestGenesisBuilder::new();
     genesis_builder
         .genesis_time_from_clock(&builder.clock())
-        .shard_layout(ShardLayout::get_simple_nightshade_layout_v3())
+        // .shard_layout(ShardLayout::get_simple_nightshade_layout_v3())
         .protocol_version(ProtocolFeature::FixMinStakeRatio.protocol_version() - 1)
         .epoch_length(epoch_length)
         .validators_raw(validators, 1, 2)
         // For genesis, set high minimum stake ratio so that small validator
         // will be excluded from the validator set.
-        .minimum_stake_ratio(Rational32::new(1, 6_250))
+        // .minimum_stake_ratio(Rational32::new(1, 6_250))
         // Disable validator rewards.
         .max_inflation_rate(Rational32::new(0, 1));
     for account in &accounts {
@@ -75,8 +75,10 @@ fn test_fix_min_stake_ratio() {
     }
     let genesis_and_epoch_config_store = genesis_builder.build();
 
-    let TestLoopEnv { mut test_loop, datas: node_datas, tempdir } =
-        builder.genesis_and_epoch_config_store(genesis_and_epoch_config_store).clients(clients).build();
+    let TestLoopEnv { mut test_loop, datas: node_datas, tempdir } = builder
+        .genesis_and_epoch_config_store(genesis_and_epoch_config_store)
+        .clients(clients)
+        .build();
 
     let client_sender = node_datas[0].client_sender.clone();
     let client_handle = node_datas[0].client_sender.actor_handle();

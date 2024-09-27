@@ -383,8 +383,6 @@ impl TestLoopBuilder {
         // ViewClientActorInner. Otherwise, we use the regular versions created above.
         let (view_epoch_manager, view_shard_tracker, view_runtime_adapter) =
             if let Some(split_store) = &split_store {
-                // let view_epoch_manager =
-                //     EpochManager::new_arc_handle(split_store.clone(), &genesis.config);
                 let view_epoch_manager = EpochManager::new_arc_handle_from_epoch_config_store(
                     split_store.clone(),
                     &genesis.config,

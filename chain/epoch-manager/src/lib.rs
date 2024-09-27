@@ -254,6 +254,7 @@ impl EpochManager {
         let reward_calculator = RewardCalculator::new(genesis_config, epoch_length);
         let all_epoch_config = AllEpochConfig::from_epoch_config_store(
             genesis_config.chain_id.as_str(),
+            epoch_length,
             epoch_config_store,
         );
         Arc::new(

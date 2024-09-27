@@ -92,13 +92,14 @@ pub struct AllEpochConfig {
     /// Store for EpochConfigs, provides configs per protocol version.
     /// Initialized only for production, ie. when `use_protocol_version` is true.
     config_store: Option<EpochConfigStore>,
+    /// Chain Id. Some parameters are specific to certain chains.
+    chain_id: String,
+    epoch_length: BlockHeightDelta,
     /// Whether this is for production (i.e., mainnet or testnet). This is a temporary implementation
     /// to allow us to change protocol config for mainnet and testnet without changing the genesis config
     use_production_config: bool,
     /// EpochConfig from genesis
     genesis_epoch_config: EpochConfig,
-    /// Chain Id. Some parameters are specific to certain chains.
-    chain_id: String,
 
     /// Testing overrides to apply to the EpochConfig returned by the `for_protocol_version`.
     test_overrides: AllEpochConfigTestOverrides,
@@ -120,11 +121,16 @@ impl AllEpochConfig {
         )
     }
 
-    pub fn from_epoch_config_store(chain_id: &str, epoch_config_store: EpochConfigStore) -> Self {
+    pub fn from_epoch_config_store(
+        chain_id: &str,
+        epoch_length: BlockHeightDelta,
+        epoch_config_store: EpochConfigStore,
+    ) -> Self {
         let genesis_epoch_config = epoch_config_store.get_config(PROTOCOL_VERSION).as_ref().clone();
         Self {
             config_store: Some(epoch_config_store),
             chain_id: chain_id.to_string(),
+            epoch_length,
             // The fields below SHOULD NOT be used.
             use_production_config: false,
             genesis_epoch_config,
@@ -148,9 +154,10 @@ impl AllEpochConfig {
         };
         let all_epoch_config = Self {
             config_store: config_store.clone(),
+            chain_id: chain_id.to_string(),
+            epoch_length: genesis_epoch_config.epoch_length,
             use_production_config,
             genesis_epoch_config,
-            chain_id: chain_id.to_string(),
             test_overrides: test_overrides.unwrap_or_default(),
         };
         // Sanity check: Validate that the stored genesis config equals to the config generated for the genesis protocol version.
@@ -169,7 +176,10 @@ impl AllEpochConfig {
 
     pub fn for_protocol_version(&self, protocol_version: ProtocolVersion) -> EpochConfig {
         if self.config_store.is_some() {
-            self.config_store.as_ref().unwrap().get_config(protocol_version).as_ref().clone()
+            let mut config =
+                self.config_store.as_ref().unwrap().get_config(protocol_version).as_ref().clone();
+            config.epoch_length = self.epoch_length; // :(
+            config
         } else {
             self.generate_epoch_config(protocol_version)
         }

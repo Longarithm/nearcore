@@ -36,7 +36,7 @@ pub struct TestGenesisBuilder {
     genesis_time: Option<chrono::DateTime<chrono::Utc>>,
     protocol_version: Option<ProtocolVersion>,
     genesis_height: Option<BlockHeight>,
-    // epoch_length: Option<BlockHeightDelta>,
+    epoch_length: Option<BlockHeightDelta>,
     // shard_layout: Option<ShardLayout>,
     min_max_gas_price: Option<(Balance, Balance)>,
     gas_limit: Option<Gas>,
@@ -129,7 +129,7 @@ impl TestGenesisBuilder {
     }
 
     pub fn epoch_length(&mut self, epoch_length: BlockHeightDelta) -> &mut Self {
-        self.epoch_config_mut().epoch_length = epoch_length;
+        self.epoch_length = Some(epoch_length);
         self
     }
 
@@ -323,6 +323,12 @@ impl TestGenesisBuilder {
             );
             default
         });
+        let epoch_length = self.epoch_length.unwrap_or_else(|| {
+            let default = 100;
+            tracing::warn!("Genesis epoch_length not explicitly set, defaulting to {:?}.", default);
+            default
+        });
+
         let derived_validator_setup = derive_validator_setup(validator_specs);
 
         let mut epoch_config = self.epoch_config_mut().clone();
@@ -335,6 +341,8 @@ impl TestGenesisBuilder {
             protocol_version,
             Arc::new(epoch_config.clone()),
         )]));
+        let shard_layout =
+            epoch_config_store.get_config(protocol_version).as_ref().shard_layout.clone();
 
         let genesis_time = self.genesis_time.unwrap_or_else(|| {
             let default = chrono::Utc::now();
@@ -353,11 +361,6 @@ impl TestGenesisBuilder {
             );
             default
         });
-        // let epoch_length = self.epoch_length.unwrap_or_else(|| {
-        //     let default = 100;
-        //     tracing::warn!("Genesis epoch_length not explicitly set, defaulting to {:?}.", default);
-        //     default
-        // });
         // let shard_layout = self.shard_layout.clone().unwrap_or_else(|| {
         //     tracing::warn!(
         //         "Genesis shard_layout not explicitly set, defaulting to single shard layout."
@@ -529,7 +532,7 @@ impl TestGenesisBuilder {
             chain_id,
             genesis_time,
             genesis_height,
-            epoch_length: epoch_config.epoch_length, // yeah, unfortunately we init it on chain from genesis
+            epoch_length, // yeah, unfortunately we init it on chain from genesis
             min_gas_price,
             max_gas_price,
             gas_limit,
@@ -551,10 +554,9 @@ impl TestGenesisBuilder {
             total_supply,
             max_kickout_stake_perc: 100,
             validators: derived_validator_setup.validators,
-            shard_layout: epoch_config.shard_layout.clone(),
+            shard_layout: shard_layout.clone(),
             num_block_producer_seats: derived_validator_setup.num_block_producer_seats,
-            num_block_producer_seats_per_shard: epoch_config
-                .shard_layout
+            num_block_producer_seats_per_shard: shard_layout
                 .shard_ids()
                 .map(|_| derived_validator_setup.num_block_producer_seats)
                 .collect(),

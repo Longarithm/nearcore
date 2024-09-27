@@ -83,7 +83,6 @@ fn test_load_memtrie_after_empty_chunks() {
     // Unload memtrie and load it back, check that it doesn't panic.
     let tip = clients[idx].chain.head().unwrap();
     let shard_layout = clients[idx].epoch_manager.get_shard_layout(&tip.epoch_id).unwrap();
-    println!("shard layout: {:?}", shard_layout);
     clients[idx]
         .runtime_adapter
         .get_tries()
