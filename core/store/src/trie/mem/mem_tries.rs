@@ -90,6 +90,8 @@ impl MemTries {
         mem_root: MemTrieNodeId,
         block_height: BlockHeight,
     ) {
+        println!("insert_root {:?} {:?} {}", state_root, self.shard_uid, block_height);
+
         assert_ne!(state_root, CryptoHash::default());
         let heights = self.heights.entry(block_height).or_default();
         heights.push(state_root);
@@ -108,6 +110,7 @@ impl MemTries {
         state_root: &CryptoHash,
     ) -> Result<MemTrieNodePtr<HybridArenaMemory>, StorageError> {
         assert_ne!(state_root, &CryptoHash::default());
+        println!("get_root {:?} {:?}", state_root, self.shard_uid);
         self.roots.get(state_root).map(|ids| ids[0].as_ptr(self.arena.memory())).ok_or_else(|| {
             StorageError::StorageInconsistentState(format!(
                 "Failed to find root node {:?} in memtrie",
@@ -121,6 +124,7 @@ impl MemTries {
     /// is expired but is still used at a higher height, it will still be
     /// valid until all references to that root expires.
     pub fn delete_until_height(&mut self, block_height: BlockHeight) {
+        println!("delete_until_height {:?} {:?}", block_height, self.shard_uid);
         let mut to_delete = vec![];
         self.heights.retain(|height, state_roots| {
             if *height < block_height {
@@ -133,6 +137,7 @@ impl MemTries {
             }
         });
         for state_root in to_delete {
+            println!("removing {:?}", state_root);
             self.delete_root(&state_root);
         }
     }
