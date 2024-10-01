@@ -18,7 +18,6 @@ use crate::test_loop::utils::ONE_NEAR;
 /// After uncommenting panics with
 /// StorageInconsistentState("Failed to find root node ... in memtrie")
 #[test]
-#[ignore]
 fn test_resharding_v3() {
     if !ProtocolFeature::SimpleNightshadeV4.enabled(PROTOCOL_VERSION) {
         return;
@@ -41,6 +40,10 @@ fn test_resharding_v3() {
         base_epoch_config_store.get_config(base_protocol_version).as_ref().clone();
     base_epoch_config.validator_selection_config.shuffle_shard_assignment_for_chunk_producers =
         false;
+    base_epoch_config.block_producer_kickout_threshold = 0;
+    base_epoch_config.chunk_producer_kickout_threshold = 0;
+    base_epoch_config.chunk_validator_only_kickout_threshold = 0;
+    base_epoch_config.shard_layout = ShardLayout::v1(vec!["account3".parse().unwrap()], None, 3);
     let base_shard_layout = base_epoch_config.shard_layout.clone();
     let base_num_shards = base_shard_layout.shard_ids().count() as ShardId;
     let mut epoch_config = base_epoch_config.clone();

@@ -1894,6 +1894,12 @@ impl Chain {
         // TODO(#12019): take proper boundary account.
         let boundary_account = AccountId::from_str("boundary.near").unwrap();
 
+        println!(
+            "process_memtrie_resharding_storage_update {} {}",
+            block.header().height(),
+            shard_uid.shard_id()
+        );
+
         // TODO(#12019): leave only tracked shards.
         for (new_shard_uid, retain_mode) in [
             (children_shard_uids[0], RetainMode::Left),
@@ -1908,6 +1914,7 @@ impl Chain {
             let partial_storage = PartialStorage { nodes: partial_state };
             let mem_changes = trie_changes.mem_trie_changes.as_ref().unwrap();
             let new_state_root = mem_tries.apply_memtrie_changes(block_height, mem_changes);
+            println!("{:?} new_state_root {:?}", new_shard_uid, new_state_root);
             // TODO(#12019): set all fields of `ChunkExtra`. Consider stronger
             // typing. Clarify where it should happen when `State` and
             // `FlatState` update is implemented.
