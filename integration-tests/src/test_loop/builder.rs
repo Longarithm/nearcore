@@ -276,12 +276,12 @@ impl TestLoopBuilder {
         let num_chunk_validator = epoch_config.validator_selection_config.num_chunk_validator_seats;
         let validator_num =
             num_block_producer.max(num_chunk_producer).max(num_chunk_validator) as usize;
-        client_config.tracked_shards = vec![666];
-        // if idx < validator_num {
-        //     client_config.tracked_shards = Vec::new();
-        // } else {
-        //     client_config.tracked_shards = vec![666];
-        // }
+        // client_config.tracked_shards = vec![666];
+        if idx < validator_num {
+            client_config.tracked_shards = Vec::new();
+        } else {
+            client_config.tracked_shards = vec![666];
+        }
 
         if let Some(config_modifier) = &self.config_modifier {
             config_modifier(&mut client_config, idx);
