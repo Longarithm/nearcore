@@ -313,7 +313,7 @@ pub fn run_catchup(
         )?;
         let mut catchup_done = true;
         for msg in block_messages.write().unwrap().drain(..) {
-            let results = do_apply_chunks(msg.block_hash, msg.block_height, msg.work)
+            let results = do_apply_chunks(msg.block_hash, msg.block_height, msg.work, &None)
                 .into_iter()
                 .map(|res| res.1)
                 .collect_vec();

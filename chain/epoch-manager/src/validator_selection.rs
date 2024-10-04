@@ -185,6 +185,7 @@ pub fn proposals_to_epoch_info(
     protocol_version: ProtocolVersion,
     use_stable_shard_assignment: bool,
 ) -> Result<EpochInfo, EpochError> {
+    println!("proposals_to_epoch_info {} {}", prev_epoch_info.epoch_height(), protocol_version);
     debug_assert!(
         proposals.iter().map(|stake| stake.account_id()).collect::<HashSet<_>>().len()
             == proposals.len(),

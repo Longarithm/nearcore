@@ -693,7 +693,9 @@ impl EpochManager {
         // Next protocol version calculation.
         // Implements https://github.com/near/NEPs/blob/master/specs/ChainSpec/Upgradability.md
         let mut versions = HashMap::new();
+        println!("version_stats");
         for (validator_id, version) in version_tracker {
+            println!("version_tracker {} {}", validator_id, version);
             let stake = epoch_info.validator_stake(validator_id);
             *versions.entry(version).or_insert(0) += stake;
         }

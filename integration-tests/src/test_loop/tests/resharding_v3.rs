@@ -8,6 +8,7 @@ use near_primitives::shard_layout::ShardLayout;
 use near_primitives::types::{AccountId, ShardId};
 use near_primitives::version::{ProtocolFeature, PROTOCOL_VERSION};
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use crate::test_loop::builder::TestLoopBuilder;
@@ -27,11 +28,13 @@ fn test_resharding_v3() {
     let builder = TestLoopBuilder::new();
 
     let initial_balance = 1_000_000 * ONE_NEAR;
-    let epoch_length = 10;
+    let epoch_length = 6;
     let accounts =
         (0..8).map(|i| format!("account{}", i).parse().unwrap()).collect::<Vec<AccountId>>();
-    let clients = accounts.iter().cloned().collect_vec();
-    let block_and_chunk_producers = (0..8).map(|idx| accounts[idx].as_str()).collect_vec();
+    let clients =
+        vec!["account0".parse().unwrap(), "account3".parse().unwrap(), "account6".parse().unwrap()];
+    let block_and_chunk_producers =
+        clients.iter().map(|account: &AccountId| account.as_str()).collect_vec();
     // TODO: set up chunk validator-only nodes.
 
     // Prepare shard split configuration.
@@ -53,9 +56,12 @@ fn test_resharding_v3() {
     let last_shard_id = shard_ids.pop().unwrap();
     let mut shards_split_map: BTreeMap<ShardId, Vec<ShardId>> =
         shard_ids.iter().map(|shard_id| (*shard_id, vec![*shard_id])).collect();
-    shard_ids.extend([max_shard_id + 1, max_shard_id + 2]);
-    shards_split_map.insert(last_shard_id, vec![max_shard_id + 1, max_shard_id + 2]);
-    boundary_accounts.push(AccountId::try_from("x.near".to_string()).unwrap());
+    // Keep this way until non-contiguous shard ids are supported.
+    // let new_shards = vec![max_shard_id + 1, max_shard_id + 2];
+    let new_shards = vec![max_shard_id, max_shard_id + 1];
+    shard_ids.extend(new_shards.clone());
+    shards_split_map.insert(last_shard_id, new_shards);
+    boundary_accounts.push(AccountId::try_from("xyz.near".to_string()).unwrap());
     epoch_config.shard_layout =
         ShardLayout::v2(boundary_accounts, shard_ids, Some(shards_split_map));
     let expected_num_shards = epoch_config.shard_layout.shard_ids().count();
@@ -80,6 +86,7 @@ fn test_resharding_v3() {
         builder.genesis(genesis).epoch_config_store(epoch_config_store).clients(clients).build();
 
     let client_handle = node_datas[0].client_sender.actor_handle();
+    let latest_epoch_height = AtomicU64::new(0);
     let success_condition = |test_loop_data: &mut TestLoopData| -> bool {
         let client = &test_loop_data.get(&client_handle).client;
         let tip = client.chain.head().unwrap();
@@ -87,6 +94,16 @@ fn test_resharding_v3() {
             client.epoch_manager.get_epoch_height_from_prev_block(&tip.prev_block_hash).unwrap();
         assert!(epoch_height < 5);
         let epoch_config = client.epoch_manager.get_epoch_config(&tip.epoch_id).unwrap();
+        let next_epoch_info = client.epoch_manager.get_epoch_info(&tip.next_epoch_id).unwrap();
+        let next_epoch_height = next_epoch_info.epoch_height();
+        if next_epoch_height > latest_epoch_height.load(Ordering::Relaxed) {
+            latest_epoch_height.store(next_epoch_height, Ordering::Relaxed);
+            println!(
+                "epoch_info: {} {:?}",
+                next_epoch_info.epoch_height(),
+                next_epoch_info.chunk_producers_settlement()
+            );
+        }
         return epoch_config.shard_layout.shard_ids().count() == expected_num_shards;
     };
 

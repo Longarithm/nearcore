@@ -37,7 +37,7 @@ pub struct MemTries {
     /// This is used for GC. The invariant is that for any state root, the
     /// number of times the state root appears in this map is equal to the
     /// sum of the refcounts of each `MemTrieNodeId`s in `roots[state hash]`.
-    heights: BTreeMap<BlockHeight, Vec<StateRoot>>,
+    pub heights: BTreeMap<BlockHeight, Vec<StateRoot>>,
     /// Shard UID, for exporting metrics only.
     shard_uid: ShardUId,
 }

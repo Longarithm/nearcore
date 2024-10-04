@@ -1815,6 +1815,7 @@ impl Chain {
             apply_chunk_work,
             apply_chunks_done_tracker,
             apply_chunks_done_sender,
+            me,
         );
 
         Ok(())
@@ -1830,11 +1831,13 @@ impl Chain {
         work: Vec<UpdateShardJob>,
         mut apply_chunks_done_tracker: ApplyChunksDoneTracker,
         apply_chunks_done_sender: Option<near_async::messaging::Sender<ApplyChunksDoneMessage>>,
+        me: &Option<AccountId>,
     ) {
         let sc = self.apply_chunks_sender.clone();
+        let me = me.clone();
         self.apply_chunks_spawner.spawn("apply_chunks", move || {
             // do_apply_chunks runs `work` in parallel, but still waits for all of them to finish
-            let res = do_apply_chunks(block_hash, block_height, work);
+            let res = do_apply_chunks(block_hash, block_height, work, &me);
             // If we encounter error here, that means the receiver is deallocated and the client
             // thread is already shut down. The node is already crashed, so we can unwrap here
             sc.send((block_hash, res)).unwrap();
@@ -2107,7 +2110,16 @@ impl Chain {
         state_patch: SandboxStatePatch,
     ) -> Result<PreprocessBlockResult, Error> {
         let header = block.header();
-
+        let tries = self.runtime_adapter.get_tries();
+        let shard_uid = ShardUId { shard_id: 0, version: 3 };
+        if let Some(mem_tries) = tries.get_mem_tries(shard_uid) {
+            println!(
+                "me: {:?} height: {:?}, mem_tries: {:?}",
+                me,
+                header.height(),
+                mem_tries.read().unwrap().heights
+            );
+        }
         // see if the block is already in processing or if there are too many blocks being processed
         self.blocks_in_processing.add_dry_run(block.hash())?;
 
@@ -2347,7 +2359,12 @@ impl Chain {
     ) -> bool {
         let result = epoch_manager.will_shard_layout_change(parent_hash);
         let will_shard_layout_change = match result {
-            Ok(will_shard_layout_change) => will_shard_layout_change,
+            Ok(_will_shard_layout_change) => {
+                // Before state sync is fixed, we don't catch up split shards.
+                // Assume that all needed shards are tracked already.
+                // will_shard_layout_change,
+                false
+            }
             Err(err) => {
                 // TODO(resharding) This is a problem, if this happens the node
                 // will not perform resharding and fall behind the network.
@@ -2355,6 +2372,7 @@ impl Chain {
                 false
             }
         };
+
         // if shard layout will change the next epoch, we should catch up the shard regardless
         // whether we already have the shard's state this epoch, because we need to generate
         // new states for shards split from the current shard for the next epoch
@@ -4586,9 +4604,10 @@ pub fn do_apply_chunks(
     block_hash: CryptoHash,
     block_height: BlockHeight,
     work: Vec<UpdateShardJob>,
+    me: &Option<AccountId>,
 ) -> Vec<(ShardId, Result<ShardUpdateResult, Error>)> {
     let parent_span =
-        tracing::debug_span!(target: "chain", "do_apply_chunks", block_height, %block_hash)
+        tracing::debug_span!(target: "chain", "do_apply_chunks", block_height, %block_hash, ?me)
             .entered();
     work.into_par_iter()
         .map(|(shard_id, task)| {
