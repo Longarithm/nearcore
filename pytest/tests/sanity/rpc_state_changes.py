@@ -74,6 +74,7 @@ def test_changes_with_new_account_with_access_key():
     new_account_response = nodes[0].send_tx_and_wait(create_account_tx, 10)
 
     # Step 2
+    print(new_account_response)
     block_hash = new_account_response['result']['receipts_outcome'][0][
         'block_hash']
     assert_changes_in_block_response(request={"block_id": block_hash},
