@@ -149,6 +149,7 @@ impl Client {
         )?;
         prev_blocks.reverse();
         let (main_block, implicit_blocks) = prev_blocks.split_first().unwrap();
+        println!("transition: {:?} {:?}", main_block, implicit_blocks);
         let (base_state, receipts_hash) = if prev_chunk_header.is_genesis() {
             (Default::default(), hash(&borsh::to_vec::<[Receipt]>(&[]).unwrap()))
         } else {
