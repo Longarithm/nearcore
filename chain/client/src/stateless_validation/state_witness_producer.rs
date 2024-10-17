@@ -137,19 +137,115 @@ impl Client {
         prev_chunk_header: &ShardChunkHeader,
     ) -> Result<(ChunkStateTransition, Vec<ChunkStateTransition>, CryptoHash), Error> {
         let store = self.chain.chain_store().store();
-        let shard_id = chunk_header.shard_id();
-        let epoch_id =
-            self.epoch_manager.get_epoch_id_from_prev_block(chunk_header.prev_block_hash())?;
-        let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
+        // let shard_id = chunk_header.shard_id();
+        // let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &epoch_id)?;
         let prev_chunk_height_included = prev_chunk_header.height_included();
-        let mut prev_blocks = self.chain.get_blocks_until_height(
-            *chunk_header.prev_block_hash(),
-            prev_chunk_height_included,
-            true,
-        )?;
-        prev_blocks.reverse();
-        let (main_block, implicit_blocks) = prev_blocks.split_first().unwrap();
-        println!("transition: {:?} {:?}", main_block, implicit_blocks);
+        // let mut prev_blocks = self.chain.get_blocks_until_height(
+        //     *chunk_header.prev_block_hash(),
+        //     prev_chunk_height_included,
+        //     true,
+        // )?;
+        // prev_blocks.reverse();
+
+        // iterate over implicit transitions
+        let mut current_block_hash = *chunk_header.prev_block_hash();
+        let mut next_epoch_id =
+            self.epoch_manager.get_epoch_id_from_prev_block(&current_block_hash)?;
+        let mut next_shard_id = chunk_header.shard_id();
+        // let mut resharding_status = ReshardingStatus::No;
+        // let mut implicit_blocks = vec![];
+        let mut implicit_transitions = vec![];
+
+        loop {
+            let header = self.chain.get_block_header(&current_block_hash)?;
+            if header.height() < prev_chunk_height_included {
+                return Err(Error::InvalidBlockHeight(prev_chunk_height_included));
+            }
+
+            let current_epoch_id = *header.epoch_id();
+            let current_shard_id =
+                self.epoch_manager.get_prev_shard_id(&current_block_hash, next_shard_id)?.0;
+            if current_shard_id != next_shard_id {
+                // extra transition to indicate resharding.
+                // implicit_blocks.push(current_block_hash);
+                let next_shard_uid =
+                    self.epoch_manager.shard_id_to_uid(next_shard_id, &next_epoch_id)?;
+                let StoredChunkStateTransitionData { base_state, .. } = store
+                    .get_ser(
+                        near_store::DBCol::StateTransitionData,
+                        &near_primitives::utils::get_block_shard_id(
+                            &current_block_hash,
+                            next_shard_id,
+                        ),
+                    )?
+                    .ok_or_else(|| {
+                        let message = format!(
+                            "Missing implicit transition state proof for block {current_block_hash} and shard {next_shard_id}"
+                        );
+                        if !cfg!(feature = "shadow_chunk_validation") {
+                            log_assert_fail!("{message}");
+                        }
+                        Error::Other(message)
+                    })?;
+                implicit_transitions.push(ChunkStateTransition {
+                    block_hash: current_block_hash,
+                    base_state,
+                    post_state_root: *self
+                        .chain
+                        .get_chunk_extra(&current_block_hash, &next_shard_uid)?
+                        .state_root(),
+                });
+            }
+            next_epoch_id = current_epoch_id;
+            next_shard_id = current_shard_id;
+
+            if header.height() == prev_chunk_height_included {
+                break;
+            }
+
+            // normal transition.
+            // implicit_blocks.push(current_block_hash);
+            let shard_uid =
+                self.epoch_manager.shard_id_to_uid(current_shard_id, &current_epoch_id)?;
+            let StoredChunkStateTransitionData { base_state, .. } = store
+                .get_ser(
+                    near_store::DBCol::StateTransitionData,
+                    &near_primitives::utils::get_block_shard_id(
+                        &current_block_hash,
+                        current_shard_id,
+                    ),
+                )?
+                .ok_or_else(|| {
+                    let message = format!(
+                        "Missing implicit transition state proof for block {current_block_hash} and shard {current_shard_id}"
+                    );
+                    if !cfg!(feature = "shadow_chunk_validation") {
+                        log_assert_fail!("{message}");
+                    }
+                    Error::Other(message)
+                })?;
+            implicit_transitions.push(ChunkStateTransition {
+                block_hash: current_block_hash,
+                base_state,
+                post_state_root: *self
+                    .chain
+                    .get_chunk_extra(&current_block_hash, &shard_uid)?
+                    .state_root(),
+            });
+
+            current_block_hash = *header.prev_hash();
+        }
+
+        // let (main_block, implicit_blocks) = prev_blocks.split_first().unwrap();
+        let main_block = current_block_hash;
+        let shard_id = next_shard_id;
+        let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, &next_epoch_id)?;
+        implicit_transitions.reverse();
+        println!(
+            "transition: {:?} {:?}",
+            main_block,
+            implicit_transitions.iter().map(|x| x.block_hash).collect::<Vec<CryptoHash>>()
+        );
 
         let (base_state, receipts_hash) = if prev_chunk_header.is_genesis() {
             (Default::default(), hash(&borsh::to_vec::<[Receipt]>(&[]).unwrap()))
@@ -157,7 +253,7 @@ impl Client {
             let StoredChunkStateTransitionData { base_state, receipts_hash } = store
                 .get_ser(
                     near_store::DBCol::StateTransitionData,
-                    &near_primitives::utils::get_block_shard_id(main_block, shard_id),
+                    &near_primitives::utils::get_block_shard_id(&main_block, shard_id),
                 )?
                 .ok_or_else(|| {
                     let message = format!(
@@ -171,33 +267,33 @@ impl Client {
             (base_state, receipts_hash)
         };
         let main_transition = ChunkStateTransition {
-            block_hash: *main_block,
+            block_hash: main_block,
             base_state,
-            post_state_root: *self.chain.get_chunk_extra(main_block, &shard_uid)?.state_root(),
+            post_state_root: *self.chain.get_chunk_extra(&main_block, &shard_uid)?.state_root(),
         };
 
-        let mut implicit_transitions = vec![];
-        for block_hash in implicit_blocks {
-            let StoredChunkStateTransitionData { base_state, .. } = store
-                .get_ser(
-                    near_store::DBCol::StateTransitionData,
-                    &near_primitives::utils::get_block_shard_id(block_hash, shard_id),
-                )?
-                .ok_or_else(|| {
-                    let message = format!(
-                        "Missing implicit transition state proof for block {block_hash} and shard {shard_id}"
-                    );
-                    if !cfg!(feature = "shadow_chunk_validation") {
-                        log_assert_fail!("{message}");
-                    }
-                    Error::Other(message)
-                })?;
-            implicit_transitions.push(ChunkStateTransition {
-                block_hash: *block_hash,
-                base_state,
-                post_state_root: *self.chain.get_chunk_extra(block_hash, &shard_uid)?.state_root(),
-            });
-        }
+        // let mut implicit_transitions = vec![];
+        // for block_hash in implicit_blocks {
+        //     let StoredChunkStateTransitionData { base_state, .. } = store
+        //         .get_ser(
+        //             near_store::DBCol::StateTransitionData,
+        //             &near_primitives::utils::get_block_shard_id(block_hash, shard_id),
+        //         )?
+        //         .ok_or_else(|| {
+        //             let message = format!(
+        //                 "Missing implicit transition state proof for block {block_hash} and shard {shard_id}"
+        //             );
+        //             if !cfg!(feature = "shadow_chunk_validation") {
+        //                 log_assert_fail!("{message}");
+        //             }
+        //             Error::Other(message)
+        //         })?;
+        //     implicit_transitions.push(ChunkStateTransition {
+        //         block_hash: *block_hash,
+        //         base_state,
+        //         post_state_root: *self.chain.get_chunk_extra(block_hash, &shard_uid)?.state_root(),
+        //     });
+        // }
 
         Ok((main_transition, implicit_transitions, receipts_hash))
     }
