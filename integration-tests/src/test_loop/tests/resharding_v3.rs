@@ -132,19 +132,19 @@ fn test_resharding_v3_base(chunk_ranges_to_drop: HashMap<ShardUId, std::ops::Ran
     let TestLoopEnv { mut test_loop, datas: node_datas, tempdir } = builder.build();
 
     let client_handle = node_datas[0].client_sender.actor_handle();
-    let latest_block_height = AtomicU64::new(0);
+    let latest_block_height = std::cell::Cell::new(0u64);
     let success_condition = |test_loop_data: &mut TestLoopData| -> bool {
         let client = &test_loop_data.get(&client_handle).client;
         let tip = client.chain.head().unwrap();
 
         // Check that all chunks are included.
         let block_header = client.chain.get_block_header(&tip.last_block_hash).unwrap();
-        if latest_block_height.load(Ordering::SeqCst) < tip.height {
-            if latest_block_height.load(Ordering::SeqCst) == 0 {
+        if latest_block_height.get() < tip.height {
+            if latest_block_height.get() == 0 {
                 println!("State before resharding:");
                 print_and_assert_shard_accounts(client);
             }
-            latest_block_height.store(tip.height, Ordering::SeqCst);
+            latest_block_height.set(tip.height);
             println!(
                 "block: {} {} chunks: {:?}",
                 tip.height,
