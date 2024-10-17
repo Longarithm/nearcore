@@ -1188,6 +1188,32 @@ impl PeerManagerActor {
                     NetworkResponses::RouteNotFound
                 }
             }
+            NetworkRequests::ChunkContractAccesses(chunk_validators, accesses) => {
+                for chunk_validator in chunk_validators {
+                    self.state.send_message_to_account(
+                        &self.clock,
+                        &chunk_validator,
+                        RoutedMessageBody::ChunkContractAccesses(accesses.clone()),
+                    );
+                }
+                NetworkResponses::NoResponse
+            }
+            NetworkRequests::ContractCodeRequest(target, request) => {
+                self.state.send_message_to_account(
+                    &self.clock,
+                    &target,
+                    RoutedMessageBody::ContractCodeRequest(request),
+                );
+                NetworkResponses::NoResponse
+            }
+            NetworkRequests::ContractCodeResponse(target, response) => {
+                self.state.send_message_to_account(
+                    &self.clock,
+                    &target,
+                    RoutedMessageBody::ContractCodeResponse(response),
+                );
+                NetworkResponses::NoResponse
+            }
         }
     }
 
@@ -1373,7 +1399,7 @@ impl actix::Handler<GetDebugStatus> for PeerManagerActor {
                         peer_id: h.peer_id.clone(),
                         sync_hash: h.sync_hash,
                         epoch_height: h.epoch_height,
-                        shards: h.shards.clone(),
+                        shards: h.shards.clone().into_iter().map(Into::into).collect(),
                     })
                     .collect::<Vec<_>>(),
             }),

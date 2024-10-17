@@ -13,7 +13,8 @@ use near_primitives::views::{
     BlockView, ChunkView, DownloadStatusView, EpochValidatorInfo, ExecutionOutcomeWithIdView,
     GasPriceView, LightClientBlockLiteView, LightClientBlockView, MaintenanceWindowsView,
     QueryRequest, QueryResponse, ReceiptView, ShardSyncDownloadView, SplitStorageInfoView,
-    StateChangesKindsView, StateChangesRequestView, StateChangesView, SyncStatusView, TxStatusView,
+    StateChangesKindsView, StateChangesRequestView, StateChangesView, StateSyncStatusView,
+    SyncStatusView, TxStatusView,
 };
 pub use near_primitives::views::{StatusResponse, StatusSyncInfo};
 use std::collections::HashMap;
@@ -21,8 +22,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use time::{Duration, OffsetDateTime as Utc};
 use tracing::debug_span;
-use yansi::Color::Magenta;
-use yansi::Style;
 
 /// Combines errors coming from chain, tx pool and block producer.
 #[derive(Debug, thiserror::Error)]
@@ -88,7 +87,7 @@ impl Clone for DownloadStatus {
 }
 
 /// Various status of syncing a specific shard.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum ShardSyncStatus {
     StateDownloadHeader,
     StateDownloadParts,
@@ -196,77 +195,21 @@ impl ShardSyncDownload {
     }
 }
 
-pub fn format_shard_sync_phase_per_shard(
-    new_shard_sync: &HashMap<ShardId, ShardSyncDownload>,
-    use_colour: bool,
-) -> Vec<(ShardId, String)> {
-    new_shard_sync
-        .iter()
-        .map(|(&shard_id, shard_progress)| {
-            (shard_id, format_shard_sync_phase(shard_progress, use_colour))
-        })
-        .collect::<Vec<(_, _)>>()
-}
-
-/// Applies style if `use_colour` is enabled.
-fn paint(s: &str, style: Style, use_style: bool) -> String {
-    if use_style {
-        style.paint(s).to_string()
-    } else {
-        s.to_string()
-    }
-}
-
-/// Formats the given ShardSyncDownload for logging.
-pub fn format_shard_sync_phase(
-    shard_sync_download: &ShardSyncDownload,
-    use_colour: bool,
-) -> String {
-    match &shard_sync_download.status {
-        ShardSyncStatus::StateDownloadHeader => format!(
-            "{} requests sent {}, last target {:?}",
-            paint("HEADER", Magenta.style().bold(), use_colour),
-            shard_sync_download.downloads.get(0).map_or(0, |x| x.state_requests_count),
-            shard_sync_download.downloads.get(0).map_or(None, |x| x.last_target.as_ref()),
-        ),
-        ShardSyncStatus::StateDownloadParts => {
-            let mut num_parts_done = 0;
-            let mut num_parts_not_done = 0;
-            for download in shard_sync_download.downloads.iter() {
-                if download.done {
-                    num_parts_done += 1;
-                } else {
-                    num_parts_not_done += 1;
-                }
-            }
-            format!("num_parts_done={num_parts_done} num_parts_not_done={num_parts_not_done}")
-        }
-        status => format!("{status:?}"),
-    }
-}
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct StateSyncStatus {
     pub sync_hash: CryptoHash,
-    pub sync_status: HashMap<ShardId, ShardSyncDownload>,
+    pub sync_status: HashMap<ShardId, ShardSyncStatus>,
+    pub download_tasks: Vec<String>,
+    pub computation_tasks: Vec<String>,
 }
 
-/// If alternate flag was specified, write formatted sync_status per shard.
-impl std::fmt::Debug for StateSyncStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        if f.alternate() {
-            write!(
-                f,
-                "StateSyncStatus {{ sync_hash: {:?}, shard_sync: {:?} }}",
-                self.sync_hash,
-                format_shard_sync_phase_per_shard(&self.sync_status, false)
-            )
-        } else {
-            write!(
-                f,
-                "StateSyncStatus {{ sync_hash: {:?}, sync_status: {:?} }}",
-                self.sync_hash, self.sync_status
-            )
+impl StateSyncStatus {
+    pub fn new(sync_hash: CryptoHash) -> Self {
+        Self {
+            sync_hash,
+            sync_status: HashMap::new(),
+            download_tasks: Vec::new(),
+            computation_tasks: Vec::new(),
         }
     }
 }
@@ -372,14 +315,20 @@ impl From<SyncStatus> for SyncStatusView {
             SyncStatus::HeaderSync { start_height, current_height, highest_height } => {
                 SyncStatusView::HeaderSync { start_height, current_height, highest_height }
             }
-            SyncStatus::StateSync(state_sync_status) => SyncStatusView::StateSync(
-                state_sync_status.sync_hash,
-                state_sync_status
-                    .sync_status
-                    .into_iter()
-                    .map(|(shard_id, shard_sync)| (shard_id, shard_sync.into()))
-                    .collect(),
-            ),
+            SyncStatus::StateSync(state_sync_status) => {
+                SyncStatusView::StateSync(StateSyncStatusView {
+                    sync_hash: state_sync_status.sync_hash,
+                    shard_sync_status: state_sync_status
+                        .sync_status
+                        .iter()
+                        .map(|(shard_id, shard_sync_status)| {
+                            (*shard_id, shard_sync_status.to_string())
+                        })
+                        .collect(),
+                    download_tasks: state_sync_status.download_tasks,
+                    computation_tasks: state_sync_status.computation_tasks,
+                })
+            }
             SyncStatus::StateSyncDone => SyncStatusView::StateSyncDone,
             SyncStatus::BlockSync { start_height, current_height, highest_height } => {
                 SyncStatusView::BlockSync { start_height, current_height, highest_height }
@@ -479,7 +428,7 @@ pub enum GetChunkError {
     #[error("Block either has never been observed on the node or has been garbage collected: {error_message}")]
     UnknownBlock { error_message: String },
     #[error("Shard ID {shard_id} is invalid")]
-    InvalidShardId { shard_id: u64 },
+    InvalidShardId { shard_id: ShardId },
     #[error("Chunk with hash {chunk_hash:?} has never been observed on this node")]
     UnknownChunk { chunk_hash: ChunkHash },
     // NOTE: Currently, the underlying errors are too broad, and while we tried to handle

@@ -22,6 +22,7 @@ use near_primitives::receipt::{PromiseYieldTimeout, Receipt};
 use near_primitives::sandbox::state_patch::SandboxStatePatch;
 use near_primitives::shard_layout::ShardUId;
 use near_primitives::state_part::PartId;
+use near_primitives::stateless_validation::contract_distribution::CodeHash;
 use near_primitives::transaction::{ExecutionOutcomeWithId, SignedTransaction};
 use near_primitives::types::validator_stake::{ValidatorStake, ValidatorStakeIter};
 use near_primitives::types::{
@@ -101,6 +102,8 @@ pub struct ApplyChunkResult {
     /// should be set to None for chunks before the CongestionControl protocol
     /// version and Some otherwise.
     pub congestion_info: Option<CongestionInfo>,
+    /// Hashes of the contracts accessed while applying the chunk.
+    pub contract_accesses: Vec<CodeHash>,
 }
 
 impl ApplyChunkResult {
@@ -540,6 +543,7 @@ mod tests {
     use near_primitives::merkle::verify_path;
     use near_primitives::test_utils::{create_test_signer, TestBlockBuilder};
     use near_primitives::transaction::{ExecutionMetadata, ExecutionOutcome, ExecutionStatus};
+    use near_primitives::types::new_shard_id_tmp;
     use near_primitives::version::PROTOCOL_VERSION;
     use std::sync::Arc;
 
@@ -547,7 +551,7 @@ mod tests {
 
     #[test]
     fn test_block_produce() {
-        let shard_ids: Vec<_> = (0..32).collect();
+        let shard_ids: Vec<_> = (0..32).map(new_shard_id_tmp).collect();
         let genesis_chunks = genesis_chunks(
             vec![Trie::EMPTY_ROOT],
             vec![Default::default(); shard_ids.len()],

@@ -22,7 +22,9 @@ use near_primitives::shard_layout::get_block_shard_uid;
 use near_primitives::sharding::ShardChunk;
 use near_primitives::state::FlatStateValue;
 use near_primitives::state_sync::StateSyncDumpProgress;
-use near_primitives::stateless_validation::stored_chunk_state_transition_data::StoredChunkStateTransitionData;
+use near_primitives::stateless_validation::stored_chunk_state_transition_data::{
+    StoredChunkStateTransitionData, StoredChunkStateTransitionDataV1,
+};
 use near_primitives::transaction::{ExecutionOutcomeWithProof, SignedTransaction};
 use near_primitives::types::chunk_extra::ChunkExtra;
 use near_primitives::types::{AccountId, Balance, BlockHeight, StateRoot};
@@ -261,9 +263,11 @@ impl EntityDebugHandlerImpl {
                 let shard_layout = self
                     .epoch_manager
                     .get_shard_layout_from_prev_block(&chunk.cloned_header().prev_block_hash())?;
+                let shard_id = chunk.shard_id();
+                let shard_index = shard_layout.get_shard_index(shard_id);
                 let shard_uid = shard_layout
                     .shard_uids()
-                    .nth(chunk.shard_id() as usize)
+                    .nth(shard_index)
                     .ok_or_else(|| anyhow!("Shard {} not found", chunk.shard_id()))?;
                 let node = store
                     .get_ser::<RawTrieNodeWithSize>(
@@ -299,9 +303,11 @@ impl EntityDebugHandlerImpl {
             }
             EntityQuery::ShardUIdByShardId { shard_id, epoch_id } => {
                 let shard_layout = self.epoch_manager.get_shard_layout(&epoch_id)?;
+                let shard_index = shard_layout.get_shard_index(shard_id);
+
                 let shard_uid = shard_layout
                     .shard_uids()
-                    .nth(shard_id as usize)
+                    .nth(shard_index)
                     .ok_or_else(|| anyhow!("Shard {} not found", shard_id))?;
                 Ok(serialize_entity(&shard_uid))
             }
@@ -320,17 +326,24 @@ impl EntityDebugHandlerImpl {
                             &get_block_shard_id(&block_hash, shard_id),
                         )?
                         .ok_or_else(|| anyhow!("State transition not found"))?;
-                    let mut serialized = EntityDataStruct::new();
-                    serialized.add(
-                        "base_state",
-                        PartialStateParser::parse_and_serialize_partial_state(
-                            state_transition.base_state,
-                        ),
-                    );
-                    serialized
-                        .add("receipts_hash", serialize_entity(&state_transition.receipts_hash));
-                    state_transitions
-                        .add(&shard_id.to_string(), EntityDataValue::Struct(serialized.into()));
+                    match state_transition {
+                        StoredChunkStateTransitionData::V1(StoredChunkStateTransitionDataV1 {
+                            base_state,
+                            receipts_hash,
+                            ..
+                        }) => {
+                            let mut serialized = EntityDataStruct::new();
+                            serialized.add(
+                                "base_state",
+                                PartialStateParser::parse_and_serialize_partial_state(base_state),
+                            );
+                            serialized.add("receipts_hash", serialize_entity(&receipts_hash));
+                            state_transitions.add(
+                                &shard_id.to_string(),
+                                EntityDataValue::Struct(serialized.into()),
+                            );
+                        }
+                    }
                 }
                 Ok(EntityDataValue::Struct(state_transitions.into()))
             }
@@ -380,9 +393,11 @@ impl EntityDebugHandlerImpl {
                 let shard_layout = self
                     .epoch_manager
                     .get_shard_layout_from_prev_block(&chunk.cloned_header().prev_block_hash())?;
+                let shard_id = chunk.shard_id();
+                let shard_index = shard_layout.get_shard_index(shard_id);
                 let shard_uid = shard_layout
                     .shard_uids()
-                    .nth(chunk.shard_id() as usize)
+                    .nth(shard_index)
                     .ok_or_else(|| anyhow!("Shard {} not found", chunk.shard_id()))?;
                 let path =
                     TriePath { path: vec![], shard_uid, state_root: chunk.prev_state_root() };

@@ -16,11 +16,14 @@ use actix::{Actor, Addr, Context};
 use futures::{future, FutureExt};
 use near_async::actix::AddrWithAutoSpanContextExt;
 use near_async::actix_wrapper::{spawn_actix_actor, ActixWrapper};
+use near_async::futures::ActixFutureSpawner;
 use near_async::messaging::{
     noop, CanSend, IntoMultiSender, IntoSender, LateBoundSender, SendAsync, Sender,
 };
 use near_async::time::{Clock, Duration, Instant, Utc};
 use near_chain::rayon_spawner::RayonAsyncComputationSpawner;
+use near_chain::resharding::resharding_actor::ReshardingActor;
+use near_chain::resharding::types::ReshardingSender;
 use near_chain::state_snapshot_actor::SnapshotCallbacks;
 use near_chain::test_utils::{KeyValueRuntime, MockEpochManager, ValidatorSchedule};
 use near_chain::types::{ChainConfig, RuntimeAdapter};
@@ -38,9 +41,11 @@ use near_epoch_manager::EpochManagerAdapter;
 use near_network::client::{
     AnnounceAccountRequest, BlockApproval, BlockHeadersRequest, BlockHeadersResponse, BlockRequest,
     BlockResponse, ChunkEndorsementMessage, SetNetworkInfo, StateRequestHeader, StateRequestPart,
+    StateResponseReceived,
 };
 use near_network::shards_manager::ShardsManagerRequestFromNetwork;
 use near_network::state_witness::{
+    ChunkContractAccessesMessage, ContractCodeRequestMessage, ContractCodeResponseMessage,
     PartialEncodedStateWitnessForwardMessage, PartialEncodedStateWitnessMessage,
     PartialWitnessSenderForNetwork,
 };
@@ -56,7 +61,9 @@ use near_primitives::epoch_info::RngSeed;
 use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::network::PeerId;
 use near_primitives::test_utils::create_test_signer;
-use near_primitives::types::{AccountId, BlockHeightDelta, EpochId, NumBlocks, NumSeats};
+use near_primitives::types::{
+    new_shard_id_tmp, AccountId, BlockHeightDelta, EpochId, NumBlocks, NumSeats,
+};
 use near_primitives::validator_signer::{EmptyValidatorSigner, ValidatorSigner};
 use near_primitives::version::PROTOCOL_VERSION;
 use near_store::adapter::StoreAdapter;
@@ -167,6 +174,9 @@ pub fn setup(
     ));
     let partial_witness_adapter = partial_witness_addr.with_auto_span_context();
 
+    let (resharding_sender_addr, _) = spawn_actix_actor(ReshardingActor::new());
+    let resharding_sender = resharding_sender_addr.with_auto_span_context();
+
     let shards_manager_adapter_for_client = LateBoundSender::new();
     let StartClientResult { client_actor, .. } = start_client(
         clock,
@@ -177,6 +187,7 @@ pub fn setup(
         runtime,
         PeerId::new(PublicKey::empty(KeyType::ED25519)),
         state_sync_adapter,
+        Arc::new(ActixFutureSpawner),
         network_adapter.clone(),
         shards_manager_adapter_for_client.as_sender(),
         signer,
@@ -188,6 +199,7 @@ pub fn setup(
         partial_witness_adapter.clone().into_multi_sender(),
         enable_doomslug,
         Some(TEST_SEED),
+        resharding_sender.into_multi_sender(),
     );
     let validator_signer = Some(Arc::new(EmptyValidatorSigner::new(account_id)));
     let (shards_manager_addr, _) = start_shards_manager(
@@ -268,6 +280,7 @@ pub fn setup_only_view(
         None,
         Arc::new(RayonAsyncComputationSpawner),
         MutableConfigValue::new(None, "validator_signer"),
+        noop().into_multi_sender(),
     )
     .unwrap();
 
@@ -448,7 +461,10 @@ fn process_peer_manager_message_default(
                             height: last_height[i],
                             hash: CryptoHash::default(),
                         }),
-                        tracked_shards: vec![0, 1, 2, 3],
+                        tracked_shards: vec![0, 1, 2, 3]
+                            .into_iter()
+                            .map(new_shard_id_tmp)
+                            .collect(),
                         archival: true,
                     },
                 },
@@ -608,9 +624,10 @@ fn process_peer_manager_message_default(
                 }
             }
         }
-        NetworkRequests::StateRequestHeader { shard_id, sync_hash, .. } => {
+        NetworkRequests::StateRequestHeader { shard_id, sync_hash, peer_id } => {
             for (i, _) in validators.iter().enumerate() {
                 let me = connectors[my_ord].client_actor.clone();
+                let peer_id = peer_id.clone();
                 actix::spawn(
                     connectors[i]
                         .view_client_actor
@@ -622,7 +639,13 @@ fn process_peer_manager_message_default(
                             let response = response.unwrap();
                             match response {
                                 Some(response) => {
-                                    me.do_send(response.with_span_context());
+                                    me.do_send(
+                                        StateResponseReceived {
+                                            peer_id,
+                                            state_response_info: response.0,
+                                        }
+                                        .with_span_context(),
+                                    );
                                 }
                                 None => {}
                             }
@@ -649,7 +672,13 @@ fn process_peer_manager_message_default(
                             let response = response.unwrap();
                             match response {
                                 Some(response) => {
-                                    me.do_send(response.with_span_context());
+                                    me.do_send(
+                                        StateResponseReceived {
+                                            peer_id: PeerId::random(),
+                                            state_response_info: response.0,
+                                        }
+                                        .with_span_context(),
+                                    );
                                 }
                                 None => {}
                             }
@@ -756,6 +785,35 @@ fn process_peer_manager_message_default(
                             PartialEncodedStateWitnessForwardMessage(partial_witness.clone()),
                         );
                     }
+                }
+            }
+        }
+        NetworkRequests::ChunkContractAccesses(accounts, accesses) => {
+            for account in accounts {
+                for (i, name) in validators.iter().enumerate() {
+                    if name == account {
+                        connectors[i]
+                            .partial_witness_sender
+                            .send(ChunkContractAccessesMessage(accesses.clone()));
+                    }
+                }
+            }
+        }
+        NetworkRequests::ContractCodeRequest(account, request) => {
+            for (i, name) in validators.iter().enumerate() {
+                if name == account {
+                    connectors[i]
+                        .partial_witness_sender
+                        .send(ContractCodeRequestMessage(request.clone()));
+                }
+            }
+        }
+        NetworkRequests::ContractCodeResponse(account, response) => {
+            for (i, name) in validators.iter().enumerate() {
+                if name == account {
+                    connectors[i]
+                        .partial_witness_sender
+                        .send(ContractCodeResponseMessage(response.clone()));
                 }
             }
         }
@@ -977,7 +1035,8 @@ pub fn setup_no_network_with_validity_period(
                         let future = client.send_async(
                             ChunkEndorsementMessage(endorsement.clone()).with_span_context(),
                         );
-                        drop(future);
+                        // Don't ignore the future or else the message may not actually be handled.
+                        actix::spawn(future);
                     }
                 }
                 _ => {}
@@ -1004,6 +1063,7 @@ pub fn setup_client_with_runtime(
     snapshot_callbacks: Option<SnapshotCallbacks>,
     partial_witness_adapter: PartialWitnessSenderForClient,
     validator_signer: Arc<ValidatorSigner>,
+    resharding_sender: ReshardingSender,
 ) -> Client {
     let mut config =
         ClientConfig::test(true, 10, 20, num_validator_seats, archive, save_trie_changes, true);
@@ -1029,6 +1089,9 @@ pub fn setup_client_with_runtime(
         snapshot_callbacks,
         Arc::new(RayonAsyncComputationSpawner),
         partial_witness_adapter,
+        resharding_sender,
+        Arc::new(ActixFutureSpawner),
+        noop().into_multi_sender(), // state sync ignored for these tests
     )
     .unwrap();
     client.sync_status = SyncStatus::NoSync;
@@ -1069,6 +1132,7 @@ pub fn setup_synchronous_shards_manager(
         None,
         Arc::new(RayonAsyncComputationSpawner),
         MutableConfigValue::new(None, "validator_signer"),
+        noop().into_multi_sender(),
     )
     .unwrap();
     let chain_head = chain.head().unwrap();
