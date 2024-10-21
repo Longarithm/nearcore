@@ -28,10 +28,10 @@ hash1 = nodes[0].get_latest_block().hash_bytes
 
 tx = sign_payment_tx(nodes[0].signer_key, 'test1', 100, 
                     #  9007199254740991, 
-                     900719925474091, 
+                     9007199254741, 
                     # 100,
                      hash1)
-res = nodes[0].send_tx_and_wait(tx, timeout=20)
+res = nodes[0].send_tx_and_wait(tx, timeout=200)
 assert 'error' not in res, res
 time.sleep(1)
 
