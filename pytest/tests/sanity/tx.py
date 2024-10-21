@@ -20,18 +20,18 @@ time.sleep(3)
 started = time.time()
 
 old_balances = [
-    int(nodes[0].get_account("test%s" % x)['result']['amount']) for x in [0, 1]
+    int(nodes[2].get_account("test%s" % x)['result']['amount']) for x in [0, 1]
 ]
 logger.info(f"BALANCES BEFORE {old_balances}")
 
-hash1 = nodes[0].get_latest_block().hash_bytes
+hash1 = nodes[2].get_latest_block().hash_bytes
 
-tx = sign_payment_tx(nodes[0].signer_key, 'test1', 100, 
+tx = sign_payment_tx(nodes[2].signer_key, 'test1', 100, 
                      9007199254740991, 
                     #  9007199254741, 
                     # 100,
                      hash1)
-res = nodes[0].send_tx_and_wait(tx, timeout=200)
+res = nodes[2].send_tx_and_wait(tx, timeout=200)
 assert 'error' not in res, res
 time.sleep(1)
 
