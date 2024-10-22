@@ -73,6 +73,7 @@ use near_primitives::validator_signer::ValidatorSigner;
 use near_primitives::version::{ProtocolFeature, PROTOCOL_VERSION};
 use near_primitives::views::{CatchupStatusView, DroppedReason};
 use near_store::ShardUId;
+use rand::Rng;
 use reed_solomon_erasure::galois_8::ReedSolomon;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
@@ -830,6 +831,9 @@ impl Client {
                 next_height,
                 ?shard_id,
                 "Not producing chunk. Not chunk producer for next chunk.");
+            return Ok(None);
+        }
+        if rand::thread_rng().gen_bool(0.5) {
             return Ok(None);
         }
 
