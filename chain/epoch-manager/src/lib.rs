@@ -1732,6 +1732,7 @@ impl EpochManager {
 
     pub fn get_epoch_config(&self, epoch_id: &EpochId) -> Result<EpochConfig, EpochError> {
         let protocol_version = self.get_epoch_info(epoch_id)?.protocol_version();
+        println!("{}", protocol_version);
         self.get_config_for_protocol_version(protocol_version)
     }
 

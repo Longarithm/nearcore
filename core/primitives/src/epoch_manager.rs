@@ -123,6 +123,8 @@ impl AllEpochConfig {
         chain_id: &str,
         test_overrides: Option<AllEpochConfigTestOverrides>,
     ) -> Self {
+        println!("use_production_config: {}", use_production_config);
+        println!("chain_id: {}", chain_id);
         Self {
             use_production_config,
             genesis_epoch_config,
@@ -132,6 +134,7 @@ impl AllEpochConfig {
     }
 
     pub fn for_protocol_version(&self, protocol_version: ProtocolVersion) -> EpochConfig {
+        println!("protocol_version: {}", protocol_version);
         let mut config = self.genesis_epoch_config.clone();
 
         Self::config_mocknet(&mut config, &self.chain_id);
@@ -141,6 +144,8 @@ impl AllEpochConfig {
         if !self.use_production_config {
             return config;
         }
+
+        println!("after use_production_config");
 
         Self::config_validator_selection(&mut config, protocol_version);
 
@@ -289,7 +294,9 @@ impl AllEpochConfig {
     }
 
     fn config_fix_min_stake_ratio(config: &mut EpochConfig, protocol_version: u32) {
+        println!("config_fix_min_stake_ratio");
         if checked_feature!("stable", FixMinStakeRatio, protocol_version) {
+            println!("FixMinStakeRatio");
             config.validator_selection_config.minimum_stake_ratio = Rational32::new(1, 62_500);
         }
     }
