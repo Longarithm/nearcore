@@ -441,7 +441,8 @@ impl Trie {
             memory.store_at(handle, TrieNodeWithSize { node, memory_usage });
 
             // Then, squash node to ensure unique trie structure, changing its
-            // type if needed.
+            // type if needed. If `key_deleted` is false, trie structure is
+            // untouched.
             if key_deleted {
                 self.squash_node(memory, handle)?;
             }
