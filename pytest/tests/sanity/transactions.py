@@ -83,6 +83,12 @@ step = 0
 sent_height = -1
 
 height, hash = utils.wait_for_blocks(nodes[4], target=5, check_storage=False)
+
+validator_info = nodes[4].json_rpc('validators', 'latest')
+validators = validator_info['result']['current_validators']
+print(
+    list(map(lambda x: (x['account_id'], x['stake'], x['shards']), validators)))
+
 tx = sign_payment_tx(nodes[0].signer_key, 'test1', 100, 1,
                      base58.b58decode(hash.encode('utf8')))
 nodes[4].send_tx(tx)
@@ -94,6 +100,7 @@ sent_height = height
 height, hash = utils.wait_for_blocks(nodes[4],
                                      target=sent_height + 6,
                                      check_storage=False)
+
 cur_balances = ctx.get_balances()
 assert cur_balances == ctx.expected_balances, "%s != %s" % (
     cur_balances, ctx.expected_balances)
@@ -104,6 +111,14 @@ for height, hash in utils.poll_blocks(nodes[4], timeout=TIMEOUT):
         count = height - sent_height
         logger.info(f'Balances caught up, took {count} blocks, moving on')
         last_balances = [x for x in ctx.expected_balances]
+
+        validator_info = nodes[4].json_rpc('validators', 'latest')
+        validators = validator_info['result']['current_validators']
+        print(
+            list(
+                map(lambda x: (x['account_id'], x['stake'], x['shards']),
+                    validators)))
+
         ctx.send_moar_txs(hash, 10, use_routing=True)
         sent_height = height
     else:
