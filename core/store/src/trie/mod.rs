@@ -874,7 +874,7 @@ impl Trie {
             eprintln!("Computed is {}", memory_usage);
             match handle {
                 NodeHandle::InMemory(h) => {
-                    eprintln!("TRIE!!!!");
+                    eprintln!("In-memory node:");
                     eprintln!("{}", memory.node_ref(h).node.deep_to_string(memory));
                 }
                 NodeHandle::Hash(_h) => {

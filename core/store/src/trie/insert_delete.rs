@@ -433,21 +433,20 @@ impl Trie {
             }
         }
 
-        // Recompute memory usages along the path.
         let mut child_memory_usage = 0;
-        for &handle in path.iter().rev() {
+        for handle in path.into_iter().rev() {
+            // First, recompute memory usage, emulating the recursive descent.
             let TrieNodeWithSize { node, mut memory_usage } = memory.destroy(handle);
             memory_usage += child_memory_usage;
             memory.store_at(handle, TrieNodeWithSize { node, memory_usage });
-            child_memory_usage = memory.node_ref(handle).memory_usage;
-        }
 
-        if key_deleted {
-            // Squash nodes to ensure unique trie structure.
-            // Iterate over nodes in `path`, changing their types where needed.
-            for handle in path.into_iter().rev() {
+            // Then, squash node to ensure unique trie structure, changing its
+            // type if needed.
+            if key_deleted {
                 self.squash_node(memory, handle)?;
             }
+
+            child_memory_usage = memory.node_ref(handle).memory_usage;
         }
 
         Ok(root_node)
