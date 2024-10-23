@@ -432,7 +432,24 @@ impl Trie {
                 }
             }
         }
-        self.squash_nodes(memory, path, key_deleted)?;
+
+        // Recompute memory usages along the path.
+        let mut child_memory_usage = 0;
+        for &handle in path.iter().rev() {
+            let TrieNodeWithSize { node, mut memory_usage } = memory.destroy(handle);
+            memory_usage += child_memory_usage;
+            memory.store_at(handle, TrieNodeWithSize { node, memory_usage });
+            child_memory_usage = memory.node_ref(handle).memory_usage;
+        }
+
+        if key_deleted {
+            // Squash nodes to ensure unique trie structure.
+            // Iterate over nodes in `path`, changing their types where needed.
+            for handle in path.into_iter().rev() {
+                self.squash_node(memory, handle)?;
+            }
+        }
+
         Ok(root_node)
     }
 
@@ -488,29 +505,6 @@ impl Trie {
             TrieNode::Extension(key, child) => {
                 self.squash_extension_node(memory, handle, key, child)?;
             }
-        }
-        Ok(())
-    }
-
-    /// Iterates over nodes in `path`, changing their types where needed,
-    /// if `key_deleted` is true, so trie structure has to change.
-    /// If `key_deleted` is false, only recomputes memory usages along the path.
-    pub(crate) fn squash_nodes(
-        &self,
-        memory: &mut NodesStorage,
-        path: Vec<StorageHandle>,
-        key_deleted: bool,
-    ) -> Result<(), StorageError> {
-        let mut child_memory_usage = 0;
-        for handle in path.into_iter().rev() {
-            if key_deleted {
-                self.squash_node(memory, handle)?;
-            } else {
-                let TrieNodeWithSize { node, memory_usage } = memory.destroy(handle);
-                let memory_usage = memory_usage + child_memory_usage;
-                memory.store_at(handle, TrieNodeWithSize { node, memory_usage });
-            }
-            child_memory_usage = memory.node_ref(handle).memory_usage;
         }
         Ok(())
     }
