@@ -192,6 +192,88 @@ impl Trie {
         self.retain_multi_range_recursive(0, vec![], &intervals_nibbles);
         self.to_trie_changes()
     }
+
+    fn retain_multi_range_recursive(
+        &mut self,
+        node_id: usize,
+        key_nibbles: Vec<u8>,
+        intervals_nibbles: &[Range<Vec<u8>>],
+    ) {
+        let decision = retain_decision(&key_nibbles, intervals_nibbles);
+        match decision {
+            RetainDecision::RetainAll => return,
+            RetainDecision::DiscardAll => {
+                let _ = self.take_node(node_id);
+                self.place_node(node_id, UpdatedMemTrieNode::Empty);
+                return;
+            }
+            RetainDecision::Descend => {
+                // We need to descend into all children. The logic follows below.
+            }
+        }
+
+        let node = self.take_node(node_id);
+        match node {
+            UpdatedMemTrieNode::Empty => {
+                // Nowhere to descend.
+                self.place_node(node_id, UpdatedMemTrieNode::Empty);
+                return;
+            }
+            UpdatedMemTrieNode::Leaf { extension, value } => {
+                let full_key_nibbles =
+                    [key_nibbles, NibbleSlice::from_encoded(&extension).0.iter().collect_vec()]
+                        .concat();
+                if !intervals_nibbles.iter().any(|interval| interval.contains(&full_key_nibbles)) {
+                    self.place_node(node_id, UpdatedMemTrieNode::Empty);
+                } else {
+                    self.place_node(node_id, UpdatedMemTrieNode::Leaf { extension, value });
+                }
+                return;
+            }
+            UpdatedMemTrieNode::Branch { mut children, mut value } => {
+                if !intervals_nibbles.iter().any(|interval| interval.contains(&key_nibbles)) {
+                    value = None;
+                }
+
+                for (i, child) in children.iter_mut().enumerate() {
+                    let Some(old_child_id) = child.take() else {
+                        continue;
+                    };
+
+                    let new_child_id = self.ensure_updated(old_child_id);
+                    let child_key_nibbles = [key_nibbles.clone(), vec![i as u8]].concat();
+                    self.retain_multi_range_recursive(
+                        new_child_id,
+                        child_key_nibbles,
+                        intervals_nibbles,
+                    );
+                    if self.updated_nodes[new_child_id] == Some(UpdatedMemTrieNode::Empty) {
+                        *child = None;
+                    } else {
+                        *child = Some(OldOrUpdatedNodeId::Updated(new_child_id));
+                    }
+                }
+
+                self.place_node(node_id, UpdatedMemTrieNode::Branch { children, value });
+            }
+            UpdatedMemTrieNode::Extension { extension, child } => {
+                let new_child_id = self.ensure_updated(child);
+                let extension_nibbles =
+                    NibbleSlice::from_encoded(&extension).0.iter().collect_vec();
+                let child_key = [key_nibbles, extension_nibbles].concat();
+                self.retain_multi_range_recursive(new_child_id, child_key, intervals_nibbles);
+
+                let node = UpdatedMemTrieNode::Extension {
+                    extension,
+                    child: OldOrUpdatedNodeId::Updated(new_child_id),
+                };
+                self.place_node(node_id, node);
+            }
+        }
+
+        // We may need to change node type to keep the trie structure unique.
+        self.squash_node(node_id);
+    }
 }
 
 /// Based on the key and the intervals, makes decision on the subtree exploration.
