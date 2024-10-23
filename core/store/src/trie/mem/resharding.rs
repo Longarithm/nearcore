@@ -1,4 +1,4 @@
-use crate::{NibbleSlice, TrieChanges};
+use crate::{NibbleSlice, Trie, TrieChanges};
 
 use super::arena::ArenaMemory;
 use super::updating::{MemTrieUpdate, OldOrUpdatedNodeId, TrieAccesses, UpdatedMemTrieNode};
@@ -25,6 +25,35 @@ enum RetainDecision {
     Descend,
 }
 
+fn boundary_account_to_intervals(
+    boundary_account: &AccountId,
+    retain_mode: RetainMode,
+) -> Vec<Range<Vec<u8>>> {
+    let mut intervals = vec![];
+    // TODO(#12074): generate correct intervals in nibbles.
+    for (col, _) in COLUMNS_WITH_ACCOUNT_ID_IN_KEY {
+        match retain_mode {
+            RetainMode::Left => {
+                intervals.push(vec![col]..[&[col], boundary_account.as_bytes()].concat())
+            }
+            RetainMode::Right => {
+                intervals.push([&[col], boundary_account.as_bytes()].concat()..vec![col + 1])
+            }
+        }
+    }
+    intervals
+}
+
+fn intervals_to_nibbles(intervals: &[Range<Vec<u8>>]) -> Vec<Range<Vec<u8>>> {
+    intervals
+        .iter()
+        .map(|range| {
+            NibbleSlice::new(&range.start).iter().collect_vec()
+                ..NibbleSlice::new(&range.end).iter().collect_vec()
+        })
+        .collect_vec()
+}
+
 impl<'a, M: ArenaMemory> MemTrieUpdate<'a, M> {
     /// Splits the trie, separating entries by the boundary account.
     /// Leaves the left or right part of the trie, depending on the retain mode.
@@ -37,18 +66,7 @@ impl<'a, M: ArenaMemory> MemTrieUpdate<'a, M> {
         boundary_account: &AccountId,
         retain_mode: RetainMode,
     ) -> (TrieChanges, TrieAccesses) {
-        let mut intervals = vec![];
-        // TODO(#12074): generate correct intervals in nibbles.
-        for (col, _) in COLUMNS_WITH_ACCOUNT_ID_IN_KEY {
-            match retain_mode {
-                RetainMode::Left => {
-                    intervals.push(vec![col]..[&[col], boundary_account.as_bytes()].concat())
-                }
-                RetainMode::Right => {
-                    intervals.push([&[col], boundary_account.as_bytes()].concat()..vec![col + 1])
-                }
-            }
-        }
+        let intervals = boundary_account_to_intervals(boundary_account, retain_mode);
         self.retain_multi_range(&intervals)
     }
 
@@ -59,13 +77,7 @@ impl<'a, M: ArenaMemory> MemTrieUpdate<'a, M> {
     /// retain operation.
     fn retain_multi_range(mut self, intervals: &[Range<Vec<u8>>]) -> (TrieChanges, TrieAccesses) {
         debug_assert!(intervals.iter().all(|range| range.start < range.end));
-        let intervals_nibbles = intervals
-            .iter()
-            .map(|range| {
-                NibbleSlice::new(&range.start).iter().collect_vec()
-                    ..NibbleSlice::new(&range.end).iter().collect_vec()
-            })
-            .collect_vec();
+        let intervals_nibbles = intervals_to_nibbles(intervals);
 
         // TODO(#12074): consider handling the case when no changes are made.
         // TODO(#12074): restore proof as well.
@@ -160,6 +172,25 @@ impl<'a, M: ArenaMemory> MemTrieUpdate<'a, M> {
 
         // We may need to change node type to keep the trie structure unique.
         self.squash_node(node_id);
+    }
+}
+
+impl Trie {
+    pub fn retain_split_shard(
+        self,
+        boundary_account: &AccountId,
+        retain_mode: RetainMode,
+    ) -> (TrieChanges, TrieAccesses) {
+        let intervals = boundary_account_to_intervals(boundary_account, retain_mode);
+        self.retain_multi_range(&intervals)
+    }
+
+    fn retain_multi_range(mut self, intervals: &[Range<Vec<u8>>]) -> (TrieChanges, TrieAccesses) {
+        debug_assert!(intervals.iter().all(|range| range.start < range.end));
+        let intervals_nibbles = intervals_to_nibbles(intervals);
+
+        self.retain_multi_range_recursive(0, vec![], &intervals_nibbles);
+        self.to_trie_changes()
     }
 }
 
