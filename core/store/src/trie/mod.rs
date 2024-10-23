@@ -1226,7 +1226,7 @@ impl Trie {
         }
     }
 
-    fn move_node_to_mutable(
+    pub(crate) fn move_node_to_mutable(
         &self,
         memory: &mut NodesStorage,
         hash: &CryptoHash,
