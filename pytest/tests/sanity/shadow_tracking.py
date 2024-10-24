@@ -62,7 +62,7 @@ class ShadowTrackingTest(unittest.TestCase):
         configs[3] = node_config_dump
 
         # Set the failover node to shadow track "test0".
-        configs[2]["tracked_shadow_validator"] = "test0"
+        configs[2]["tracked_shadow_validator"] = "test1"
 
         nodes = start_cluster(
             2, 2, 3, None,
