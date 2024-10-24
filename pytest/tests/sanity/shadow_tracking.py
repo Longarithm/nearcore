@@ -58,7 +58,7 @@ class ShadowTrackingTest(unittest.TestCase):
         )
         node_config_sync["tracked_shards"] = []
         node_config_sync["store.load_mem_tries_for_tracked_shards"] = True
-        configs = {x: node_config_sync for x in range(3)}
+        configs = {x: node_config_sync for x in range(4)}
         configs[4] = node_config_dump
 
         # Set the failover node to shadow track "test0".
