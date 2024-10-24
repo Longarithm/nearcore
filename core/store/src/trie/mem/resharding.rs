@@ -7,7 +7,7 @@ use super::updating::{MemTrieUpdate, OldOrUpdatedNodeId, TrieAccesses, UpdatedMe
 use itertools::Itertools;
 use near_primitives::errors::StorageError;
 use near_primitives::trie_key::col::COLUMNS_WITH_ACCOUNT_ID_IN_KEY;
-use near_primitives::types::AccountId;
+use near_primitives::types::{AccountId, StateRoot};
 use std::ops::Range;
 
 #[derive(Debug)]
@@ -183,19 +183,26 @@ impl Trie {
         &self,
         boundary_account: &AccountId,
         retain_mode: RetainMode,
-    ) -> Result<(), StorageError> {
+    ) -> Result<StateRoot, StorageError> {
         let intervals = boundary_account_to_intervals(boundary_account, retain_mode);
         self.retain_multi_range(&intervals)
     }
 
-    fn retain_multi_range(&self, intervals: &[Range<Vec<u8>>]) -> Result<(), StorageError> {
+    fn retain_multi_range(&self, intervals: &[Range<Vec<u8>>]) -> Result<StateRoot, StorageError> {
         debug_assert!(intervals.iter().all(|range| range.start < range.end));
         let intervals_nibbles = intervals_to_nibbles(intervals);
 
         let mut memory = NodesStorage::new();
         let root_node = self.move_node_to_mutable(&mut memory, &self.root)?;
 
-        self.retain_multi_range_recursive(&mut memory, root_node, vec![], &intervals_nibbles)
+        self.retain_multi_range_recursive(&mut memory, root_node, vec![], &intervals_nibbles)?;
+
+        #[cfg(test)]
+        {
+            self.memory_usage_verify(&memory, NodeHandle::InMemory(root_node));
+        }
+        let result = Trie::flatten_nodes(&self.root, memory, root_node)?;
+        Ok(result.new_root)
     }
 
     fn retain_multi_range_recursive(
@@ -364,18 +371,14 @@ mod tests {
     use itertools::Itertools;
     use near_primitives::{shard_layout::ShardUId, types::StateRoot};
 
-    use crate::{
-        test_utils::TestTriesBuilder,
-        trie::{
-            mem::{
-                iter::MemTrieIterator,
-                mem_tries::MemTries,
-                nibbles_utils::{all_two_nibble_nibbles, hex_to_nibbles, multi_hex_to_nibbles},
-            },
-            trie_storage::TrieMemoryPartialStorage,
-        },
-        Trie,
+    use crate::test_utils::TestTriesBuilder;
+    use crate::trie::mem::iter::MemTrieIterator;
+    use crate::trie::mem::mem_tries::MemTries;
+    use crate::trie::mem::nibbles_utils::{
+        all_two_nibble_nibbles, hex_to_nibbles, multi_hex_to_nibbles,
     };
+    use crate::trie::trie_storage::TrieMemoryPartialStorage;
+    use crate::trie::Trie;
 
     // Logic for a single test.
     // Creates trie from initial entries, applies retain multi range to it and
@@ -394,12 +397,26 @@ mod tests {
             .iter()
             .map(|(key, value)| (key.clone(), Some(value.clone())))
             .collect_vec();
-        let expected_state_root = crate::test_utils::test_populate_trie(
+        let expected_naive_state_root = crate::test_utils::test_populate_trie(
             &shard_tries,
             &Trie::EMPTY_ROOT,
             ShardUId::single_shard(),
             changes,
         );
+
+        let shard_tries = TestTriesBuilder::new().build();
+        let initial_changes = initial_entries
+            .iter()
+            .map(|(key, value)| (key.clone(), Some(value.clone())))
+            .collect_vec();
+        let initial_state_root = crate::test_utils::test_populate_trie(
+            &shard_tries,
+            &Trie::EMPTY_ROOT,
+            ShardUId::single_shard(),
+            initial_changes,
+        );
+        let trie = shard_tries.get_trie_for_shard(ShardUId::single_shard(), initial_state_root);
+        let expected_disk_state_root = trie.retain_multi_range(&retain_multi_ranges).unwrap();
 
         let mut memtries = MemTries::new(ShardUId::single_shard());
         let mut update = memtries.update(Trie::EMPTY_ROOT, false).unwrap();
@@ -412,12 +429,12 @@ mod tests {
         let update = memtries.update(state_root, true).unwrap();
         let (mut trie_changes, _) = update.retain_multi_range(&retain_multi_ranges);
         let memtrie_changes = trie_changes.mem_trie_changes.take().unwrap();
-        let new_state_root = memtries.apply_memtrie_changes(1, &memtrie_changes);
+        let mem_state_root = memtries.apply_memtrie_changes(1, &memtrie_changes);
 
-        let entries = if new_state_root != StateRoot::default() {
-            let state_root_ptr = memtries.get_root(&new_state_root).unwrap();
+        let entries = if mem_state_root != StateRoot::default() {
+            let state_root_ptr = memtries.get_root(&mem_state_root).unwrap();
             let trie =
-                Trie::new(Arc::new(TrieMemoryPartialStorage::default()), new_state_root, None);
+                Trie::new(Arc::new(TrieMemoryPartialStorage::default()), mem_state_root, None);
             MemTrieIterator::new(Some(state_root_ptr), &trie).map(|e| e.unwrap()).collect_vec()
         } else {
             vec![]
@@ -427,7 +444,10 @@ mod tests {
         assert_eq!(entries, retain_result_naive);
 
         // Check state root, because it must be unique.
-        assert_eq!(new_state_root, expected_state_root);
+        assert_eq!(mem_state_root, expected_naive_state_root);
+
+        // Check state root with disk-trie state root.
+        assert_eq!(mem_state_root, expected_disk_state_root);
     }
 
     #[test]
