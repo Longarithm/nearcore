@@ -264,10 +264,7 @@ impl Trie {
                     };
 
                     // let new_child_id = self.ensure_updated(old_child_id);
-                    let new_child_id = match old_child_id {
-                        NodeHandle::Hash(hash) => self.move_node_to_mutable(memory, &hash)?,
-                        NodeHandle::InMemory(handle) => handle,
-                    };
+                    let new_child_id = self.ensure_updated(memory, old_child_id)?;
                     let child_key_nibbles = [key_nibbles.clone(), vec![i as u8]].concat();
                     self.retain_multi_range_recursive(
                         memory,
@@ -291,10 +288,7 @@ impl Trie {
             }
             TrieNode::Extension(extension, child) => {
                 // let new_child_id = self.ensure_updated(child);
-                let new_child_id = match child {
-                    NodeHandle::Hash(hash) => self.move_node_to_mutable(memory, &hash)?,
-                    NodeHandle::InMemory(handle) => handle,
-                };
+                let new_child_id = self.ensure_updated(memory, child)?;
                 let extension_nibbles =
                     NibbleSlice::from_encoded(&extension).0.iter().collect_vec();
                 let child_key = [key_nibbles, extension_nibbles].concat();

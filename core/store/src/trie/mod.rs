@@ -1241,6 +1241,17 @@ impl Trie {
         }
     }
 
+    fn ensure_updated(
+        &self,
+        memory: &mut NodesStorage,
+        handle: NodeHandle,
+    ) -> Result<StorageHandle, StorageError> {
+        match handle {
+            NodeHandle::Hash(hash) => self.move_node_to_mutable(memory, &hash),
+            NodeHandle::InMemory(handle) => Ok(handle),
+        }
+    }
+
     /// Retrieves decoded node alongside with its raw bytes representation.
     ///
     /// Note that because Empty nodes (those which are referenced by
