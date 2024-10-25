@@ -112,7 +112,7 @@ class ShadowTrackingTest(unittest.TestCase):
             for shard in shards['test0']:
                 # The RPC node should have chunk from a shard tracked by "test0".
                 self.assertTrue(self._has_chunk(block_hash, shard, nodes[3]))
-            if round == 4:
+            if round == 10:
                 break
 
 
