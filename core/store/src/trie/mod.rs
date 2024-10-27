@@ -73,7 +73,8 @@ pub struct PartialStorage {
 pub(crate) struct StorageHandle(usize);
 
 #[derive(Clone, Hash, Debug, Copy)]
-pub(crate) struct StorageValueHandle(usize);
+// (index, value length for memory counting)
+pub(crate) struct StorageValueHandle(usize, usize);
 
 pub struct TrieCosts {
     pub byte_of_key: u64,
@@ -114,8 +115,8 @@ impl std::fmt::Debug for NodeHandle {
     }
 }
 
-#[derive(Clone, Hash)]
-enum ValueHandle {
+#[derive(Clone, Copy, Hash)]
+pub(crate) enum ValueHandle {
     InMemory(StorageValueHandle),
     HashAndSize(ValueRef),
 }
@@ -124,7 +125,7 @@ impl std::fmt::Debug for ValueHandle {
     fn fmt(&self, fmtr: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::HashAndSize(value) => write!(fmtr, "{value:?}"),
-            Self::InMemory(StorageValueHandle(num)) => write!(fmtr, "@{num}"),
+            Self::InMemory(StorageValueHandle(num, _)) => write!(fmtr, "@{num}"),
         }
     }
 }
@@ -1241,17 +1242,6 @@ impl Trie {
         }
     }
 
-    fn ensure_updated(
-        &self,
-        memory: &mut NodesStorage,
-        handle: NodeHandle,
-    ) -> Result<StorageHandle, StorageError> {
-        match handle {
-            NodeHandle::Hash(hash) => self.move_node_to_mutable(memory, &hash),
-            NodeHandle::InMemory(handle) => Ok(handle),
-        }
-    }
-
     /// Retrieves decoded node alongside with its raw bytes representation.
     ///
     /// Note that because Empty nodes (those which are referenced by
@@ -1676,7 +1666,7 @@ impl Trie {
                 Ok(trie_changes)
             }
             None => {
-                let mut memory = NodesStorage::new();
+                let mut memory = NodesStorage::new(&self);
                 let mut root_node = self.move_node_to_mutable(&mut memory, &self.root)?;
                 for (key, value) in changes {
                     let key = NibbleSlice::new(&key);
