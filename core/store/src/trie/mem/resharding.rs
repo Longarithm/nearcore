@@ -1,9 +1,13 @@
 use crate::trie::insert_delete::NodesStorage;
-use crate::trie::{NodeHandle, StorageHandle, TrieNode, TrieNodeWithSize};
+#[cfg(test)]
+use crate::trie::NodeHandle;
 use crate::{NibbleSlice, Trie, TrieChanges};
 
 use super::arena::ArenaMemory;
-use super::updating::{MemTrieUpdate, OldOrUpdatedNodeId, TrieAccesses, UpdatedMemTrieNode};
+use super::updating::{
+    GenericNodeOrIndex, GenericTrieUpdate, GenericUpdatedNodeId, GenericUpdatedTrieNode,
+    GenericUpdatedTrieNodeWithSize, HasLength, MemTrieUpdate, TrieAccesses,
+};
 use itertools::Itertools;
 use near_primitives::errors::StorageError;
 use near_primitives::trie_key::col::COLUMNS_WITH_ACCOUNT_ID_IN_KEY;
@@ -28,6 +32,8 @@ enum RetainDecision {
     Descend,
 }
 
+/// By the boundary account and the retain mode, generates the list of ranges
+/// to be retained in trie.
 fn boundary_account_to_intervals(
     boundary_account: &AccountId,
     retain_mode: RetainMode,
@@ -47,6 +53,7 @@ fn boundary_account_to_intervals(
     intervals
 }
 
+/// Converts the list of ranges in bytes to the list of ranges in nibbles.
 fn intervals_to_nibbles(intervals: &[Range<Vec<u8>>]) -> Vec<Range<Vec<u8>>> {
     intervals
         .iter()
@@ -84,97 +91,8 @@ impl<'a, M: ArenaMemory> MemTrieUpdate<'a, M> {
 
         // TODO(#12074): consider handling the case when no changes are made.
         // TODO(#12074): restore proof as well.
-        self.retain_multi_range_recursive(0, vec![], &intervals_nibbles);
+        self.generic_retain_multi_range_recursive(0, vec![], &intervals_nibbles).unwrap();
         self.to_trie_changes()
-    }
-
-    /// Recursive implementation of the algorithm of retaining keys belonging to
-    /// any of the ranges given in `intervals` from the trie. All changes are
-    /// applied in `updated_nodes`.
-    ///
-    /// `node_id` is the root of subtree being explored.
-    /// `key_nibbles` is the key corresponding to `root`.
-    /// `intervals_nibbles` is the list of ranges to be retained.
-    fn retain_multi_range_recursive(
-        &mut self,
-        node_id: usize,
-        key_nibbles: Vec<u8>,
-        intervals_nibbles: &[Range<Vec<u8>>],
-    ) {
-        let decision = retain_decision(&key_nibbles, intervals_nibbles);
-        match decision {
-            RetainDecision::RetainAll => return,
-            RetainDecision::DiscardAll => {
-                let _ = self.take_node(node_id);
-                self.place_node(node_id, UpdatedMemTrieNode::Empty);
-                return;
-            }
-            RetainDecision::Descend => {
-                // We need to descend into all children. The logic follows below.
-            }
-        }
-
-        let node = self.take_node(node_id);
-        match node {
-            UpdatedMemTrieNode::Empty => {
-                // Nowhere to descend.
-                self.place_node(node_id, UpdatedMemTrieNode::Empty);
-                return;
-            }
-            UpdatedMemTrieNode::Leaf { extension, value } => {
-                let full_key_nibbles =
-                    [key_nibbles, NibbleSlice::from_encoded(&extension).0.iter().collect_vec()]
-                        .concat();
-                if !intervals_nibbles.iter().any(|interval| interval.contains(&full_key_nibbles)) {
-                    self.place_node(node_id, UpdatedMemTrieNode::Empty);
-                } else {
-                    self.place_node(node_id, UpdatedMemTrieNode::Leaf { extension, value });
-                }
-                return;
-            }
-            UpdatedMemTrieNode::Branch { mut children, mut value } => {
-                if !intervals_nibbles.iter().any(|interval| interval.contains(&key_nibbles)) {
-                    value = None;
-                }
-
-                for (i, child) in children.iter_mut().enumerate() {
-                    let Some(old_child_id) = child.take() else {
-                        continue;
-                    };
-
-                    let new_child_id = self.ensure_updated(old_child_id);
-                    let child_key_nibbles = [key_nibbles.clone(), vec![i as u8]].concat();
-                    self.retain_multi_range_recursive(
-                        new_child_id,
-                        child_key_nibbles,
-                        intervals_nibbles,
-                    );
-                    if self.updated_nodes[new_child_id] == Some(UpdatedMemTrieNode::Empty) {
-                        *child = None;
-                    } else {
-                        *child = Some(OldOrUpdatedNodeId::Updated(new_child_id));
-                    }
-                }
-
-                self.place_node(node_id, UpdatedMemTrieNode::Branch { children, value });
-            }
-            UpdatedMemTrieNode::Extension { extension, child } => {
-                let new_child_id = self.ensure_updated(child);
-                let extension_nibbles =
-                    NibbleSlice::from_encoded(&extension).0.iter().collect_vec();
-                let child_key = [key_nibbles, extension_nibbles].concat();
-                self.retain_multi_range_recursive(new_child_id, child_key, intervals_nibbles);
-
-                let node = UpdatedMemTrieNode::Extension {
-                    extension,
-                    child: OldOrUpdatedNodeId::Updated(new_child_id),
-                };
-                self.place_node(node_id, node);
-            }
-        }
-
-        // We may need to change node type to keep the trie structure unique.
-        self.squash_node(node_id);
     }
 }
 
@@ -192,10 +110,10 @@ impl Trie {
         debug_assert!(intervals.iter().all(|range| range.start < range.end));
         let intervals_nibbles = intervals_to_nibbles(intervals);
 
-        let mut memory = NodesStorage::new();
+        let mut memory = NodesStorage::new(&self);
         let root_node = self.move_node_to_mutable(&mut memory, &self.root)?;
 
-        self.retain_multi_range_recursive(&mut memory, root_node, vec![], &intervals_nibbles)?;
+        memory.generic_retain_multi_range_recursive(0, vec![], &intervals_nibbles).unwrap();
 
         #[cfg(test)]
         {
@@ -204,11 +122,21 @@ impl Trie {
         let result = Trie::flatten_nodes(&self.root, memory, root_node)?;
         Ok(result.new_root)
     }
+}
 
-    fn retain_multi_range_recursive(
-        &self,
-        memory: &mut NodesStorage,
-        handle: StorageHandle,
+trait GenericTrieUpdateRetain<'a, N: std::fmt::Debug, V: std::fmt::Debug + HasLength>:
+    GenericTrieUpdate<'a, N, V>
+{
+    /// Recursive implementation of the algorithm of retaining keys belonging to
+    /// any of the ranges given in `intervals` from the trie. All changes are
+    /// applied in `updated_nodes`.
+    ///
+    /// `node_id` is the root of subtree being explored.
+    /// `key_nibbles` is the key corresponding to `root`.
+    /// `intervals_nibbles` is the list of ranges to be retained.
+    fn generic_retain_multi_range_recursive(
+        &mut self,
+        node_id: GenericUpdatedNodeId,
         key_nibbles: Vec<u8>,
         intervals_nibbles: &[Range<Vec<u8>>],
     ) -> Result<(), StorageError> {
@@ -216,10 +144,8 @@ impl Trie {
         match decision {
             RetainDecision::RetainAll => return Ok(()),
             RetainDecision::DiscardAll => {
-                // let _ = self.take_node(node_id);
-                // self.place_node(node_id, UpdatedMemTrieNode::Empty);
-                let _ = memory.destroy(handle);
-                memory.store_at(handle, TrieNodeWithSize::empty());
+                let _ = self.generic_take_node(node_id);
+                self.generic_place_node(node_id, GenericUpdatedTrieNodeWithSize::empty());
                 return Ok(());
             }
             RetainDecision::Descend => {
@@ -227,94 +153,98 @@ impl Trie {
             }
         }
 
-        // let node = self.take_node(node_id);
-        let TrieNodeWithSize { node, memory_usage } = memory.destroy(handle);
+        let GenericUpdatedTrieNodeWithSize { node, memory_usage } = self.generic_take_node(node_id);
         match node {
-            TrieNode::Empty => {
+            GenericUpdatedTrieNode::Empty => {
                 // Nowhere to descend.
-                // self.place_node(node_id, UpdatedMemTrieNode::Empty);
-                memory.store_at(handle, TrieNodeWithSize::empty());
+                self.generic_place_node(node_id, GenericUpdatedTrieNodeWithSize::empty());
                 return Ok(());
             }
-            TrieNode::Leaf(extension, value) => {
+            GenericUpdatedTrieNode::Leaf { extension, value } => {
                 let full_key_nibbles =
                     [key_nibbles, NibbleSlice::from_encoded(&extension).0.iter().collect_vec()]
                         .concat();
                 if !intervals_nibbles.iter().any(|interval| interval.contains(&full_key_nibbles)) {
-                    // self.place_node(node_id, UpdatedMemTrieNode::Empty);
-                    memory.store_at(handle, TrieNodeWithSize::empty());
+                    self.generic_place_node(node_id, GenericUpdatedTrieNodeWithSize::empty());
                 } else {
-                    // self.place_node(node_id, UpdatedMemTrieNode::Leaf { extension, value });
-                    memory.store_at(
-                        handle,
-                        TrieNodeWithSize::new(TrieNode::Leaf(extension, value), memory_usage),
+                    self.generic_place_node(
+                        node_id,
+                        GenericUpdatedTrieNodeWithSize {
+                            node: GenericUpdatedTrieNode::Leaf { extension, value },
+                            memory_usage,
+                        },
                     );
                 }
                 return Ok(());
             }
-            TrieNode::Branch(mut children, mut value) => {
+            GenericUpdatedTrieNode::Branch { mut children, mut value } => {
                 if !intervals_nibbles.iter().any(|interval| interval.contains(&key_nibbles)) {
                     value = None;
                 }
 
                 let mut memory_usage = 0;
-                for (i, child) in children.0.iter_mut().enumerate() {
+                for (i, child) in children.iter_mut().enumerate() {
                     let Some(old_child_id) = child.take() else {
                         continue;
                     };
 
-                    // let new_child_id = self.ensure_updated(old_child_id);
-                    let new_child_id = self.ensure_updated(memory, old_child_id)?;
+                    let new_child_id = self.generic_ensure_updated(old_child_id)?;
                     let child_key_nibbles = [key_nibbles.clone(), vec![i as u8]].concat();
-                    self.retain_multi_range_recursive(
-                        memory,
+                    self.generic_retain_multi_range_recursive(
                         new_child_id,
                         child_key_nibbles,
                         intervals_nibbles,
                     )?;
-                    // if self.updated_nodes[new_child_id] == Some(UpdatedMemTrieNode::Empty) {
-                    if matches!(memory.node_ref(new_child_id).node, TrieNode::Empty) {
+                    if matches!(
+                        self.generic_get_node(new_child_id).node,
+                        GenericUpdatedTrieNode::Empty
+                    ) {
                         *child = None;
                     } else {
-                        *child = Some(NodeHandle::InMemory(new_child_id));
-                        memory_usage += memory.node_ref(new_child_id).memory_usage;
+                        *child = Some(GenericNodeOrIndex::Updated(new_child_id));
+                        memory_usage += self.generic_get_node(new_child_id).memory_usage;
                     }
                 }
 
-                // self.place_node(node_id, UpdatedMemTrieNode::Branch { children, value });
-                let new_node = TrieNode::Branch(children, value);
-                memory_usage += new_node.memory_usage_direct(memory);
-                memory.store_at(handle, TrieNodeWithSize::new(new_node, memory_usage));
+                let node = GenericUpdatedTrieNode::Branch { children, value };
+                memory_usage += node.memory_usage_direct();
+                self.generic_place_node(
+                    node_id,
+                    GenericUpdatedTrieNodeWithSize { node, memory_usage },
+                );
             }
-            TrieNode::Extension(extension, child) => {
-                // let new_child_id = self.ensure_updated(child);
-                let new_child_id = self.ensure_updated(memory, child)?;
+            GenericUpdatedTrieNode::Extension { extension, child } => {
+                let new_child_id = self.generic_ensure_updated(child)?;
                 let extension_nibbles =
                     NibbleSlice::from_encoded(&extension).0.iter().collect_vec();
                 let child_key = [key_nibbles, extension_nibbles].concat();
-                self.retain_multi_range_recursive(
-                    memory,
+                self.generic_retain_multi_range_recursive(
                     new_child_id,
                     child_key,
                     intervals_nibbles,
                 )?;
 
-                // let node = UpdatedMemTrieNode::Extension {
-                //     extension,
-                //     child: OldOrUpdatedNodeId::Updated(new_child_id),
-                // };
-                // self.place_node(node_id, node);
-                let node = TrieNode::Extension(extension, NodeHandle::InMemory(new_child_id));
-                let memory_usage =
-                    memory.node_ref(new_child_id).memory_usage + node.memory_usage_direct(memory);
-                memory.store_at(handle, TrieNodeWithSize::new(node, memory_usage));
+                let node = GenericUpdatedTrieNode::Extension {
+                    extension,
+                    child: GenericNodeOrIndex::Updated(new_child_id),
+                };
+                let child_memory_usage = self.generic_get_node(new_child_id).memory_usage;
+                let memory_usage = node.memory_usage_direct() + child_memory_usage;
+                self.generic_place_node(
+                    node_id,
+                    GenericUpdatedTrieNodeWithSize { node, memory_usage },
+                );
             }
         }
 
         // We may need to change node type to keep the trie structure unique.
-        // self.squash_node(node_id);
-        self.squash_node(memory, handle)
+        self.generic_squash_node(node_id)
     }
+}
+
+impl<'a, N: std::fmt::Debug, V: std::fmt::Debug + HasLength, T: GenericTrieUpdate<'a, N, V>>
+    GenericTrieUpdateRetain<'a, N, V> for T
+{
 }
 
 /// Based on the key and the intervals, makes decision on the subtree exploration.

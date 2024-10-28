@@ -9,21 +9,23 @@ use borsh::BorshSerialize;
 use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::state::ValueRef;
 
-pub(crate) struct NodesStorage {
+pub(crate) struct NodesStorage<'a> {
     nodes: Vec<Option<TrieNodeWithSize>>,
     values: Vec<Option<Vec<u8>>>,
     pub(crate) refcount_changes: TrieRefcountDeltaMap,
+    pub(crate) trie: &'a Trie,
 }
 
 const INVALID_STORAGE_HANDLE: &str = "invalid storage handle";
 
 /// Local mutable storage that owns node objects.
-impl NodesStorage {
-    pub fn new() -> NodesStorage {
+impl<'a> NodesStorage<'a> {
+    pub fn new(trie: &'a Trie) -> NodesStorage<'a> {
         NodesStorage {
             nodes: Vec::new(),
             refcount_changes: TrieRefcountDeltaMap::new(),
             values: Vec::new(),
+            trie,
         }
     }
 
@@ -57,8 +59,9 @@ impl NodesStorage {
     }
 
     pub(crate) fn store_value(&mut self, value: Vec<u8>) -> StorageValueHandle {
+        let value_len = value.len();
         self.values.push(Some(value));
-        StorageValueHandle(self.values.len() - 1)
+        StorageValueHandle(self.values.len() - 1, value_len)
     }
 
     pub(crate) fn value_ref(&self, handle: StorageValueHandle) -> &[u8] {
