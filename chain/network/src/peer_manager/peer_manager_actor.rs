@@ -111,6 +111,7 @@ pub struct PeerManagerActor {
 /// we are at that stage, feel free to add any events that you need to observe.
 /// In particular prefer emitting a new event to polling for a state change.
 #[derive(Debug, PartialEq, Eq, Clone)]
+#[allow(clippy::large_enum_variant)]
 pub enum Event {
     PeerManagerStarted,
     ServerStarted,
@@ -1104,7 +1105,9 @@ impl PeerManagerActor {
             }
             NetworkRequests::Challenge(challenge) => {
                 // TODO(illia): smarter routing?
-                self.state.tier2.broadcast_message(Arc::new(PeerMessage::Challenge(challenge)));
+                self.state
+                    .tier2
+                    .broadcast_message(Arc::new(PeerMessage::Challenge(Box::new(challenge))));
                 NetworkResponses::NoResponse
             }
             NetworkRequests::ChunkStateWitnessAck(target, ack) => {
@@ -1168,12 +1171,22 @@ impl PeerManagerActor {
                     NetworkResponses::RouteNotFound
                 }
             }
-            NetworkRequests::ChunkContractAccesses(chunk_validators, accesses) => {
-                for chunk_validator in chunk_validators {
+            NetworkRequests::ChunkContractAccesses(validators, accesses) => {
+                for validator in validators {
                     self.state.send_message_to_account(
                         &self.clock,
-                        &chunk_validator,
+                        &validator,
                         RoutedMessageBody::ChunkContractAccesses(accesses.clone()),
+                    );
+                }
+                NetworkResponses::NoResponse
+            }
+            NetworkRequests::ChunkContractDeployments(validators, deploys) => {
+                for validator in validators {
+                    self.state.send_message_to_account(
+                        &self.clock,
+                        &validator,
+                        RoutedMessageBody::ChunkContractDeployments(deploys.clone()),
                     );
                 }
                 NetworkResponses::NoResponse

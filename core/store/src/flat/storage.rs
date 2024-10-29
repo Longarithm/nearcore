@@ -285,8 +285,7 @@ impl FlatStorage {
 
     /// Get sequence of blocks `target_block_hash` (inclusive) to flat head (exclusive)
     /// in backwards chain order. Returns an error if there is no path between them.
-    #[cfg(test)]
-    pub(crate) fn get_blocks_to_head(
+    pub fn get_blocks_to_head(
         &self,
         target_block_hash: &CryptoHash,
     ) -> Result<Vec<CryptoHash>, FlatStorageError> {
@@ -306,7 +305,7 @@ impl FlatStorage {
             let changes = guard.get_block_changes(block_hash)?;
             match changes.get(key) {
                 Some(value_ref) => {
-                    return Ok(value_ref.clone().map(|value_ref| FlatStateValue::Ref(value_ref)));
+                    return Ok((*value_ref).map(|value_ref| FlatStateValue::Ref(value_ref)));
                 }
                 None => {}
             };

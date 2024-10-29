@@ -1,5 +1,6 @@
 use super::task_tracker::TaskHandle;
 use super::StateSyncDownloadSource;
+use crate::metrics;
 use crate::sync::state::util::increment_download_count;
 use futures::future::BoxFuture;
 use futures::FutureExt;
@@ -41,7 +42,7 @@ pub(super) struct StateSyncDownloadSourcePeerSharedState {
     pending_requests: HashMap<PendingPeerRequestKey, PendingPeerRequestValue>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 struct PendingPeerRequestKey {
     shard_id: ShardId,
     sync_hash: CryptoHash,
@@ -69,18 +70,21 @@ impl StateSyncDownloadSourcePeerSharedState {
                 None => PartIdOrHeader::Header,
             },
         };
-        if let Some(request) = self.pending_requests.get(&key) {
-            if request
-                .peer_id
-                .as_ref()
-                .is_some_and(|expecting_peer_id| expecting_peer_id == &peer_id)
-            {
-                let value = self.pending_requests.remove(&key).unwrap();
-                let _ = value.sender.send(data);
-                return Ok(());
-            }
+
+        let Some(request) = self.pending_requests.get(&key) else {
+            tracing::debug!(target: "sync", "Received {:?} expecting {:?}", key, self.pending_requests.keys());
+            return Err(near_chain::Error::Other("Unexpected state response".to_owned()));
+        };
+
+        if request.peer_id.as_ref().is_some_and(|expecting_peer_id| expecting_peer_id != &peer_id) {
+            return Err(near_chain::Error::Other(
+                "Unexpected state response (wrong sender)".to_owned(),
+            ));
         }
-        Err(near_chain::Error::Other("Unexpected message".to_owned()))
+
+        let value = self.pending_requests.remove(&key).unwrap();
+        let _ = value.sender.send(data);
+        Ok(())
     }
 
     /// Sets the peers that are eligible for querying state sync headers/parts.
@@ -89,7 +93,7 @@ impl StateSyncDownloadSourcePeerSharedState {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 enum PartIdOrHeader {
     Part { part_id: u64 },
     Header,
@@ -176,6 +180,10 @@ impl StateSyncDownloadSourcePeer {
             PartIdOrHeader::Part { .. } => "part",
             PartIdOrHeader::Header => "header",
         };
+
+        let _timer = metrics::STATE_SYNC_P2P_REQUEST_DELAY
+            .with_label_values(&[&key.shard_id.to_string(), &typ])
+            .start_timer();
 
         handle.set_status("Sending network request");
         match request_sender.send_async(network_request).await {
