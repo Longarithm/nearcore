@@ -198,6 +198,10 @@ pub(crate) trait GenericTrieUpdate<'a, GenericTrieNodePtr, GenericValueHandle> {
         &self,
         node_id: GenericUpdatedNodeId,
     ) -> GenericUpdatedTrieNodeWithSize<GenericTrieNodePtr, GenericValueHandle>;
+
+    fn generic_delete_value(&mut self, value: GenericValueHandle) -> Result<(), StorageError>;
+
+    fn generic_store_value(&mut self, value: Vec<u8>) -> GenericValueHandle;
 }
 
 /// Keeps values and internal nodes accessed on updating memtrie.
@@ -310,6 +314,11 @@ impl<'a, M: ArenaMemory> GenericTrieUpdate<'a, MemTrieNodeId, FlatStateValue>
             memory_usage: 0,
         }
     }
+
+    fn generic_delete_value(&mut self, value: FlatStateValue) -> Result<(), StorageError> {
+        self.subtract_refcount_for_value(value);
+        Ok(())
+    }
 }
 
 pub(crate) type TrieStorageNodePtr = CryptoHash;
@@ -421,6 +430,19 @@ impl<'a> GenericTrieUpdate<'a, TrieStorageNodePtr, ValueHandle> for NodesStorage
             node: UpdatedTrieStorageNode::from_trie_node_with_size(node),
             memory_usage,
         }
+    }
+
+    fn generic_delete_value(&mut self, value: ValueHandle) -> Result<(), StorageError> {
+        match value {
+            ValueHandle::HashAndSize(value) => {
+                self.trie.internal_retrieve_trie_node(&value.hash, true, true)?;
+                self.refcount_changes.subtract(value.hash, 1);
+            }
+            ValueHandle::InMemory(_) => {
+                // do nothing
+            }
+        }
+        Ok(())
     }
 }
 
