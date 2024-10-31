@@ -19,7 +19,7 @@ use crate::trie::{
 use crate::{NibbleSlice, RawTrieNode, RawTrieNodeWithSize, TrieChanges};
 use near_primitives::errors::StorageError;
 use near_primitives::hash::{hash, CryptoHash};
-use near_primitives::state::{FlatStateValue, GenericTrieValue};
+use near_primitives::state::{FlatStateValue, GenericTrieValue, ValueRef};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
@@ -393,10 +393,43 @@ pub(crate) type UpdatedTrieStorageNode = GenericUpdatedTrieNode<TrieStorageNodeP
 pub(crate) type UpdatedTrieStorageNodeWithSize =
     GenericUpdatedTrieNodeWithSize<TrieStorageNodePtr, ValueHandle>;
 
+impl UpdatedTrieStorageNodeWithSize {
+    pub fn from_raw_trie_node_with_size(node: RawTrieNodeWithSize) -> Self {
+        Self {
+            node: UpdatedTrieStorageNode::from_raw_trie_node(node.node),
+            memory_usage: node.memory_usage,
+        }
+    }
+}
+
 /// Conversion between updated node for trie storage and generic updated node.
 /// TODO(#12324): remove once the whole trie storage logic is rewritten in
 /// generic terms.
 impl UpdatedTrieStorageNode {
+    fn new_branch(children: Children, value: Option<ValueRef>) -> Self {
+        let children =
+            Box::new(children.0.map(|child| child.map(|id| GenericNodeOrIndex::Old(id))));
+        let value = value.map(ValueHandle::HashAndSize);
+        Self::Branch { children, value }
+    }
+
+    pub fn from_raw_trie_node(node: RawTrieNode) -> Self {
+        match node {
+            RawTrieNode::Leaf(extension, value) => Self::Leaf {
+                extension: extension.to_vec().into_boxed_slice(),
+                value: ValueHandle::HashAndSize(value),
+            },
+            RawTrieNode::BranchNoValue(children) => Self::new_branch(children, None),
+            RawTrieNode::BranchWithValue(value, children) => {
+                Self::new_branch(children, Some(value))
+            }
+            RawTrieNode::Extension(extension, child) => Self::Extension {
+                extension: extension.to_vec().into_boxed_slice(),
+                child: GenericNodeOrIndex::Old(child),
+            },
+        }
+    }
+
     pub fn from_trie_node_with_size(node: TrieNodeWithSize) -> Self {
         match node.node {
             TrieNode::Empty => Self::Empty,
@@ -456,6 +489,8 @@ impl UpdatedTrieStorageNode {
     }
 }
 
+const INVALID_STORAGE_HANDLE: &str = "invalid storage handle";
+
 impl<'a> GenericTrieUpdate<'a, TrieStorageNodePtr, ValueHandle> for NodesStorage<'a> {
     fn generic_ensure_updated(
         &mut self,
@@ -470,12 +505,11 @@ impl<'a> GenericTrieUpdate<'a, TrieStorageNodePtr, ValueHandle> for NodesStorage
     }
 
     fn generic_take_node(&mut self, index: GenericUpdatedNodeId) -> UpdatedTrieStorageNodeWithSize {
-        let node = self.destroy(StorageHandle(index));
-        let memory_usage = node.memory_usage;
-        UpdatedTrieStorageNodeWithSize {
-            node: UpdatedTrieStorageNode::from_trie_node_with_size(node),
-            memory_usage,
-        }
+        self.nodes
+            .get_mut(index)
+            .expect(INVALID_STORAGE_HANDLE)
+            .take()
+            .expect(INVALID_STORAGE_HANDLE)
     }
 
     fn generic_place_node(
@@ -483,9 +517,8 @@ impl<'a> GenericTrieUpdate<'a, TrieStorageNodePtr, ValueHandle> for NodesStorage
         index: GenericUpdatedNodeId,
         node: UpdatedTrieStorageNodeWithSize,
     ) {
-        let UpdatedTrieStorageNodeWithSize { node, memory_usage } = node;
-        let node = node.into_trie_node_with_size(memory_usage);
-        self.store_at(StorageHandle(index), node);
+        debug_assert!(self.nodes.get(index).expect(INVALID_STORAGE_HANDLE).is_none());
+        self.nodes[index] = Some(node);
     }
 
     fn generic_insert_node(
@@ -493,19 +526,18 @@ impl<'a> GenericTrieUpdate<'a, TrieStorageNodePtr, ValueHandle> for NodesStorage
         node: UpdatedTrieStorageNodeWithSize,
     ) -> GenericUpdatedNodeId {
         let index = self.nodes.len();
-        let UpdatedTrieStorageNodeWithSize { node, memory_usage } = node;
-        let node = node.into_trie_node_with_size(memory_usage);
         self.nodes.push(Some(node));
         index
     }
 
     fn generic_get_node(&self, index: GenericUpdatedNodeId) -> UpdatedTrieStorageNodeWithSize {
-        let node = self.node_ref(StorageHandle(index)).clone();
-        let memory_usage = node.memory_usage;
-        UpdatedTrieStorageNodeWithSize {
-            node: UpdatedTrieStorageNode::from_trie_node_with_size(node),
-            memory_usage,
-        }
+        let node = self
+            .nodes
+            .get(index)
+            .expect(INVALID_STORAGE_HANDLE)
+            .as_ref()
+            .expect(INVALID_STORAGE_HANDLE);
+        node.clone()
     }
 
     fn generic_store_value(&mut self, value: GenericTrieValue) -> ValueHandle {

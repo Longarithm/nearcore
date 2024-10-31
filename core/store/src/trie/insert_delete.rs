@@ -1,7 +1,8 @@
+use super::mem::updating::{GenericTrieUpdate, UpdatedTrieStorageNodeWithSize};
 use super::TrieRefcountDeltaMap;
 use crate::trie::{
     Children, NodeHandle, RawTrieNode, RawTrieNodeWithSize, StorageHandle, StorageValueHandle,
-    TrieNode, TrieNodeWithSize, ValueHandle,
+    TrieNode, ValueHandle,
 };
 use crate::{StorageError, Trie, TrieChanges};
 use borsh::BorshSerialize;
@@ -9,7 +10,7 @@ use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::state::ValueRef;
 
 pub(crate) struct NodesStorage<'a> {
-    pub(crate) nodes: Vec<Option<TrieNodeWithSize>>,
+    pub(crate) nodes: Vec<Option<UpdatedTrieStorageNodeWithSize>>,
     pub(crate) values: Vec<Option<Vec<u8>>>,
     pub(crate) refcount_changes: TrieRefcountDeltaMap,
     pub(crate) trie: &'a Trie,
@@ -28,31 +29,7 @@ impl<'a> NodesStorage<'a> {
         }
     }
 
-    pub(crate) fn destroy(&mut self, handle: StorageHandle) -> TrieNodeWithSize {
-        self.nodes
-            .get_mut(handle.0)
-            .expect(INVALID_STORAGE_HANDLE)
-            .take()
-            .expect(INVALID_STORAGE_HANDLE)
-    }
-
-    pub fn node_ref(&self, handle: StorageHandle) -> &TrieNodeWithSize {
-        self.nodes
-            .get(handle.0)
-            .expect(INVALID_STORAGE_HANDLE)
-            .as_ref()
-            .expect(INVALID_STORAGE_HANDLE)
-    }
-
-    fn node_mut(&mut self, handle: StorageHandle) -> &mut TrieNodeWithSize {
-        self.nodes
-            .get_mut(handle.0)
-            .expect(INVALID_STORAGE_HANDLE)
-            .as_mut()
-            .expect(INVALID_STORAGE_HANDLE)
-    }
-
-    pub(crate) fn store(&mut self, node: TrieNodeWithSize) -> StorageHandle {
+    pub(crate) fn store(&mut self, node: UpdatedTrieStorageNodeWithSize) -> StorageHandle {
         self.nodes.push(Some(node));
         StorageHandle(self.nodes.len() - 1)
     }
@@ -63,11 +40,6 @@ impl<'a> NodesStorage<'a> {
             .expect(INVALID_STORAGE_HANDLE)
             .as_ref()
             .expect(INVALID_STORAGE_HANDLE)
-    }
-
-    pub(crate) fn store_at(&mut self, handle: StorageHandle, node: TrieNodeWithSize) {
-        debug_assert!(self.nodes.get(handle.0).expect(INVALID_STORAGE_HANDLE).is_none());
-        self.nodes[handle.0] = Some(node);
     }
 }
 
@@ -90,7 +62,9 @@ impl Trie {
         let mut buffer: Vec<u8> = Vec::new();
         let mut memory = memory;
         'outer: while let Some((node, position)) = stack.pop() {
-            let node_with_size = memory.node_ref(node);
+            let node_with_size = memory.generic_get_node(node.0);
+            let memory_usage = node_with_size.memory_usage;
+            let node_with_size = node_with_size.node.into_trie_node_with_size(memory_usage);
             let memory_usage = node_with_size.memory_usage;
             let raw_node = match &node_with_size.node {
                 TrieNode::Empty => {

@@ -24,6 +24,9 @@ use crate::StorageError;
 use borsh::{BorshDeserialize, BorshSerialize};
 pub use from_flat::construct_trie_from_flat;
 use mem::mem_tries::MemTries;
+#[cfg(test)]
+use mem::updating::GenericTrieUpdate;
+use mem::updating::UpdatedTrieStorageNodeWithSize;
 use near_primitives::challenge::PartialState;
 use near_primitives::hash::{hash, CryptoHash};
 pub use near_primitives::shard_layout::ShardUId;
@@ -160,10 +163,6 @@ impl TrieNodeWithSize {
         TrieNodeWithSize { node, memory_usage }
     }
 
-    fn memory_usage(&self) -> u64 {
-        self.memory_usage
-    }
-
     fn empty() -> TrieNodeWithSize {
         TrieNodeWithSize { node: TrieNode::Empty, memory_usage: 0 }
     }
@@ -216,7 +215,8 @@ impl TrieNode {
                             write!(f, "{}", hash)?;
                         }
                         NodeHandle::InMemory(handle) => {
-                            let child = &memory.node_ref(*handle).node;
+                            let child = memory.generic_get_node(handle.0).node;
+                            let child = child.into_trie_node_with_size(0).node;
                             child.print(f, memory, spaces)?;
                         }
                     }
@@ -234,7 +234,8 @@ impl TrieNode {
                         write!(f, "{}{}", spaces, hash)?;
                     }
                     NodeHandle::InMemory(handle) => {
-                        let child = &memory.node_ref(*handle).node;
+                        let child = memory.generic_get_node(handle.0).node;
+                        let child = child.into_trie_node_with_size(0).node;
                         child.print(f, memory, spaces)?;
                     }
                 }
@@ -278,6 +279,7 @@ impl TrieNode {
         self.memory_usage_direct_internal(None)
     }
 
+    #[cfg(test)]
     fn memory_usage_direct(&self, memory: &NodesStorage) -> u64 {
         self.memory_usage_direct_internal(Some(memory))
     }
@@ -844,6 +846,7 @@ impl Trie {
     #[cfg(test)]
     fn memory_usage_verify(&self, memory: &NodesStorage, handle: NodeHandle) -> u64 {
         // Cannot compute memory usage naively if given only partial storage.
+
         if self.storage.as_partial_storage().is_some() {
             return 0;
         }
@@ -854,7 +857,10 @@ impl Trie {
         }
 
         let TrieNodeWithSize { node, memory_usage } = match handle {
-            NodeHandle::InMemory(h) => memory.node_ref(h).clone(),
+            NodeHandle::InMemory(h) => {
+                let node = memory.generic_get_node(h.0);
+                node.node.into_trie_node_with_size(node.memory_usage)
+            }
             NodeHandle::Hash(h) => self.retrieve_node(&h).expect("storage failure").1,
         };
 
@@ -879,7 +885,9 @@ impl Trie {
             match handle {
                 NodeHandle::InMemory(h) => {
                     eprintln!("In-memory node:");
-                    eprintln!("{}", memory.node_ref(h).node.deep_to_string(memory));
+                    let node = memory.generic_get_node(h.0).node;
+                    let node = node.into_trie_node_with_size(0).node;
+                    eprintln!("{}", node.deep_to_string(memory));
                 }
                 NodeHandle::Hash(_h) => {
                     eprintln!("Bad node in storage!");
@@ -1219,9 +1227,10 @@ impl Trie {
         hash: &CryptoHash,
     ) -> Result<StorageHandle, StorageError> {
         match self.retrieve_raw_node(hash, true, true)? {
-            None => Ok(memory.store(TrieNodeWithSize::empty())),
+            None => Ok(memory.store(UpdatedTrieStorageNodeWithSize::empty())),
             Some((_, node)) => {
-                let result = memory.store(TrieNodeWithSize::from_raw(node));
+                let result = memory
+                    .store(UpdatedTrieStorageNodeWithSize::from_raw_trie_node_with_size(node));
                 memory.refcount_changes.subtract(*hash, 1);
                 Ok(result)
             }
