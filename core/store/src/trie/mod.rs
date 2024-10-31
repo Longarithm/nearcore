@@ -1,7 +1,9 @@
 use self::accounting_cache::TrieAccountingCache;
 use self::iterator::DiskTrieIterator;
 use self::mem::flexible_data::value::ValueView;
-use self::mem::updating::{UpdatedMemTrieNode, UpdatedMemTrieNodeId};
+use self::mem::updating::{
+    GenericTrieUpdateInsertDelete, UpdatedMemTrieNode, UpdatedMemTrieNodeId,
+};
 use self::trie_recording::TrieRecorder;
 use self::trie_storage::TrieMemoryPartialStorage;
 use crate::flat::{FlatStateChanges, FlatStorageChunkView};
@@ -1607,7 +1609,7 @@ impl Trie {
                 for (key, value) in changes {
                     match value {
                         Some(arr) => trie_update.insert(&key, arr)?,
-                        None => trie_update.delete(&key)?,
+                        None => trie_update.generic_delete(0, &key)?,
                     }
                 }
                 let (trie_changes, trie_accesses) = trie_update.to_trie_changes();
@@ -1651,18 +1653,16 @@ impl Trie {
             }
             None => {
                 let mut memory = NodesStorage::new(&self);
-                let mut root_node = self.move_node_to_mutable(&mut memory, &self.root)?;
+                let root_node = self.move_node_to_mutable(&mut memory, &self.root)?;
                 for (key, value) in changes {
-                    let key = NibbleSlice::new(&key);
-                    root_node = match value {
-                        Some(arr) => self.insert(
-                            &mut memory,
-                            root_node,
-                            key,
+                    match value {
+                        Some(arr) => memory.generic_insert(
+                            root_node.0,
+                            &key,
                             near_primitives::state::GenericTrieValue::MemtrieAndDisk(arr),
-                        ),
-                        None => self.delete(&mut memory, root_node, key),
-                    }?;
+                        )?,
+                        None => memory.generic_delete(0, &key)?,
+                    };
                 }
 
                 #[cfg(test)]
