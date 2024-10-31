@@ -5,11 +5,12 @@ use crate::trie::{TrieNode, TrieNodeWithSize, ValueHandle};
 use crate::{MissingTrieValueContext, StorageError, Trie};
 
 use super::mem::iter::STMemTrieIterator;
+use super::RawTrieNodeWithSize;
 
 /// Crumb is a piece of trie iteration state. It describes a node on the trail and processing status of that node.
 #[derive(Debug)]
 struct Crumb {
-    node: TrieNodeWithSize,
+    node: RawTrieNodeWithSize,
     status: CrumbStatus,
     prefix_boundary: bool,
 }
@@ -206,11 +207,12 @@ impl<'a> DiskTrieIterator<'a> {
     /// with [`Self::remember_visited_nodes`]), the node will be added to the
     /// list.
     fn descend_into_node(&mut self, hash: &CryptoHash) -> Result<(), StorageError> {
-        let (bytes, node) = self.trie.retrieve_node(hash)?;
+        let (bytes, node) = self
+            .trie
+            .retrieve_node(hash)?
+            .ok_or(StorageError::MissingTrieValue(MissingTrieValueContext::TrieIterator, *hash))?;
         if let Some(ref mut visited) = self.visited_nodes {
-            visited.push(bytes.ok_or({
-                StorageError::MissingTrieValue(MissingTrieValueContext::TrieIterator, *hash)
-            })?);
+            visited.push(bytes);
         }
         self.trail.push(Crumb { status: CrumbStatus::Entering, node, prefix_boundary: false });
         Ok(())

@@ -95,7 +95,8 @@ pub enum KeyLookupMode {
     Trie,
 }
 
-const TRIE_COSTS: TrieCosts = TrieCosts { byte_of_key: 2, byte_of_value: 1, node_cost: 50 };
+pub(crate) const TRIE_COSTS: TrieCosts =
+    TrieCosts { byte_of_key: 2, byte_of_value: 1, node_cost: 50 };
 
 #[derive(Clone, Hash)]
 enum NodeHandle {
@@ -847,6 +848,8 @@ impl Trie {
     fn memory_usage_verify(&self, memory: &NodesStorage, handle: NodeHandle) -> u64 {
         // Cannot compute memory usage naively if given only partial storage.
 
+        use mem::updating::GenericUpdatedTrieNodeWithSize;
+
         if self.storage.as_partial_storage().is_some() {
             return 0;
         }
@@ -856,15 +859,15 @@ impl Trie {
             return 0;
         }
 
-        let TrieNodeWithSize { node, memory_usage } = match handle {
-            NodeHandle::InMemory(h) => {
-                let node = memory.generic_get_node(h.0);
-                node.node.into_trie_node_with_size(node.memory_usage)
+        let GenericUpdatedTrieNodeWithSize { node, memory_usage } = match handle {
+            NodeHandle::InMemory(h) => memory.generic_get_node(h.0),
+            NodeHandle::Hash(h) => {
+                let raw_node = self.retrieve_node(&h).expect("storage failure").1;
+                GenericUpdatedTrieNodeWithSize::from_raw_trie_node_with_size(raw_node)
             }
-            NodeHandle::Hash(h) => self.retrieve_node(&h).expect("storage failure").1,
         };
 
-        let mut memory_usage_naive = node.memory_usage_direct(memory);
+        let mut memory_usage_naive = node.memory_usage_direct();
         match &node {
             TrieNode::Empty => {}
             TrieNode::Leaf(_key, _value) => {}
@@ -1238,19 +1241,11 @@ impl Trie {
     }
 
     /// Retrieves decoded node alongside with its raw bytes representation.
-    ///
-    /// Note that because Empty nodes (those which are referenced by
-    /// [`Self::EMPTY_ROOT`] hash) aren’t stored in the database, they don’t
-    /// have a bytes representation.  For those nodes the first return value
-    /// will be `None`.
     fn retrieve_node(
         &self,
         hash: &CryptoHash,
-    ) -> Result<(Option<std::sync::Arc<[u8]>>, TrieNodeWithSize), StorageError> {
-        match self.retrieve_raw_node(hash, true, true)? {
-            None => Ok((None, TrieNodeWithSize::empty())),
-            Some((bytes, node)) => Ok((Some(bytes), TrieNodeWithSize::from_raw(node))),
-        }
+    ) -> Result<Option<(std::sync::Arc<[u8]>, RawTrieNodeWithSize)>, StorageError> {
+        self.retrieve_raw_node(hash, true, true)
     }
 
     pub fn retrieve_root_node(&self) -> Result<StateRootNode, StorageError> {

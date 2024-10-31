@@ -4,6 +4,8 @@ use near_primitives::hash::CryptoHash;
 use near_primitives::state::ValueRef;
 use near_schema_checker_lib::ProtocolSchema;
 
+use super::TRIE_COSTS;
+
 /// Trie node with memory cost of its subtree.
 ///
 /// memory_usage is serialized, stored and contributes to hash.
@@ -40,6 +42,23 @@ impl RawTrieNode {
             Some(value) => Self::BranchWithValue(value, children),
             None => Self::BranchNoValue(children),
         }
+    }
+
+    fn memory_usage_value(value_length: u32) -> u64 {
+        (value_length as u64) * TRIE_COSTS.byte_of_value + TRIE_COSTS.node_cost
+    }
+
+    pub fn memory_usage_direct(&self) -> u64 {
+        TRIE_COSTS.node_cost
+            + match self {
+                Self::Leaf(key, value) => {
+                    (key.len() as u64) * TRIE_COSTS.byte_of_key
+                        + Self::memory_usage_value(value.length)
+                }
+                Self::BranchNoValue(_children) => 0,
+                Self::BranchWithValue(value, _children) => Self::memory_usage_value(value.length),
+                Self::Extension(key, _child) => (key.len() as u64) * TRIE_COSTS.byte_of_key,
+            }
     }
 }
 

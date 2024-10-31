@@ -430,31 +430,6 @@ impl UpdatedTrieStorageNode {
         }
     }
 
-    pub fn from_trie_node_with_size(node: TrieNodeWithSize) -> Self {
-        match node.node {
-            TrieNode::Empty => Self::Empty,
-            TrieNode::Leaf(extension, value) => {
-                Self::Leaf { extension: extension.to_vec().into_boxed_slice(), value }
-            }
-            TrieNode::Branch(children, value) => Self::Branch {
-                children: Box::new(children.0.map(|child| {
-                    child.map(|id| match id {
-                        NodeHandle::Hash(id) => GenericNodeOrIndex::Old(id),
-                        NodeHandle::InMemory(id) => GenericNodeOrIndex::Updated(id.0),
-                    })
-                })),
-                value,
-            },
-            TrieNode::Extension(extension, child) => Self::Extension {
-                extension: extension.to_vec().into_boxed_slice(),
-                child: match child {
-                    NodeHandle::Hash(id) => GenericNodeOrIndex::Old(id),
-                    NodeHandle::InMemory(id) => GenericNodeOrIndex::Updated(id.0),
-                },
-            },
-        }
-    }
-
     pub fn into_trie_node_with_size(self, memory_usage: u64) -> TrieNodeWithSize {
         match self {
             Self::Empty => TrieNodeWithSize { node: TrieNode::Empty, memory_usage },
