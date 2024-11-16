@@ -315,6 +315,8 @@ enum SnapshotAction {
     None,
 }
 
+use usdt::register_probes;
+
 impl Chain {
     /// Builds genesis block and chunks from the current configuration obtained through the arguments.
     pub fn make_genesis_block(
@@ -417,6 +419,8 @@ impl Chain {
         validator: MutableValidatorSigner,
         resharding_sender: ReshardingSender,
     ) -> Result<Chain, Error> {
+        register_probes().unwrap();
+
         let state_roots = get_genesis_state_roots(runtime_adapter.store())?
             .expect("genesis should be initialized.");
         let (genesis, genesis_chunks) = Self::make_genesis_block(

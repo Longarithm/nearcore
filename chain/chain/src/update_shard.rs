@@ -111,6 +111,11 @@ pub fn process_shard_update(
     })
 }
 
+#[usdt::provider]
+mod my_provider {
+    fn task_event(_: u8, _: &str, _: u64) {} // value, event_type, duration
+}
+
 /// Applies new chunk, which includes applying transactions from chunk and
 /// receipts filtered from outgoing receipts from previous chunks.
 pub fn apply_new_chunk(
@@ -139,13 +144,14 @@ pub fn apply_new_chunk(
     let gas_limit = chunk_header.gas_limit();
 
     let _timer = CryptoHashTimer::new(Clock::real(), chunk_header.chunk_hash().0);
+    let start = std::time::Instant::now();
     let storage_config = RuntimeStorageConfig {
         state_root: chunk_header.prev_state_root(),
         use_flat_storage: true,
         source: storage_context.storage_data_source,
         state_patch: storage_context.state_patch,
     };
-    match runtime.apply_chunk(
+    let result = match runtime.apply_chunk(
         storage_config,
         apply_reason,
         ApplyChunkShardContext {
@@ -163,7 +169,12 @@ pub fn apply_new_chunk(
             Ok(NewChunkResult { gas_limit, shard_uid: shard_context.shard_uid, apply_result })
         }
         Err(err) => Err(err),
-    }
+    };
+    // End the task
+    let duration = start.elapsed().as_nanos() as u64;
+    let shard_id_u64: u64 = shard_id.into();
+    my_provider::task_event!(|| (shard_id_u64 as u8, "apply_new_chunk_end", duration));
+    result
 }
 
 /// Applies shard update corresponding to missing chunk.

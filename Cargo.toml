@@ -384,6 +384,7 @@ tracing-subscriber = { version = "0.3.18", features = [
 ] }
 trybuild = "1.0.11"
 turn = "0.6"
+usdt = "0.5"
 wasm-encoder = "0.27.0"
 wasmer-compiler = { package = "wasmer-compiler-near", version = "=2.4.1" }
 wasmer-compiler-singlepass = { package = "wasmer-compiler-singlepass-near", version = "=2.4.1" }
