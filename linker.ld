@@ -1,0 +1,5 @@
+SECTIONS {
+    .probes : {
+        KEEP(*(.probes))
+    }
+}

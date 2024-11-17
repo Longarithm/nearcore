@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crate::crypto_hash_timer::CryptoHashTimer;
 use crate::types::{
     ApplyChunkBlockContext, ApplyChunkResult, ApplyChunkShardContext, RuntimeAdapter,
@@ -116,6 +118,37 @@ mod my_provider {
     fn task_event(_: u8, _: &str, _: u64) {} // value, event_type, duration
 }
 
+static GLOBAL_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+#[no_mangle]
+#[link_section = ".probes"]
+pub static PROBE_START: AtomicU64 = AtomicU64::new(0);
+
+#[no_mangle]
+#[link_section = ".probes"]
+pub static PROBE_END: AtomicU64 = AtomicU64::new(0);
+
+// Macro for probes that shares counter between start/end
+macro_rules! usdt_probe {
+    ($name:ident, counter: u64, id: $type:ty) => {
+        #[inline(never)]
+        pub fn $name(counter: u64, id: $type) {
+            unsafe {
+                std::arch::asm!(
+                    "nop",
+                    in("rdi") counter,
+                    in("rsi") id as u64,
+                    options(nomem, nostack)
+                );
+            }
+        }
+    };
+}
+
+// Define probe points
+usdt_probe!(probe_start, counter: u64, id: u64);
+usdt_probe!(probe_end, counter: u64, id: u64);
+
 /// Applies new chunk, which includes applying transactions from chunk and
 /// receipts filtered from outgoing receipts from previous chunks.
 pub fn apply_new_chunk(
@@ -151,6 +184,9 @@ pub fn apply_new_chunk(
         source: storage_context.storage_data_source,
         state_patch: storage_context.state_patch,
     };
+    let counter = GLOBAL_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let shard_id_u64: u64 = shard_id.into();
+    probe_start(counter, shard_id_u64);
     let result = match runtime.apply_chunk(
         storage_config,
         apply_reason,
@@ -172,8 +208,8 @@ pub fn apply_new_chunk(
     };
     // End the task
     let duration = start.elapsed().as_nanos() as u64;
-    let shard_id_u64: u64 = shard_id.into();
     my_provider::task_event!(|| (shard_id_u64 as u8, "apply_new_chunk_end", duration));
+    probe_end(counter, shard_id_u64);
     result
 }
 
