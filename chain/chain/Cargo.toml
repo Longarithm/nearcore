@@ -23,6 +23,7 @@ lru.workspace = true
 more-asserts.workspace = true
 num-rational.workspace = true
 once_cell.workspace = true
+probe.workspace = true
 rand_chacha.workspace = true
 rand.workspace = true
 rayon.workspace = true

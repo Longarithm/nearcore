@@ -145,7 +145,9 @@ pub fn apply_new_chunk(
         source: storage_context.storage_data_source,
         state_patch: storage_context.state_patch,
     };
-    match runtime.apply_chunk(
+    let shard_id_u64: u64 = shard_id.into();
+    probe::probe!(apply_chunk, begin, shard_id_u64);
+    let result = match runtime.apply_chunk(
         storage_config,
         apply_reason,
         ApplyChunkShardContext {
@@ -163,7 +165,9 @@ pub fn apply_new_chunk(
             Ok(NewChunkResult { gas_limit, shard_uid: shard_context.shard_uid, apply_result })
         }
         Err(err) => Err(err),
-    }
+    };
+    probe::probe!(apply_chunk, end, shard_id_u64);
+    result
 }
 
 /// Applies shard update corresponding to missing chunk.

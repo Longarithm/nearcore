@@ -3973,6 +3973,7 @@ dependencies = [
  "num-rational 0.3.2",
  "once_cell",
  "primitive-types 0.10.1",
+ "probe",
  "rand",
  "rand_chacha",
  "rayon",
@@ -6106,6 +6107,12 @@ dependencies = [
  "scale-info",
  "uint",
 ]
+
+[[package]]
+name = "probe"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8e2d2444b730c8f027344c60f9e1f1554d7a3342df9bdd425142ed119a6e5a3"
 
 [[package]]
 name = "proc-macro-crate"
