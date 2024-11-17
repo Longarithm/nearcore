@@ -1,21 +1,12 @@
 PHDRS
 {
-  text PT_LOAD FLAGS(5);   /* R_E */
-  data PT_LOAD FLAGS(6);   /* RW_ */
-  probes PT_NOTE FLAGS(4); /* R__ */
+  text PT_LOAD FLAGS(5);
+  data PT_LOAD FLAGS(6);
+  note PT_NOTE FLAGS(4);
 }
 
 SECTIONS {
-    .probes : {
-        KEEP(*(.probes))
+    .custom_usdt_probes : {
+        KEEP(*(.custom_usdt_probes))
     } :data
-}
-
-/* Ensure we don't interfere with the default script */
-SECTIONS {
-  .text : { *(.text*) } :text
-  .rodata : { *(.rodata*) } :text
-  .data.rel.ro : { *(.data.rel.ro*) } :data
-  .data : { *(.data*) } :data
-  .bss : { *(.bss*) } :data
 }

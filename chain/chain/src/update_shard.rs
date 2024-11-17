@@ -121,11 +121,11 @@ mod my_provider {
 static GLOBAL_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[no_mangle]
-#[link_section = ".probes"]
+#[link_section = ".custom_usdt_probes"]
 pub static PROBE_START: AtomicU64 = AtomicU64::new(0);
 
 #[no_mangle]
-#[link_section = ".probes"]
+#[link_section = ".custom_usdt_probes"]
 pub static PROBE_END: AtomicU64 = AtomicU64::new(0);
 
 // Macro for probes that shares counter between start/end
