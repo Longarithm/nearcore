@@ -101,10 +101,7 @@ impl NightshadeRuntime {
         let runtime = Runtime::new();
         let trie_viewer = TrieViewer::new(trie_viewer_state_size_limit, max_gas_burnt_view);
         let flat_storage_manager = FlatStorageManager::new(store.flat_store());
-        let epoch_config = epoch_manager
-            .read()
-            .get_config_for_protocol_version(genesis_config.protocol_version)
-            .unwrap();
+        let epoch_config = epoch_manager.read().get_epoch_config(genesis_config.protocol_version);
         let shard_uids: Vec<_> = epoch_config.shard_layout.shard_uids().collect();
         let tries = ShardTries::new(
             store.trie_store(),
@@ -219,10 +216,8 @@ impl NightshadeRuntime {
         prev_hash: &CryptoHash,
     ) -> Result<ShardUId, Error> {
         let epoch_manager = self.epoch_manager.read();
-        let epoch_id =
-            epoch_manager.get_epoch_id_from_prev_block(prev_hash).map_err(Error::from)?;
-        let shard_version =
-            epoch_manager.get_shard_layout(&epoch_id).map_err(Error::from)?.version();
+        let epoch_id = epoch_manager.get_epoch_id_from_prev_block(prev_hash)?;
+        let shard_version = epoch_manager.get_shard_layout(&epoch_id)?.version();
         Ok(ShardUId::new(shard_version, shard_id))
     }
 
@@ -232,8 +227,7 @@ impl NightshadeRuntime {
         epoch_id: &EpochId,
     ) -> Result<ShardUId, Error> {
         let epoch_manager = self.epoch_manager.read();
-        let shard_version =
-            epoch_manager.get_shard_layout(epoch_id).map_err(Error::from)?.version();
+        let shard_version = epoch_manager.get_shard_layout(epoch_id)?.version();
         Ok(ShardUId::new(shard_version, shard_id))
     }
 
@@ -243,7 +237,7 @@ impl NightshadeRuntime {
         epoch_id: &EpochId,
     ) -> Result<ShardUId, Error> {
         let epoch_manager = self.epoch_manager.read();
-        let shard_layout = epoch_manager.get_shard_layout(epoch_id).map_err(Error::from)?;
+        let shard_layout = epoch_manager.get_shard_layout(epoch_id)?;
         let shard_id = account_id_to_shard_id(account_id, &shard_layout);
         Ok(ShardUId::from_shard_id_and_layout(shard_id, &shard_layout))
     }
@@ -370,7 +364,7 @@ impl NightshadeRuntime {
         );
 
         let apply_state = ApplyState {
-            apply_reason: Some(apply_reason),
+            apply_reason,
             block_height,
             prev_block_hash: *prev_block_hash,
             block_hash,
@@ -468,56 +462,12 @@ impl NightshadeRuntime {
             processed_yield_timeouts: apply_result.processed_yield_timeouts,
             applied_receipts_hash: hash(&borsh::to_vec(receipts).unwrap()),
             congestion_info: apply_result.congestion_info,
-            contract_accesses: apply_result.contract_accesses,
             bandwidth_requests: apply_result.bandwidth_requests,
             bandwidth_scheduler_state_hash: apply_result.bandwidth_scheduler_state_hash,
-            contract_deploys: apply_result.contract_deploys,
+            contract_updates: apply_result.contract_updates,
         };
 
         Ok(result)
-    }
-
-    fn precompile_contracts(
-        &self,
-        epoch_id: &EpochId,
-        contract_codes: Vec<ContractCode>,
-    ) -> Result<(), Error> {
-        let _span = tracing::debug_span!(
-            target: "runtime",
-            "precompile_contracts",
-            num_contracts = contract_codes.len())
-        .entered();
-        let protocol_version = self.epoch_manager.get_epoch_protocol_version(epoch_id)?;
-        let runtime_config = self.runtime_config_store.get_config(protocol_version);
-        let compiled_contract_cache: Option<Box<dyn ContractRuntimeCache>> =
-            Some(Box::new(self.compiled_contract_cache.handle()));
-        // Execute precompile_contract in parallel but prevent it from using more than half of all
-        // threads so that node will still function normally.
-        rayon::scope(|scope| {
-            let (slot_sender, slot_receiver) = std::sync::mpsc::channel();
-            // Use up-to half of the threads for the compilation.
-            let max_threads = std::cmp::max(rayon::current_num_threads() / 2, 1);
-            for _ in 0..max_threads {
-                slot_sender.send(()).expect("both sender and receiver are owned here");
-            }
-            for code in contract_codes {
-                slot_receiver.recv().expect("could not receive a slot to compile contract");
-                let contract_cache = compiled_contract_cache.as_deref();
-                let slot_sender = slot_sender.clone();
-                scope.spawn(move |_| {
-                    precompile_contract(
-                        &code,
-                        Arc::clone(&runtime_config.wasm_config),
-                        contract_cache,
-                    )
-                    .ok();
-                    // If this fails, it just means there won't be any more attempts to recv the
-                    // slots
-                    let _ = slot_sender.send(());
-                });
-            }
-        });
-        Ok(())
     }
 
     fn get_gc_stop_height_impl(&self, block_hash: &CryptoHash) -> Result<BlockHeight, Error> {
@@ -1350,6 +1300,49 @@ impl RuntimeAdapter for NightshadeRuntime {
     fn compiled_contract_cache(&self) -> &dyn ContractRuntimeCache {
         self.compiled_contract_cache.as_ref()
     }
+
+    fn precompile_contracts(
+        &self,
+        epoch_id: &EpochId,
+        contract_codes: Vec<ContractCode>,
+    ) -> Result<(), Error> {
+        let _span = tracing::debug_span!(
+            target: "runtime",
+            "precompile_contracts",
+            num_contracts = contract_codes.len())
+        .entered();
+        let protocol_version = self.epoch_manager.get_epoch_protocol_version(epoch_id)?;
+        let runtime_config = self.runtime_config_store.get_config(protocol_version);
+        let compiled_contract_cache: Option<Box<dyn ContractRuntimeCache>> =
+            Some(Box::new(self.compiled_contract_cache.handle()));
+        // Execute precompile_contract in parallel but prevent it from using more than half of all
+        // threads so that node will still function normally.
+        rayon::scope(|scope| {
+            let (slot_sender, slot_receiver) = std::sync::mpsc::channel();
+            // Use up-to half of the threads for the compilation.
+            let max_threads = std::cmp::max(rayon::current_num_threads() / 2, 1);
+            for _ in 0..max_threads {
+                slot_sender.send(()).expect("both sender and receiver are owned here");
+            }
+            for code in contract_codes {
+                slot_receiver.recv().expect("could not receive a slot to compile contract");
+                let contract_cache = compiled_contract_cache.as_deref();
+                let slot_sender = slot_sender.clone();
+                scope.spawn(move |_| {
+                    precompile_contract(
+                        &code,
+                        Arc::clone(&runtime_config.wasm_config),
+                        contract_cache,
+                    )
+                    .ok();
+                    // If this fails, it just means there won't be any more attempts to recv the
+                    // slots
+                    let _ = slot_sender.send(());
+                });
+            }
+        });
+        Ok(())
+    }
 }
 
 /// Get the limit on the number of new receipts imposed by the local congestion control.
@@ -1403,11 +1396,18 @@ fn chunk_tx_gas_limit(
 fn calculate_transactions_size_limit(
     protocol_version: ProtocolVersion,
     runtime_config: &RuntimeConfig,
-    last_chunk_transactions_size: usize,
+    mut last_chunk_transactions_size: usize,
     transactions_gas_limit: Gas,
 ) -> u64 {
     // Checking feature WitnessTransactionLimits
     if ProtocolFeature::StatelessValidation.enabled(protocol_version) {
+        if near_primitives::checked_feature!(
+            "protocol_feature_relaxed_chunk_validation",
+            RelaxedChunkValidation,
+            protocol_version
+        ) {
+            last_chunk_transactions_size = 0;
+        }
         // Sum of transactions in the previous and current chunks should not exceed the limit.
         // Witness keeps transactions from both previous and current chunk, so we have to limit the sum of both.
         runtime_config

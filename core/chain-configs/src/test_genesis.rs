@@ -75,8 +75,7 @@ impl TestGenesisBuilder {
 
     pub fn epoch_config_mut(&mut self) -> &mut EpochConfig {
         if self.epoch_config.is_none() {
-            let mut epoch_config =
-                Genesis::test_epoch_config(1, ShardLayout::v0_single_shard(), 100);
+            let mut epoch_config = Genesis::test_epoch_config(1, ShardLayout::single_shard(), 100);
             epoch_config.block_producer_kickout_threshold = 0;
             epoch_config.chunk_producer_kickout_threshold = 0;
             epoch_config.chunk_validator_only_kickout_threshold = 0;
@@ -121,16 +120,14 @@ impl TestGenesisBuilder {
     }
 
     pub fn shard_layout_single(&mut self) -> &mut Self {
-        self.epoch_config_mut().shard_layout = ShardLayout::v0_single_shard();
+        self.epoch_config_mut().shard_layout = ShardLayout::single_shard();
         self
     }
 
     pub fn shard_layout_simple_v1(&mut self, boundary_accounts: &[&str]) -> &mut Self {
-        self.epoch_config_mut().shard_layout = ShardLayout::v1(
-            boundary_accounts.iter().map(|a| a.parse().unwrap()).collect(),
-            None,
-            1,
-        );
+        let boundary_accounts = boundary_accounts.iter().map(|a| a.parse().unwrap()).collect();
+        self.epoch_config_mut().shard_layout =
+            ShardLayout::multi_shard_custom(boundary_accounts, 1);
         self
     }
 

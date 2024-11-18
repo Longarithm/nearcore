@@ -2,19 +2,18 @@ use crate::EpochManagerHandle;
 use near_chain_primitives::Error;
 use near_crypto::Signature;
 use near_primitives::block::Tip;
-use near_primitives::block_header::{Approval, ApprovalInner, BlockHeader};
+use near_primitives::block_header::BlockHeader;
 use near_primitives::epoch_block_info::BlockInfo;
 use near_primitives::epoch_info::EpochInfo;
 use near_primitives::epoch_manager::{EpochConfig, ShardConfig};
 use near_primitives::errors::EpochError;
 use near_primitives::hash::CryptoHash;
-use near_primitives::shard_layout::{account_id_to_shard_id, ShardLayout, ShardLayoutError};
+use near_primitives::shard_layout::{account_id_to_shard_id, ShardLayout};
 use near_primitives::sharding::{ChunkHash, ShardChunkHeader};
-use near_primitives::stateless_validation::chunk_endorsement::{
-    ChunkEndorsementV1, ChunkEndorsementV2,
+use near_primitives::stateless_validation::chunk_endorsement::ChunkEndorsement;
+use near_primitives::stateless_validation::contract_distribution::{
+    ChunkContractAccesses, ContractCodeRequest,
 };
-use near_primitives::stateless_validation::contract_distribution::ChunkContractAccesses;
-use near_primitives::stateless_validation::partial_witness::PartialEncodedStateWitness;
 use near_primitives::stateless_validation::validator_assignment::ChunkValidatorAssignments;
 use near_primitives::stateless_validation::ChunkProductionKey;
 use near_primitives::types::validator_stake::ValidatorStake;
@@ -222,12 +221,6 @@ pub trait EpochManagerAdapter: Send + Sync {
         shard_id: ShardId,
     ) -> Result<Vec<AccountId>, EpochError>;
 
-    fn get_random_chunk_producer_for_shard(
-        &self,
-        epoch_id: &EpochId,
-        shard_id: ShardId,
-    ) -> Result<AccountId, EpochError>;
-
     /// Returns all validators for a given epoch.
     fn get_epoch_all_validators(
         &self,
@@ -241,13 +234,11 @@ pub trait EpochManagerAdapter: Send + Sync {
         height: BlockHeight,
     ) -> Result<AccountId, EpochError>;
 
-    /// Chunk producer for given height for given shard. Return EpochError if outside of known boundaries.
-    fn get_chunk_producer(
+    /// Chunk producer info for given height for given shard. Return EpochError if outside of known boundaries.
+    fn get_chunk_producer_info(
         &self,
-        epoch_id: &EpochId,
-        height: BlockHeight,
-        shard_id: ShardId,
-    ) -> Result<AccountId, EpochError>;
+        key: &ChunkProductionKey,
+    ) -> Result<ValidatorStake, EpochError>;
 
     /// Gets the chunk validators for a given height and shard.
     fn get_chunk_validator_assignments(
@@ -310,49 +301,6 @@ pub trait EpochManagerAdapter: Send + Sync {
     }
 
     // TODO #3488 this likely to be updated
-    /// Data that is necessary for prove Epochs in Epoch Sync.
-    fn get_epoch_sync_data(
-        &self,
-        prev_epoch_last_block_hash: &CryptoHash,
-        epoch_id: &EpochId,
-        next_epoch_id: &EpochId,
-    ) -> Result<
-        (
-            Arc<BlockInfo>,
-            Arc<BlockInfo>,
-            Arc<BlockInfo>,
-            Arc<EpochInfo>,
-            Arc<EpochInfo>,
-            Arc<EpochInfo>,
-        ),
-        EpochError,
-    >;
-
-    // TODO #3488 this likely to be updated
-    /// Hash that is necessary for prove Epochs in Epoch Sync.
-    fn get_epoch_sync_data_hash(
-        &self,
-        prev_epoch_last_block_hash: &CryptoHash,
-        epoch_id: &EpochId,
-        next_epoch_id: &EpochId,
-    ) -> Result<CryptoHash, EpochError> {
-        let (
-            prev_epoch_first_block_info,
-            prev_epoch_prev_last_block_info,
-            prev_epoch_last_block_info,
-            prev_epoch_info,
-            cur_epoch_info,
-            next_epoch_info,
-        ) = self.get_epoch_sync_data(prev_epoch_last_block_hash, epoch_id, next_epoch_id)?;
-        Ok(CryptoHash::hash_borsh(&(
-            prev_epoch_first_block_info,
-            prev_epoch_prev_last_block_info,
-            prev_epoch_last_block_info,
-            prev_epoch_info,
-            cur_epoch_info,
-            next_epoch_info,
-        )))
-    }
 
     fn is_chunk_producer_for_epoch(
         &self,
@@ -443,59 +391,19 @@ pub trait EpochManagerAdapter: Send + Sync {
         shard_id: ShardId,
     ) -> Result<bool, Error>;
 
-    /// Verify aggregated bls signature
-    fn verify_approval(
-        &self,
-        prev_block_hash: &CryptoHash,
-        prev_block_height: BlockHeight,
-        block_height: BlockHeight,
-        approvals: &[Option<Box<Signature>>],
-    ) -> Result<bool, Error>;
-
-    /// Verify aggregated bls signature given block approvers info
-    fn verify_approval_with_approvers_info(
-        &self,
-        prev_block_hash: &CryptoHash,
-        prev_block_height: BlockHeight,
-        block_height: BlockHeight,
-        approvals: &[Option<Box<Signature>>],
-        info: Vec<(ApprovalStake, bool)>,
-    ) -> Result<bool, Error>;
-
-    /// Verify approvals and check threshold, but ignore next epoch approvals and slashing
-    fn verify_approvals_and_threshold_orphan(
-        &self,
-        epoch_id: &EpochId,
-        can_approved_block_be_produced: &dyn Fn(
-            &[Option<Box<Signature>>],
-            // (stake this in epoch, stake in next epoch, is_slashed)
-            &[(Balance, Balance, bool)],
-        ) -> bool,
-        prev_block_hash: &CryptoHash,
-        prev_block_height: BlockHeight,
-        block_height: BlockHeight,
-        approvals: &[Option<Box<Signature>>],
-    ) -> Result<(), Error>;
-
-    fn verify_chunk_endorsement(
-        &self,
-        chunk_header: &ShardChunkHeader,
-        endorsement: &ChunkEndorsementV1,
-    ) -> Result<bool, Error>;
-
     fn verify_chunk_endorsement_signature(
         &self,
-        endorsement: &ChunkEndorsementV2,
-    ) -> Result<bool, Error>;
-
-    fn verify_partial_witness_signature(
-        &self,
-        partial_witness: &PartialEncodedStateWitness,
+        endorsement: &ChunkEndorsement,
     ) -> Result<bool, Error>;
 
     fn verify_witness_contract_accesses_signature(
         &self,
         accesses: &ChunkContractAccesses,
+    ) -> Result<bool, Error>;
+
+    fn verify_witness_contract_code_request_signature(
+        &self,
+        request: &ContractCodeRequest,
     ) -> Result<bool, Error>;
 
     fn cares_about_shard_in_epoch(
@@ -592,7 +500,7 @@ impl EpochManagerAdapter for EpochManagerHandle {
         let shard_layout = epoch_manager.get_shard_layout(epoch_id)?;
         let shard_id = account_id_to_shard_id(account_id, &shard_layout);
         let shard_uid = ShardUId::from_shard_id_and_layout(shard_id, &shard_layout);
-        let shard_index = shard_layout.get_shard_index(shard_id);
+        let shard_index = shard_layout.get_shard_index(shard_id)?;
         Ok(ShardUIdAndIndex { shard_uid, shard_index })
     }
 
@@ -613,7 +521,7 @@ impl EpochManagerAdapter for EpochManagerHandle {
     ) -> Result<ShardIndex, EpochError> {
         let epoch_manager = self.read();
         let shard_layout = epoch_manager.get_shard_layout(epoch_id)?;
-        Ok(shard_layout.get_shard_index(shard_id))
+        Ok(shard_layout.get_shard_index(shard_id)?)
     }
 
     fn get_block_info(&self, hash: &CryptoHash) -> Result<Arc<BlockInfo>, EpochError> {
@@ -623,7 +531,8 @@ impl EpochManagerAdapter for EpochManagerHandle {
 
     fn get_epoch_config(&self, epoch_id: &EpochId) -> Result<EpochConfig, EpochError> {
         let epoch_manager = self.read();
-        epoch_manager.get_epoch_config(epoch_id)
+        let protocol_version = self.get_epoch_info(epoch_id)?.protocol_version();
+        Ok(epoch_manager.get_epoch_config(protocol_version))
     }
 
     fn get_epoch_info(&self, epoch_id: &EpochId) -> Result<Arc<EpochInfo>, EpochError> {
@@ -638,7 +547,8 @@ impl EpochManagerAdapter for EpochManagerHandle {
 
     fn get_shard_config(&self, epoch_id: &EpochId) -> Result<ShardConfig, EpochError> {
         let epoch_manager = self.read();
-        let epoch_config = epoch_manager.get_epoch_config(epoch_id)?;
+        let protocol_version = self.get_epoch_info(epoch_id)?.protocol_version();
+        let epoch_config = epoch_manager.get_epoch_config(protocol_version);
         Ok(ShardConfig::new(epoch_config))
     }
 
@@ -688,31 +598,25 @@ impl EpochManagerAdapter for EpochManagerHandle {
         shard_ids: Vec<ShardId>,
     ) -> Result<Vec<(ShardId, ShardIndex)>, Error> {
         let shard_layout = self.get_shard_layout_from_prev_block(prev_hash)?;
-        if self.is_next_block_epoch_start(prev_hash)? {
-            let prev_shard_layout = self.get_shard_layout(&self.get_epoch_id(prev_hash)?)?;
-            if prev_shard_layout != shard_layout {
-                return Ok(shard_ids
-                    .into_iter()
-                    .map(|shard_id| {
-                        shard_layout.get_parent_shard_id(shard_id).map(|parent_shard_id|{
-                            assert!(prev_shard_layout.shard_ids().any(|i| i == parent_shard_id),
-                                    "invalid shard layout.  parent_shard_id: {}\nshard_layout: {:?}\nprev_shard_layout: {:?}",
-                                    parent_shard_id,
-                                    shard_layout,
-                                    parent_shard_id
-                            );
-                            let parent_shard_index = prev_shard_layout.get_shard_index(parent_shard_id);
-                            (parent_shard_id, parent_shard_index)
-                        })
-                    })
-                    .collect::<Result<_, ShardLayoutError>>()?);
-            }
-        }
+        let prev_shard_layout = self.get_shard_layout(&self.get_epoch_id(prev_hash)?)?;
+        let is_resharding_boundary =
+            self.is_next_block_epoch_start(prev_hash)? && prev_shard_layout != shard_layout;
 
-        Ok(shard_ids
-            .iter()
-            .map(|&shard_id| (shard_id, shard_layout.get_shard_index(shard_id)))
-            .collect())
+        let mut result = vec![];
+        if is_resharding_boundary {
+            for shard_id in shard_ids {
+                let parent_shard_id = shard_layout.get_parent_shard_id(shard_id)?;
+                let parent_shard_index = prev_shard_layout.get_shard_index(parent_shard_id)?;
+                result.push((parent_shard_id, parent_shard_index));
+            }
+            Ok(result)
+        } else {
+            for shard_id in shard_ids {
+                let shard_index = shard_layout.get_shard_index(shard_id)?;
+                result.push((shard_id, shard_index));
+            }
+            Ok(result)
+        }
     }
 
     fn get_prev_shard_id(
@@ -721,21 +625,18 @@ impl EpochManagerAdapter for EpochManagerHandle {
         shard_id: ShardId,
     ) -> Result<(ShardId, ShardIndex), Error> {
         let shard_layout = self.get_shard_layout_from_prev_block(prev_hash)?;
-        if self.is_next_block_epoch_start(prev_hash)? {
-            let prev_shard_layout = self.get_shard_layout(&self.get_epoch_id(prev_hash)?)?;
-            if prev_shard_layout != shard_layout {
-                let parent_shard_id = shard_layout.get_parent_shard_id(shard_id)?;
-                assert!(prev_shard_layout.shard_ids().any(|i| i == parent_shard_id),
-                                    "invalid shard layout.  parent_shard_id: {}\nshard_layout: {:?}\nprev_shard_layout: {:?}",
-                                    parent_shard_id,
-                                    shard_layout,
-                                    parent_shard_id
-                            );
-                let parent_shard_index = prev_shard_layout.get_shard_index(parent_shard_id);
-                return Ok((parent_shard_id, parent_shard_index));
-            }
+        let prev_shard_layout = self.get_shard_layout(&self.get_epoch_id(prev_hash)?)?;
+        let is_resharding_boundary =
+            self.is_next_block_epoch_start(prev_hash)? && prev_shard_layout != shard_layout;
+
+        if is_resharding_boundary {
+            let parent_shard_id = shard_layout.get_parent_shard_id(shard_id)?;
+            let parent_shard_index = prev_shard_layout.get_shard_index(parent_shard_id)?;
+            Ok((parent_shard_id, parent_shard_index))
+        } else {
+            let shard_index = shard_layout.get_shard_index(shard_id)?;
+            Ok((shard_id, shard_index))
         }
-        Ok((shard_id, shard_layout.get_shard_index(shard_id)))
     }
 
     fn get_shard_layout_from_prev_block(
@@ -819,15 +720,6 @@ impl EpochManagerAdapter for EpochManagerHandle {
         epoch_manager.get_epoch_chunk_producers_for_shard(epoch_id, shard_id)
     }
 
-    fn get_random_chunk_producer_for_shard(
-        &self,
-        epoch_id: &EpochId,
-        shard_id: ShardId,
-    ) -> Result<AccountId, EpochError> {
-        let epoch_manager = self.read();
-        epoch_manager.get_random_chunk_producer_for_shard(epoch_id, shard_id)
-    }
-
     fn get_block_producer(
         &self,
         epoch_id: &EpochId,
@@ -837,14 +729,11 @@ impl EpochManagerAdapter for EpochManagerHandle {
         Ok(epoch_manager.get_block_producer_info(epoch_id, height)?.take_account_id())
     }
 
-    fn get_chunk_producer(
+    fn get_chunk_producer_info(
         &self,
-        epoch_id: &EpochId,
-        height: BlockHeight,
-        shard_id: ShardId,
-    ) -> Result<AccountId, EpochError> {
-        let epoch_manager = self.read();
-        Ok(epoch_manager.get_chunk_producer_info(epoch_id, height, shard_id)?.take_account_id())
+        key: &ChunkProductionKey,
+    ) -> Result<ValidatorStake, EpochError> {
+        self.read().get_chunk_producer_info(key)
     }
 
     fn get_chunk_validator_assignments(
@@ -911,36 +800,6 @@ impl EpochManagerAdapter for EpochManagerHandle {
     ) -> Result<ProtocolVersion, EpochError> {
         let epoch_manager = self.read();
         Ok(epoch_manager.get_epoch_info(epoch_id)?.protocol_version())
-    }
-
-    // TODO #3488 this likely to be updated
-    fn get_epoch_sync_data(
-        &self,
-        prev_epoch_last_block_hash: &CryptoHash,
-        epoch_id: &EpochId,
-        next_epoch_id: &EpochId,
-    ) -> Result<
-        (
-            Arc<BlockInfo>,
-            Arc<BlockInfo>,
-            Arc<BlockInfo>,
-            Arc<EpochInfo>,
-            Arc<EpochInfo>,
-            Arc<EpochInfo>,
-        ),
-        EpochError,
-    > {
-        let epoch_manager = self.read();
-        let last_block_info = epoch_manager.get_block_info(prev_epoch_last_block_hash)?;
-        let prev_epoch_id = *last_block_info.epoch_id();
-        Ok((
-            epoch_manager.get_block_info(last_block_info.epoch_first_block())?,
-            epoch_manager.get_block_info(last_block_info.prev_hash())?,
-            last_block_info,
-            epoch_manager.get_epoch_info(&prev_epoch_id)?,
-            epoch_manager.get_epoch_info(epoch_id)?,
-            epoch_manager.get_epoch_info(next_epoch_id)?,
-        ))
     }
 
     fn init_after_epoch_sync(
@@ -1064,8 +923,9 @@ impl EpochManagerAdapter for EpochManagerHandle {
         shard_id: ShardId,
     ) -> Result<bool, Error> {
         let epoch_manager = self.read();
-        let chunk_producer =
-            epoch_manager.get_chunk_producer_info(epoch_id, height_created, shard_id)?;
+        let key =
+            ChunkProductionKey { epoch_id: *epoch_id, height_created: height_created, shard_id };
+        let chunk_producer = epoch_manager.get_chunk_producer_info(&key)?;
         let block_info = epoch_manager.get_block_info(last_known_hash)?;
         if block_info.slashed().contains_key(chunk_producer.account_id()) {
             return Ok(false);
@@ -1073,132 +933,9 @@ impl EpochManagerAdapter for EpochManagerHandle {
         Ok(signature.verify(chunk_hash.as_ref(), chunk_producer.public_key()))
     }
 
-    fn verify_approval(
-        &self,
-        prev_block_hash: &CryptoHash,
-        prev_block_height: BlockHeight,
-        block_height: BlockHeight,
-        approvals: &[Option<Box<Signature>>],
-    ) -> Result<bool, Error> {
-        let info = {
-            let epoch_manager = self.read();
-            epoch_manager.get_all_block_approvers_ordered(prev_block_hash)?
-        };
-        self.verify_approval_with_approvers_info(
-            prev_block_hash,
-            prev_block_height,
-            block_height,
-            approvals,
-            info,
-        )
-    }
-
-    fn verify_approval_with_approvers_info(
-        &self,
-        prev_block_hash: &CryptoHash,
-        prev_block_height: BlockHeight,
-        block_height: BlockHeight,
-        approvals: &[Option<Box<Signature>>],
-        info: Vec<(ApprovalStake, bool)>,
-    ) -> Result<bool, Error> {
-        if approvals.len() > info.len() {
-            return Ok(false);
-        }
-
-        let message_to_sign = Approval::get_data_for_sig(
-            &if prev_block_height + 1 == block_height {
-                ApprovalInner::Endorsement(*prev_block_hash)
-            } else {
-                ApprovalInner::Skip(prev_block_height)
-            },
-            block_height,
-        );
-
-        for ((validator, is_slashed), may_be_signature) in info.into_iter().zip(approvals.iter()) {
-            if let Some(signature) = may_be_signature {
-                if is_slashed || !signature.verify(message_to_sign.as_ref(), &validator.public_key)
-                {
-                    return Ok(false);
-                }
-            }
-        }
-        Ok(true)
-    }
-
-    fn verify_approvals_and_threshold_orphan(
-        &self,
-        epoch_id: &EpochId,
-        can_approved_block_be_produced: &dyn Fn(
-            &[Option<Box<Signature>>],
-            &[(Balance, Balance, bool)],
-        ) -> bool,
-        prev_block_hash: &CryptoHash,
-        prev_block_height: BlockHeight,
-        block_height: BlockHeight,
-        approvals: &[Option<Box<Signature>>],
-    ) -> Result<(), Error> {
-        let info = {
-            let epoch_manager = self.read();
-            epoch_manager.get_heuristic_block_approvers_ordered(epoch_id)?
-        };
-
-        let message_to_sign = Approval::get_data_for_sig(
-            &if prev_block_height + 1 == block_height {
-                ApprovalInner::Endorsement(*prev_block_hash)
-            } else {
-                ApprovalInner::Skip(prev_block_height)
-            },
-            block_height,
-        );
-
-        for (validator, may_be_signature) in info.iter().zip(approvals.iter()) {
-            if let Some(signature) = may_be_signature {
-                if !signature.verify(message_to_sign.as_ref(), &validator.public_key) {
-                    return Err(Error::InvalidApprovals);
-                }
-            }
-        }
-        let stakes = info
-            .iter()
-            .map(|stake| (stake.stake_this_epoch, stake.stake_next_epoch, false))
-            .collect::<Vec<_>>();
-        if !can_approved_block_be_produced(approvals, &stakes) {
-            Err(Error::NotEnoughApprovals)
-        } else {
-            Ok(())
-        }
-    }
-
-    // TODO(ChunkEndorsementV2): Deprecate this after shifting to ChunkEndorsementV2
-    fn verify_chunk_endorsement(
-        &self,
-        chunk_header: &ShardChunkHeader,
-        endorsement: &ChunkEndorsementV1,
-    ) -> Result<bool, Error> {
-        if &chunk_header.chunk_hash() != endorsement.chunk_hash() {
-            return Err(Error::InvalidChunkEndorsement);
-        }
-        let epoch_manager = self.read();
-        let epoch_id =
-            epoch_manager.get_epoch_id_from_prev_block(chunk_header.prev_block_hash())?;
-        // Note that we are using the chunk_header.height_created param here to determine the chunk validators
-        // This only works when height created for a chunk is the same as the height_included during block production
-        let chunk_validator_assignments = epoch_manager.get_chunk_validator_assignments(
-            &epoch_id,
-            chunk_header.shard_id(),
-            chunk_header.height_created(),
-        )?;
-        if !chunk_validator_assignments.contains(&endorsement.account_id) {
-            return Err(Error::NotAValidator(format!("verify chunk endorsement")));
-        }
-        let validator =
-            epoch_manager.get_validator_by_account_id(&epoch_id, &endorsement.account_id)?;
-        Ok(endorsement.verify(validator.public_key()))
-    }
-
     fn verify_chunk_endorsement_signature(
         &self,
-        endorsement: &ChunkEndorsementV2,
+        endorsement: &ChunkEndorsement,
     ) -> Result<bool, Error> {
         let epoch_manager = self.read();
         let epoch_id = endorsement.chunk_production_key().epoch_id;
@@ -1207,29 +944,24 @@ impl EpochManagerAdapter for EpochManagerHandle {
         Ok(endorsement.verify(validator.public_key()))
     }
 
-    fn verify_partial_witness_signature(
-        &self,
-        partial_witness: &PartialEncodedStateWitness,
-    ) -> Result<bool, Error> {
-        // Get the chunk producer from the epoch_id, height_created and shard_id, verify if signature is correct
-        let epoch_manager = self.read();
-        let ChunkProductionKey { shard_id, epoch_id, height_created } =
-            partial_witness.chunk_production_key();
-        let chunk_producer =
-            epoch_manager.get_chunk_producer_info(&epoch_id, height_created, shard_id)?;
-        Ok(partial_witness.verify(chunk_producer.public_key()))
-    }
-
     fn verify_witness_contract_accesses_signature(
         &self,
         accesses: &ChunkContractAccesses,
     ) -> Result<bool, Error> {
-        let epoch_manager = self.read();
-        let ChunkProductionKey { shard_id, epoch_id, height_created } =
-            accesses.chunk_production_key();
         let chunk_producer =
-            epoch_manager.get_chunk_producer_info(epoch_id, *height_created, *shard_id)?;
+            self.read().get_chunk_producer_info(accesses.chunk_production_key())?;
         Ok(accesses.verify_signature(chunk_producer.public_key()))
+    }
+
+    fn verify_witness_contract_code_request_signature(
+        &self,
+        request: &ContractCodeRequest,
+    ) -> Result<bool, Error> {
+        let validator = self.read().get_validator_by_account_id(
+            &request.chunk_production_key().epoch_id,
+            request.requester(),
+        )?;
+        Ok(request.verify_signature(validator.public_key()))
     }
 
     fn cares_about_shard_from_prev_block(

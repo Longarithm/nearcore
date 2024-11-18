@@ -13,6 +13,7 @@ use near_primitives::epoch_manager::{AllEpochConfig, AllEpochConfigTestOverrides
 use near_primitives::hash::CryptoHash;
 use near_primitives::serialize::to_base64;
 use near_primitives::shard_layout::account_id_to_shard_uid;
+use near_primitives::stateless_validation::ChunkProductionKey;
 use near_primitives::transaction::{
     Action, DeployContractAction, FunctionCallAction, SignedTransaction,
 };
@@ -233,7 +234,7 @@ impl TestReshardingEnv {
         let shard_layout = env.clients[0].epoch_manager.get_shard_layout(&epoch_id).unwrap();
         let mut chunk_producer_to_shard_id: HashMap<AccountId, Vec<ShardId>> = HashMap::new();
         for shard_index in 0..block.chunks().len() {
-            let shard_id = shard_layout.get_shard_id(shard_index);
+            let shard_id = shard_layout.get_shard_id(shard_index).unwrap();
             let validator_id = get_chunk_producer(env, &block, shard_id);
             chunk_producer_to_shard_id.entry(validator_id).or_default().push(shard_id);
         }
@@ -369,7 +370,7 @@ impl TestReshardingEnv {
                 Some((new_block_hash, target_shard_id)) => {
                     let new_block = client.chain.get_block(&new_block_hash).unwrap().clone();
                     let chunks = new_block.chunks();
-                    let target_shard_index = shard_layout.get_shard_index(target_shard_id);
+                    let target_shard_index = shard_layout.get_shard_index(target_shard_id).unwrap();
                     // check that the target chunk in the new block is new
                     assert_eq!(
                         chunks.get(target_shard_index).unwrap().height_included(),
@@ -405,7 +406,7 @@ impl TestReshardingEnv {
                 };
 
                 for target_shard_id in target_shard_ids {
-                    let target_shard_index = shard_layout.get_shard_index(target_shard_id);
+                    let target_shard_index = shard_layout.get_shard_index(target_shard_id).unwrap();
                     let chunk = chunks.get(target_shard_index).unwrap();
                     assert_ne!(chunk.height_included(), last_block.header().height());
                 }
@@ -506,7 +507,10 @@ fn get_chunk_producer(env: &TestEnv, block: &Block, shard_id: ShardId) -> Accoun
     let parent_hash = block.header().prev_hash();
     let epoch_id = epoch_manager.get_epoch_id_from_prev_block(parent_hash).unwrap();
     let height = block.header().height() + 1;
-    let chunk_producer = epoch_manager.get_chunk_producer(&epoch_id, height, shard_id).unwrap();
+    let chunk_producer = epoch_manager
+        .get_chunk_producer_info(&ChunkProductionKey { epoch_id, height_created: height, shard_id })
+        .unwrap()
+        .take_account_id();
     chunk_producer
 }
 
@@ -520,7 +524,7 @@ fn check_account(env: &TestEnv, account_id: &AccountId, block: &Block) {
         env.clients[0].epoch_manager.get_shard_layout_from_prev_block(prev_hash).unwrap();
     let shard_uid = account_id_to_shard_uid(account_id, &shard_layout);
     let shard_id = shard_uid.shard_id();
-    let shard_index = shard_layout.get_shard_index(shard_id);
+    let shard_index = shard_layout.get_shard_index(shard_id).unwrap();
     for (i, me) in env.validators.iter().enumerate() {
         let client = &env.clients[i];
         let care_about_shard =
@@ -889,16 +893,16 @@ fn test_latest_protocol_missing_chunks(p_missing: f64, rng_seed: u64) {
 // latest protocol
 
 #[test]
-fn test_latest_protocol_missing_chunks_low_missing_prob() {
+fn slow_test_latest_protocol_missing_chunks_low_missing_prob() {
     test_latest_protocol_missing_chunks(0.1, 25);
 }
 
 #[test]
-fn test_latest_protocol_missing_chunks_mid_missing_prob() {
+fn slow_test_latest_protocol_missing_chunks_mid_missing_prob() {
     test_latest_protocol_missing_chunks(0.5, 26);
 }
 
 #[test]
-fn test_latest_protocol_missing_chunks_high_missing_prob() {
+fn slow_test_latest_protocol_missing_chunks_high_missing_prob() {
     test_latest_protocol_missing_chunks(0.9, 27);
 }

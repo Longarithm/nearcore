@@ -1,10 +1,11 @@
+use std::io;
 use std::sync::Arc;
 
-use super::event_type::ReshardingEventType;
+use super::event_type::{ReshardingEventType, ReshardingSplitShardParams};
 use super::types::ReshardingSender;
 use crate::flat_storage_resharder::{FlatStorageResharder, FlatStorageResharderController};
 use crate::types::RuntimeAdapter;
-use near_async::messaging::IntoSender;
+use crate::ChainStoreUpdate;
 use near_chain_configs::{MutableConfigValue, ReshardingConfig, ReshardingHandle};
 use near_chain_primitives::Error;
 use near_epoch_manager::EpochManagerAdapter;
@@ -13,11 +14,11 @@ use near_primitives::challenge::PartialState;
 use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::{get_block_shard_uid, ShardLayout};
 use near_primitives::types::chunk_extra::ChunkExtra;
-use near_store::adapter::StoreUpdateAdapter;
-use near_store::trie::mem::resharding::RetainMode;
-use near_store::{DBCol, PartialStorage, ShardTries, ShardUId, Store};
-
-use crate::ChainStoreUpdate;
+use near_store::adapter::{StoreAdapter, StoreUpdateAdapter};
+use near_store::trie::mem::mem_trie_update::TrackingMode;
+use near_store::trie::ops::resharding::RetainMode;
+use near_store::trie::TrieRecorder;
+use near_store::{DBCol, ShardTries, ShardUId, Store};
 
 pub struct ReshardingManager {
     store: Store,
@@ -42,20 +43,17 @@ impl ReshardingManager {
         let resharding_handle = ReshardingHandle::new();
         let flat_storage_resharder = FlatStorageResharder::new(
             runtime_adapter,
-            resharding_sender.into_sender(),
+            resharding_sender,
             FlatStorageResharderController::from_resharding_handle(resharding_handle.clone()),
             resharding_config.clone(),
         );
         Self { store, epoch_manager, resharding_config, flat_storage_resharder, resharding_handle }
     }
 
-    /// If shard layout changes after the given block, creates temporary
-    /// memtries for new shards to be able to process them in the next epoch.
-    /// Note this doesn't complete resharding, proper memtries are to be
-    /// created later.
-    pub fn process_memtrie_resharding_storage_update(
+    /// Trigger resharding if shard layout changes after the given block.
+    pub fn start_resharding(
         &mut self,
-        mut chain_store_update: ChainStoreUpdate,
+        chain_store_update: ChainStoreUpdate,
         block: &Block,
         shard_uid: ShardUId,
         tries: ShardTries,
@@ -63,7 +61,7 @@ impl ReshardingManager {
         let block_hash = block.hash();
         let block_height = block.header().height();
         let _span = tracing::debug_span!(
-            target: "resharding", "process_memtrie_resharding_storage_update", 
+            target: "resharding", "start_resharding",
             ?block_hash, block_height, ?shard_uid)
         .entered();
 
@@ -84,34 +82,102 @@ impl ReshardingManager {
             tracing::debug!(target: "resharding", ?next_shard_layout, "next shard layout is not v2, skipping");
             return Ok(());
         }
+
         let resharding_event_type =
-            ReshardingEventType::from_shard_layout(&next_shard_layout, *block_hash, *prev_hash)?;
-        let Some(ReshardingEventType::SplitShard(split_shard_event)) = resharding_event_type else {
-            tracing::debug!(target: "resharding", ?resharding_event_type, "resharding event type is not split shard, skipping");
-            return Ok(());
+            ReshardingEventType::from_shard_layout(&next_shard_layout, *block_hash)?;
+        match resharding_event_type {
+            Some(ReshardingEventType::SplitShard(split_shard_event)) => {
+                self.split_shard(
+                    chain_store_update,
+                    block,
+                    shard_uid,
+                    tries,
+                    split_shard_event,
+                    next_shard_layout,
+                )?;
+            }
+            None => {
+                tracing::warn!(target: "resharding", ?resharding_event_type, "unsupported resharding event type, skipping");
+            }
         };
+        Ok(())
+    }
+
+    fn split_shard(
+        &mut self,
+        chain_store_update: ChainStoreUpdate,
+        block: &Block,
+        shard_uid: ShardUId,
+        tries: ShardTries,
+        split_shard_event: ReshardingSplitShardParams,
+        next_shard_layout: ShardLayout,
+    ) -> Result<(), Error> {
         if split_shard_event.parent_shard != shard_uid {
             let parent_shard = split_shard_event.parent_shard;
-            tracing::debug!(target: "resharding", ?parent_shard, "shard uid does not match event parent shard, skipping");
+            tracing::debug!(target: "resharding", ?parent_shard, "ShardUId does not match event parent shard, skipping");
             return Ok(());
         }
+
+        // Reshard the State column by setting ShardUId mapping from children to parent.
+        self.set_state_shard_uid_mapping(&split_shard_event)?;
+
+        // Create temporary children memtries by freezing parent memtrie and referencing it.
+        self.process_memtrie_resharding_storage_update(
+            chain_store_update,
+            block,
+            shard_uid,
+            tries,
+            split_shard_event.clone(),
+        )?;
+
+        // Trigger resharding of flat storage.
+        self.flat_storage_resharder.start_resharding(
+            ReshardingEventType::SplitShard(split_shard_event),
+            &next_shard_layout,
+        )?;
+
+        Ok(())
+    }
+
+    /// Store in the database the mapping of ShardUId from children to the parent shard,
+    /// so that subsequent accesses to the State will use the parent shard's UId as a prefix for the database key.
+    fn set_state_shard_uid_mapping(
+        &mut self,
+        split_shard_event: &ReshardingSplitShardParams,
+    ) -> io::Result<()> {
+        let mut store_update = self.store.trie_store().store_update();
+        let parent_shard_uid = split_shard_event.parent_shard;
+        // TODO(reshardingV3) No need to set the mapping for children shards that we won't track just after resharding?
+        for child_shard_uid in split_shard_event.children_shards() {
+            store_update.set_shard_uid_mapping(child_shard_uid, parent_shard_uid);
+        }
+        store_update.commit()
+    }
+
+    /// Creates temporary memtries for new shards to be able to process them in the next epoch.
+    /// Note this doesn't complete memtries resharding, proper memtries are to be created later.
+    fn process_memtrie_resharding_storage_update(
+        &mut self,
+        mut chain_store_update: ChainStoreUpdate,
+        block: &Block,
+        parent_shard_uid: ShardUId,
+        tries: ShardTries,
+        split_shard_event: ReshardingSplitShardParams,
+    ) -> Result<(), Error> {
+        let block_hash = block.hash();
+        let block_height = block.header().height();
+        let _span = tracing::debug_span!(
+            target: "resharding", "process_memtrie_resharding_storage_update",
+            ?block_hash, block_height, ?parent_shard_uid)
+        .entered();
 
         // TODO(resharding): what if node doesn't have memtrie? just pause
         // processing?
         // TODO(resharding): fork handling. if epoch is finalized on different
         // blocks, the second finalization will crash.
-        tries.freeze_mem_tries(
-            shard_uid,
-            vec![split_shard_event.left_child_shard, split_shard_event.right_child_shard],
-        )?;
+        tries.freeze_mem_tries(parent_shard_uid, split_shard_event.children_shards())?;
 
-        // Trigger resharding of flat storage.
-        self.flat_storage_resharder.start_resharding(
-            ReshardingEventType::SplitShard(split_shard_event.clone()),
-            &next_shard_layout,
-        )?;
-
-        let chunk_extra = self.get_chunk_extra(block_hash, &shard_uid)?;
+        let chunk_extra = self.get_chunk_extra(block_hash, &parent_shard_uid)?;
         let boundary_account = split_shard_event.boundary_account;
 
         let mut trie_store_update = self.store.store_update();
@@ -126,7 +192,7 @@ impl ReshardingManager {
                     "Memtrie not loaded. Cannot process memtrie resharding storage
                      update for block {:?}, shard {:?}",
                     block_hash,
-                    shard_uid
+                    parent_shard_uid,
                 );
                 return Err(Error::Other("Memtrie not loaded".to_string()));
             };
@@ -136,16 +202,15 @@ impl ReshardingManager {
                 "Creating child memtrie by retaining nodes in parent memtrie..."
             );
             let mut mem_tries = mem_tries.write().unwrap();
-            let mem_trie_update = mem_tries.update(*chunk_extra.state_root(), true)?;
+            let mut trie_recorder = TrieRecorder::new();
+            let mode = TrackingMode::RefcountsAndAccesses(&mut trie_recorder);
+            let mem_trie_update = mem_tries.update(*chunk_extra.state_root(), mode)?;
 
-            let (trie_changes, _) =
-                mem_trie_update.retain_split_shard(&boundary_account, retain_mode);
-            // TODO(#12019): proof generation
-            let partial_state = PartialState::default();
-            let partial_state_len = match &partial_state {
+            let trie_changes = mem_trie_update.retain_split_shard(&boundary_account, retain_mode);
+            let partial_storage = trie_recorder.recorded_storage();
+            let partial_state_len = match &partial_storage.nodes {
                 PartialState::TrieValues(values) => values.len(),
             };
-            let partial_storage = PartialStorage { nodes: partial_state };
             let mem_changes = trie_changes.mem_trie_changes.as_ref().unwrap();
             let new_state_root = mem_tries.apply_memtrie_changes(block_height, mem_changes);
             // TODO(resharding): set all fields of `ChunkExtra`. Consider stronger
@@ -160,10 +225,7 @@ impl ReshardingManager {
                 new_shard_uid.shard_id(),
                 Some(partial_storage),
                 CryptoHash::default(),
-                // No contract code is accessed during resharding.
-                // TODO(#11099): Confirm if sending no contracts is ok here.
-                Default::default(),
-                // No contract code is deployed during resharding.
+                // No contract code is accessed or deployed during resharding.
                 // TODO(#11099): Confirm if sending no contracts is ok here.
                 Default::default(),
             );

@@ -106,10 +106,7 @@ pub(crate) fn execute_function_call(
     drop(mode_guard);
     near_vm_runner::report_metrics(
         &apply_state.shard_id.to_string(),
-        &apply_state
-            .apply_reason
-            .as_ref()
-            .map_or_else(|| String::from("unknown"), |r| r.to_string()),
+        &apply_state.apply_reason.to_string(),
     );
 
     // There are many specific errors that the runtime can encounter.
@@ -185,17 +182,12 @@ pub(crate) fn action_function_call(
         .into());
     }
 
-    // When the contract code is excluded from the witness, the Trie read for the contract code
-    // is not recorded and the code-size does not contribute to the storage-proof limit.
-    // Instead we just record that the code with the given hash was called, so that we can identify
-    // which contract-code to distribute to the validators.
-    if ProtocolFeature::ExcludeContractCodeFromStateWitness
-        .enabled(apply_state.current_protocol_version)
-    {
-        state_update.contract_storage.record_call(code_hash);
-    } else {
-        state_update.trie.request_code_recording(account_id.clone());
-    }
+    state_update.record_contract_call(
+        account_id.clone(),
+        code_hash,
+        apply_state.apply_reason.clone(),
+        apply_state.current_protocol_version,
+    )?;
 
     #[cfg(feature = "test_features")]
     apply_recorded_storage_garbage(function_call, state_update);
@@ -651,7 +643,7 @@ pub(crate) fn action_deploy_contract(
     // Inform the `store::contract::Storage` about the new deploy (so that the `get` method can
     // return the contract before the contract is written out to the underlying storage as part of
     // the `TrieUpdate` commit.)
-    state_update.contract_storage.record_deploy(code);
+    state_update.record_contract_deploy(code);
     Ok(())
 }
 
@@ -1169,6 +1161,7 @@ mod tests {
     use crate::near_primitives::shard_layout::ShardUId;
     use near_primitives::account::FunctionCallPermission;
     use near_primitives::action::delegate::NonDelegateAction;
+    use near_primitives::apply::ApplyChunkReason;
     use near_primitives::bandwidth_scheduler::BlockBandwidthRequests;
     use near_primitives::congestion_info::BlockCongestionInfo;
     use near_primitives::errors::InvalidAccessKeyError;
@@ -1416,7 +1409,7 @@ mod tests {
 
     fn create_apply_state(block_height: BlockHeight) -> ApplyState {
         ApplyState {
-            apply_reason: None,
+            apply_reason: ApplyChunkReason::UpdateTrackedShard,
             block_height,
             prev_block_hash: CryptoHash::default(),
             block_hash: CryptoHash::default(),

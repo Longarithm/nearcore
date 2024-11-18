@@ -5,7 +5,7 @@
 //! from the source structure in the relevant `From<SourceStruct>` impl.
 use crate::account::{AccessKey, AccessKeyPermission, Account, FunctionCallPermission};
 use crate::action::delegate::{DelegateAction, SignedDelegateAction};
-use crate::bandwidth_scheduler::{BandwidthRequest, BandwidthRequests, BandwidthRequestsV1};
+use crate::bandwidth_scheduler::BandwidthRequests;
 use crate::block::{Block, BlockHeader, Tip};
 use crate::block_header::BlockHeaderInnerLite;
 use crate::challenge::{Challenge, ChallengesResult};
@@ -479,7 +479,7 @@ pub struct LabeledEdgeView {
     pub nonce: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Default)]
 pub struct EdgeCacheView {
     pub peer_labels: HashMap<PeerId, u32>,
     pub spanning_trees: HashMap<u32, Vec<LabeledEdgeView>>,
@@ -491,7 +491,7 @@ pub struct PeerDistancesView {
     pub min_nonce: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Default)]
 pub struct NetworkRoutesView {
     pub edge_cache: EdgeCacheView,
     pub local_edges: HashMap<PeerId, EdgeView>,
@@ -945,7 +945,7 @@ pub struct ChunkHeaderView {
     pub tx_root: CryptoHash,
     pub validator_proposals: Vec<ValidatorStakeView>,
     pub congestion_info: Option<CongestionInfoView>,
-    pub bandwidth_requests: Option<BandwidthRequestsView>,
+    pub bandwidth_requests: Option<BandwidthRequests>,
     pub signature: Signature,
 }
 
@@ -974,7 +974,7 @@ impl From<ShardChunkHeader> for ChunkHeaderView {
             tx_root: *inner.tx_root(),
             validator_proposals: inner.prev_validator_proposals().map(Into::into).collect(),
             congestion_info: inner.congestion_info().map(Into::into),
-            bandwidth_requests: inner.bandwidth_requests().map(Into::into),
+            bandwidth_requests: inner.bandwidth_requests().cloned(),
             signature,
         }
     }
@@ -1004,7 +1004,7 @@ impl From<ChunkHeaderView> for ShardChunkHeader {
                             .map(Into::into)
                             .collect(),
                         congestion_info: congestion_info.into(),
-                        bandwidth_requests: bandwidth_requests.into(),
+                        bandwidth_requests,
                     }),
                     height_included: view.height_included,
                     signature: view.signature,
@@ -2060,7 +2060,9 @@ pub struct CurrentEpochValidatorInfo {
     pub is_slashed: bool,
     #[serde(with = "dec_format")]
     pub stake: Balance,
-    pub shards: Vec<ShardId>,
+    /// Shards this validator is assigned to as chunk producer in the current epoch.
+    #[serde(rename = "shards")]
+    pub shards_produced: Vec<ShardId>,
     pub num_produced_blocks: NumBlocks,
     pub num_expected_blocks: NumBlocks,
     #[serde(default)]
@@ -2070,6 +2072,8 @@ pub struct CurrentEpochValidatorInfo {
     // The following two fields correspond to the shards in the shard array.
     #[serde(default)]
     pub num_produced_chunks_per_shard: Vec<NumBlocks>,
+    /// Number of chunks this validator was expected to produce in each shard.
+    /// Each entry in the array corresponds to the shard in the `shards_produced` array.
     #[serde(default)]
     pub num_expected_chunks_per_shard: Vec<NumBlocks>,
     #[serde(default, skip_serializing_if = "num_blocks_is_zero")]
@@ -2078,8 +2082,12 @@ pub struct CurrentEpochValidatorInfo {
     pub num_expected_endorsements: NumBlocks,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub num_produced_endorsements_per_shard: Vec<NumBlocks>,
+    /// Number of chunks this validator was expected to validate and endorse in each shard.
+    /// Each entry in the array corresponds to the shard in the `shards_endorsed` array.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub num_expected_endorsements_per_shard: Vec<NumBlocks>,
+    /// Shards this validator is assigned to as chunk validator in the current epoch.
+    pub shards_endorsed: Vec<ShardId>,
 }
 
 fn num_blocks_is_zero(n: &NumBlocks) -> bool {
@@ -2438,62 +2446,6 @@ impl CongestionInfoView {
         // misleading to call it congestion, as it is not a problem with too
         // much traffic.
         CongestionInfo::from(self.clone()).localized_congestion_level(&congestion_config)
-    }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub enum BandwidthRequestsView {
-    V1(BandwidthRequestsV1View),
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct BandwidthRequestsV1View {
-    pub requests: Vec<BandwidthRequestView>,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct BandwidthRequestView {
-    pub to_shard: u8,
-    // TODO(bandwidth_scheduler) - include requested values in the view.
-}
-
-impl From<&BandwidthRequests> for BandwidthRequestsView {
-    fn from(bandwidth_requests: &BandwidthRequests) -> BandwidthRequestsView {
-        match bandwidth_requests {
-            BandwidthRequests::V1(bandwidth_requests) => {
-                BandwidthRequestsView::V1(BandwidthRequestsV1View {
-                    requests: bandwidth_requests.requests.iter().map(Into::into).collect(),
-                })
-            }
-        }
-    }
-}
-
-impl From<&BandwidthRequest> for BandwidthRequestView {
-    fn from(request: &BandwidthRequest) -> BandwidthRequestView {
-        BandwidthRequestView { to_shard: request.to_shard }
-    }
-}
-
-impl From<BandwidthRequestsView> for BandwidthRequests {
-    fn from(bandwidth_requests: BandwidthRequestsView) -> BandwidthRequests {
-        match bandwidth_requests {
-            BandwidthRequestsView::V1(bandwidth_requests_view) => {
-                BandwidthRequests::V1(BandwidthRequestsV1 {
-                    requests: bandwidth_requests_view
-                        .requests
-                        .into_iter()
-                        .map(Into::into)
-                        .collect(),
-                })
-            }
-        }
-    }
-}
-
-impl From<BandwidthRequestView> for BandwidthRequest {
-    fn from(request_view: BandwidthRequestView) -> BandwidthRequest {
-        BandwidthRequest { to_shard: request_view.to_shard }
     }
 }
 

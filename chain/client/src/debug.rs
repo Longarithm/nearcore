@@ -19,8 +19,10 @@ use near_epoch_manager::EpochManagerAdapter;
 use near_o11y::log_assert;
 use near_performance_metrics_macros::perf;
 use near_primitives::congestion_info::CongestionControl;
+use near_primitives::errors::EpochError;
 use near_primitives::state_sync::get_num_state_parts;
 use near_primitives::stateless_validation::chunk_endorsement::ChunkEndorsement;
+use near_primitives::stateless_validation::ChunkProductionKey;
 use near_primitives::types::{
     AccountId, BlockHeight, NumShards, ShardId, ShardIndex, ValidatorInfoIdentifier,
 };
@@ -132,6 +134,8 @@ impl BlockProductionTracker {
         for shard_index in 0..num_shards {
             let shard_layout = epoch_manager.get_shard_layout(epoch_id)?;
             let shard_id = shard_layout.get_shard_id(shard_index);
+            let shard_id = shard_id.map_err(Into::<EpochError>::into)?;
+
             if let Some(chunk_hash) = new_chunks.get(&shard_id) {
                 let (chunk_producer, received_time) =
                     chunk_inclusion_tracker.get_chunk_producer_and_received_time(chunk_hash)?;
@@ -141,8 +145,13 @@ impl BlockProductionTracker {
                     chunk_included: true,
                 });
             } else {
-                let chunk_producer =
-                    epoch_manager.get_chunk_producer(epoch_id, block_height, shard_id)?;
+                let chunk_producer = epoch_manager
+                    .get_chunk_producer_info(&ChunkProductionKey {
+                        epoch_id: *epoch_id,
+                        height_created: block_height,
+                        shard_id,
+                    })?
+                    .take_account_id();
                 chunk_collection_info.push(ChunkCollection {
                     chunk_producer,
                     received_time: None,
@@ -243,6 +252,11 @@ impl ClientActorInner {
             .enumerate()
             .map(|(shard_index, chunk)| {
                 let shard_id = shard_layout.get_shard_id(shard_index);
+                let Ok(shard_id) = shard_id else {
+                    tracing::error!("Failed to get shard id for shard index {}", shard_index);
+                    return (0, 0);
+                };
+
                 let state_root_node = self.client.runtime_adapter.get_state_root_node(
                     shard_id,
                     block.hash(),
@@ -503,11 +517,12 @@ impl ClientActorInner {
                                 chunk_producer: self
                                     .client
                                     .epoch_manager
-                                    .get_chunk_producer(
-                                        block_header.epoch_id(),
-                                        block_header.height(),
-                                        chunk.shard_id(),
-                                    )
+                                    .get_chunk_producer_info(&ChunkProductionKey {
+                                        epoch_id: *block_header.epoch_id(),
+                                        height_created: block_header.height(),
+                                        shard_id: chunk.shard_id(),
+                                    })
+                                    .map(|info| info.take_account_id())
                                     .ok(),
                                 gas_used: chunk.prev_gas_used(),
                                 processing_time_ms: CryptoHashTimer::get_timer_value(
@@ -621,8 +636,12 @@ impl ClientActorInner {
                     let chunk_producer = self
                         .client
                         .epoch_manager
-                        .get_chunk_producer(&epoch_id, height, shard_id)
-                        .map(|f| f.to_string())
+                        .get_chunk_producer_info(&ChunkProductionKey {
+                            epoch_id,
+                            height_created: height,
+                            shard_id,
+                        })
+                        .map(|info| info.take_account_id().to_string())
                         .unwrap_or_default();
                     if chunk_producer == validator_id {
                         production.chunk_production.insert(

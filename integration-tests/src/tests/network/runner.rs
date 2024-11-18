@@ -5,6 +5,7 @@ use near_async::actix_wrapper::{spawn_actix_actor, ActixWrapper};
 use near_async::futures::ActixFutureSpawner;
 use near_async::messaging::{noop, IntoMultiSender, IntoSender, LateBoundSender};
 use near_async::time::{self, Clock};
+use near_chain::rayon_spawner::RayonAsyncComputationSpawner;
 use near_chain::types::RuntimeAdapter;
 use near_chain::{Chain, ChainGenesis};
 use near_chain_configs::{ClientConfig, Genesis, GenesisConfig, MutableConfigValue};
@@ -146,6 +147,7 @@ fn setup_network_node(
         validator_signer,
         epoch_manager,
         runtime,
+        Arc::new(RayonAsyncComputationSpawner),
     ));
     shards_manager_adapter.bind(shards_manager_actor.with_auto_span_context());
     let peer_manager = PeerManagerActor::spawn(
@@ -153,6 +155,7 @@ fn setup_network_node(
         db.clone(),
         config,
         client_sender_for_network(client_actor, view_client_addr),
+        network_adapter.as_multi_sender(),
         shards_manager_adapter.as_sender(),
         partial_witness_actor.with_auto_span_context().into_multi_sender(),
         genesis_id,

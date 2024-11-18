@@ -19,6 +19,7 @@ use near_epoch_manager::shard_tracker::ShardTracker;
 use near_epoch_manager::{EpochManager, EpochManagerHandle};
 use near_primitives::block::Block;
 use near_primitives::hash::CryptoHash;
+use near_primitives::stateless_validation::ChunkProductionKey;
 use near_primitives::test_utils::create_test_signer;
 use near_primitives::types::{AccountId, NumBlocks, NumShards};
 use near_primitives::utils::MaybeValidated;
@@ -231,12 +232,13 @@ pub fn display_chain(me: &Option<AccountId>, chain: &mut Chain, tail: bool) {
             if let Some(block) = maybe_block {
                 for chunk_header in block.chunks().iter_deprecated() {
                     let chunk_producer = epoch_manager
-                        .get_chunk_producer(
-                            &epoch_id,
-                            chunk_header.height_created(),
-                            chunk_header.shard_id(),
-                        )
-                        .unwrap();
+                        .get_chunk_producer_info(&ChunkProductionKey {
+                            epoch_id,
+                            height_created: chunk_header.height_created(),
+                            shard_id: chunk_header.shard_id(),
+                        })
+                        .unwrap()
+                        .take_account_id();
                     if let Ok(chunk) = chain_store.get_chunk(&chunk_header.chunk_hash()) {
                         debug!(
                             "    {: >3} {} | {} | {: >10} | tx = {: >2}, receipts = {: >2}",
@@ -305,7 +307,7 @@ mod test {
     }
 
     fn test_build_receipt_hashes_with_num_shard(num_shards: NumShards) {
-        let shard_layout = ShardLayout::v0(num_shards, 0);
+        let shard_layout = ShardLayout::multi_shard(num_shards, 0);
         let create_receipt_from_receiver_id =
             |receiver_id| Receipt::new_balance_refund(&receiver_id, 0, ReceiptPriority::NoPriority);
         let mut rng = rand::thread_rng();

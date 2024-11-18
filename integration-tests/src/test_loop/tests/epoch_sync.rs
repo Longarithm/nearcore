@@ -141,7 +141,6 @@ fn bootstrap_node_via_epoch_sync(setup: TestNetworkSetup, source_node: usize) ->
         .test_loop_data_dir(tempdir)
         .config_modifier(|config, _| {
             // Enable epoch sync, and make the horizon small enough to trigger it.
-            config.epoch_sync.enabled = true;
             config.epoch_sync.epoch_sync_horizon = 30;
             // Make header sync horizon small enough to trigger it.
             config.block_header_fetch_horizon = 8;
@@ -275,7 +274,7 @@ fn bootstrap_node_via_epoch_sync(setup: TestNetworkSetup, source_node: usize) ->
 // Test that a new node that only has genesis can use Epoch Sync to bring itself
 // up to date.
 #[test]
-fn test_epoch_sync_from_genesis() {
+fn slow_test_epoch_sync_from_genesis() {
     init_test_logger();
     let setup = setup_initial_blockchain(4, 20);
     bootstrap_node_via_epoch_sync(setup, 0);
@@ -284,7 +283,7 @@ fn test_epoch_sync_from_genesis() {
 // Tests that after epoch syncing, we can use the new node to bootstrap another
 // node via epoch sync.
 #[test]
-fn test_epoch_sync_from_another_epoch_synced_node() {
+fn slow_test_epoch_sync_from_another_epoch_synced_node() {
     init_test_logger();
     let setup = setup_initial_blockchain(4, 20);
     let setup = bootstrap_node_via_epoch_sync(setup, 0);
@@ -292,7 +291,7 @@ fn test_epoch_sync_from_another_epoch_synced_node() {
 }
 
 #[test]
-fn test_epoch_sync_transaction_validity_period_one_epoch() {
+fn slow_test_epoch_sync_transaction_validity_period_one_epoch() {
     init_test_logger();
     let setup = setup_initial_blockchain(4, 10);
     let setup = bootstrap_node_via_epoch_sync(setup, 0);
@@ -300,7 +299,7 @@ fn test_epoch_sync_transaction_validity_period_one_epoch() {
 }
 
 #[test]
-fn test_epoch_sync_with_expired_transactions() {
+fn slow_test_epoch_sync_with_expired_transactions() {
     init_test_logger();
     let setup = setup_initial_blockchain(4, 1);
     let setup = bootstrap_node_via_epoch_sync(setup, 0);
@@ -350,6 +349,7 @@ fn sanity_check_epoch_sync_proof(
     // epochs ago, i.e. the current epoch's previous previous epoch.
     expected_epochs_ago: u64,
 ) {
+    let proof = proof.as_v1();
     let epoch_height_of_final_block =
         (final_head_height - genesis_config.genesis_height - 1) / genesis_config.epoch_length + 1;
     let expected_current_epoch_height = epoch_height_of_final_block - expected_epochs_ago;
@@ -380,7 +380,7 @@ fn sanity_check_epoch_sync_proof(
 }
 
 #[test]
-fn test_initial_epoch_sync_proof_sanity() {
+fn slow_test_initial_epoch_sync_proof_sanity() {
     init_test_logger();
     let setup = setup_initial_blockchain(4, 20);
     let proof = setup.derive_epoch_sync_proof(0);
@@ -393,7 +393,7 @@ fn test_initial_epoch_sync_proof_sanity() {
 }
 
 #[test]
-fn test_epoch_sync_proof_sanity_from_epoch_synced_node() {
+fn slow_test_epoch_sync_proof_sanity_from_epoch_synced_node() {
     init_test_logger();
     let setup = setup_initial_blockchain(4, 20);
     let setup = bootstrap_node_via_epoch_sync(setup, 0);
@@ -417,7 +417,7 @@ fn test_epoch_sync_proof_sanity_from_epoch_synced_node() {
 }
 
 #[test]
-fn test_epoch_sync_proof_sanity_shorter_transaction_validity_period() {
+fn slow_test_epoch_sync_proof_sanity_shorter_transaction_validity_period() {
     init_test_logger();
     let setup = setup_initial_blockchain(4, 10);
     let proof = setup.derive_epoch_sync_proof(0);
@@ -426,7 +426,7 @@ fn test_epoch_sync_proof_sanity_shorter_transaction_validity_period() {
 }
 
 #[test]
-fn test_epoch_sync_proof_sanity_zero_transaction_validity_period() {
+fn slow_test_epoch_sync_proof_sanity_zero_transaction_validity_period() {
     init_test_logger();
     let setup = setup_initial_blockchain(4, 0);
     let proof = setup.derive_epoch_sync_proof(0);

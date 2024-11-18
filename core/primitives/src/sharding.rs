@@ -1,10 +1,8 @@
 use crate::bandwidth_scheduler::BandwidthRequests;
-use crate::block::Block;
 use crate::congestion_info::CongestionInfo;
 use crate::hash::{hash, CryptoHash};
 use crate::merkle::{combine_hash, merklize, verify_path, MerklePath};
 use crate::receipt::Receipt;
-use crate::shard_layout::ShardLayout;
 use crate::transaction::SignedTransaction;
 use crate::types::validator_stake::{ValidatorStake, ValidatorStakeIter, ValidatorStakeV1};
 use crate::types::{Balance, BlockHeight, Gas, MerkleHash, ShardId, StateRoot};
@@ -60,17 +58,6 @@ impl From<CryptoHash> for ChunkHash {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct ShardInfo(pub ShardId, pub ChunkHash);
-
-impl ShardInfo {
-    fn new(prev_block: &Block, shard_layout: &ShardLayout, shard_id: ShardId) -> Self {
-        let shard_index = shard_layout.get_shard_index(shard_id);
-        let chunk = &prev_block.chunks()[shard_index];
-        Self(shard_id, chunk.chunk_hash())
-    }
-}
-
 /// This version of the type is used in the old state sync, where we sync to the state right before the new epoch
 #[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct StateSyncInfoV0 {
@@ -79,7 +66,7 @@ pub struct StateSyncInfoV0 {
     /// by this hash in the database, but it's a small amount of data that makes the info in this type more complete.
     pub sync_hash: CryptoHash,
     /// Shards to fetch state
-    pub shards: Vec<ShardInfo>,
+    pub shards: Vec<ShardId>,
 }
 
 /// This version of the type is used when syncing to the current epoch's state, and `sync_hash` is an
@@ -97,7 +84,7 @@ pub struct StateSyncInfoV1 {
     /// is first set to None until we find the right "sync_hash".
     pub sync_hash: Option<CryptoHash>,
     /// Shards to fetch state
-    pub shards: Vec<ShardInfo>,
+    pub shards: Vec<ShardId>,
 }
 
 /// Contains the information that is used to sync state for shards as epochs switch
@@ -113,51 +100,24 @@ pub enum StateSyncInfo {
     V1(StateSyncInfoV1),
 }
 
-fn shard_infos(
-    prev_block: &Block,
-    shard_layout: &ShardLayout,
-    shards: &[ShardId],
-) -> Vec<ShardInfo> {
-    shards.iter().map(|shard_id| ShardInfo::new(prev_block, shard_layout, *shard_id)).collect()
-}
-
 impl StateSyncInfo {
-    pub fn new_previous_epoch(
-        epoch_first_block: CryptoHash,
-        prev_block: &Block,
-        shard_layout: &ShardLayout,
-        shards: &[ShardId],
-    ) -> Self {
-        Self::V0(StateSyncInfoV0 {
-            sync_hash: epoch_first_block,
-            shards: shard_infos(prev_block, shard_layout, shards),
-        })
+    fn new_previous_epoch(epoch_first_block: CryptoHash, shards: Vec<ShardId>) -> Self {
+        Self::V0(StateSyncInfoV0 { sync_hash: epoch_first_block, shards })
     }
 
-    fn new_current_epoch(
-        epoch_first_block: CryptoHash,
-        prev_block: &Block,
-        shard_layout: &ShardLayout,
-        shards: &[ShardId],
-    ) -> Self {
-        Self::V1(StateSyncInfoV1 {
-            epoch_first_block,
-            sync_hash: None,
-            shards: shard_infos(prev_block, shard_layout, shards),
-        })
+    fn new_current_epoch(epoch_first_block: CryptoHash, shards: Vec<ShardId>) -> Self {
+        Self::V1(StateSyncInfoV1 { epoch_first_block, sync_hash: None, shards })
     }
 
     pub fn new(
         protocol_version: ProtocolVersion,
         epoch_first_block: CryptoHash,
-        prev_block: &Block,
-        shard_layout: &ShardLayout,
-        shards: &[ShardId],
+        shards: Vec<ShardId>,
     ) -> Self {
-        if ProtocolFeature::StateSyncHashUpdate.enabled(protocol_version) {
-            Self::new_current_epoch(epoch_first_block, prev_block, shard_layout, shards)
+        if ProtocolFeature::CurrentEpochStateSync.enabled(protocol_version) {
+            Self::new_current_epoch(epoch_first_block, shards)
         } else {
-            Self::new_previous_epoch(epoch_first_block, prev_block, shard_layout, shards)
+            Self::new_previous_epoch(epoch_first_block, shards)
         }
     }
 
@@ -169,7 +129,7 @@ impl StateSyncInfo {
         }
     }
 
-    pub fn shards(&self) -> &[ShardInfo] {
+    pub fn shards(&self) -> &[ShardId] {
         match self {
             Self::V0(info) => &info.shards,
             Self::V1(info) => &info.shards,
@@ -583,7 +543,10 @@ impl ShardChunkHeader {
     }
 
     /// Returns whether the header is valid for given `ProtocolVersion`.
-    pub fn valid_for(&self, version: ProtocolVersion) -> bool {
+    pub fn validate_version(
+        &self,
+        version: ProtocolVersion,
+    ) -> Result<(), BadHeaderForProtocolVersionError> {
         const BLOCK_HEADER_V3_VERSION: ProtocolVersion =
             ProtocolFeature::BlockHeaderV3.protocol_version();
         const CONGESTION_CONTROL_VERSION: ProtocolVersion =
@@ -591,7 +554,7 @@ impl ShardChunkHeader {
         const BANDWIDTH_SCHEDULER_VERSION: ProtocolVersion =
             ProtocolFeature::BandwidthScheduler.protocol_version();
 
-        match &self {
+        let is_valid = match &self {
             ShardChunkHeader::V1(_) => version < SHARD_CHUNK_HEADER_UPGRADE_VERSION,
             ShardChunkHeader::V2(_) => {
                 SHARD_CHUNK_HEADER_UPGRADE_VERSION <= version && version < BLOCK_HEADER_V3_VERSION
@@ -606,12 +569,54 @@ impl ShardChunkHeader {
                 // In bandwidth scheduler version v3 and v4 are allowed. The first chunk in
                 // the bandwidth scheduler version will be v3 because the chunk extra for the
                 // last chunk of previous version doesn't have bandwidth requests.
-                ShardChunkHeaderInner::V2(_) => {
-                    version >= BLOCK_HEADER_V3_VERSION && version < BANDWIDTH_SCHEDULER_VERSION
-                }
+                // v2 is also allowed in the bandwidth scheduler version because there
+                // are multiple tests which upgrade from an old version directly to the
+                // latest version. TODO(#12328) - don't allow InnerV2 in bandwidth scheduler version.
+                ShardChunkHeaderInner::V2(_) => version >= BLOCK_HEADER_V3_VERSION,
                 ShardChunkHeaderInner::V3(_) => version >= CONGESTION_CONTROL_VERSION,
                 ShardChunkHeaderInner::V4(_) => version >= BANDWIDTH_SCHEDULER_VERSION,
             },
+        };
+
+        if is_valid {
+            Ok(())
+        } else {
+            Err(BadHeaderForProtocolVersionError {
+                protocol_version: version,
+                header_version: self.header_version_number(),
+                header_inner_version: self.inner_version_number(),
+            })
+        }
+    }
+
+    /// Used for error messages, use `match` for other code.
+    #[inline]
+    pub(crate) fn header_version_number(&self) -> u64 {
+        match self {
+            ShardChunkHeader::V1(_) => 1,
+            ShardChunkHeader::V2(_) => 2,
+            ShardChunkHeader::V3(_) => 3,
+        }
+    }
+
+    /// Used for error messages, use `match` for other code.
+    #[inline]
+    pub(crate) fn inner_version_number(&self) -> u64 {
+        match self {
+            ShardChunkHeader::V1(v1) => {
+                // Shows that Header V1 contains Inner V1
+                let _inner_v1: &ShardChunkHeaderInnerV1 = &v1.inner;
+                1
+            }
+            ShardChunkHeader::V2(v2) => {
+                // Shows that Header V2 also contains Inner V1, not Inner V2
+                let _inner_v1: &ShardChunkHeaderInnerV1 = &v2.inner;
+                1
+            }
+            ShardChunkHeader::V3(v3) => {
+                let inner_enum: &ShardChunkHeaderInner = &v3.inner;
+                inner_enum.version_number()
+            }
         }
     }
 
@@ -622,6 +627,14 @@ impl ShardChunkHeader {
             ShardChunkHeader::V3(header) => ShardChunkHeaderV3::compute_hash(&header.inner),
         }
     }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("Invalid chunk header version for protocol version {protocol_version}. (header: {header_version}, inner: {header_inner_version})")]
+pub struct BadHeaderForProtocolVersionError {
+    pub protocol_version: ProtocolVersion,
+    pub header_version: u64,
+    pub header_inner_version: u64,
 }
 
 #[derive(

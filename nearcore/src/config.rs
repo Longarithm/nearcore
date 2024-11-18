@@ -14,7 +14,8 @@ use near_chain_configs::{
     default_header_sync_progress_timeout, default_header_sync_stall_ban_timeout,
     default_log_summary_period, default_orphan_state_witness_max_size,
     default_orphan_state_witness_pool_size, default_produce_chunk_add_transactions_time_limit,
-    default_state_sync_enabled, default_state_sync_timeout, default_sync_check_period,
+    default_state_sync_enabled, default_state_sync_external_timeout,
+    default_state_sync_p2p_timeout, default_state_sync_retry_timeout, default_sync_check_period,
     default_sync_height_threshold, default_sync_max_block_requests, default_sync_step_period,
     default_transaction_pool_size_limit, default_trie_viewer_state_size_limit,
     default_tx_routing_height_horizon, default_view_client_threads,
@@ -36,6 +37,8 @@ use near_jsonrpc::RpcConfig;
 use near_network::config::NetworkConfig;
 use near_network::tcp;
 use near_o11y::log_config::LogConfig;
+use near_primitives::chains::MAINNET;
+use near_primitives::epoch_manager::EpochConfigStore;
 use near_primitives::hash::CryptoHash;
 use near_primitives::shard_layout::ShardLayout;
 use near_primitives::test_utils::create_test_signer;
@@ -45,7 +48,7 @@ use near_primitives::types::{
 };
 use near_primitives::utils::{from_timestamp, get_num_seats_per_shard};
 use near_primitives::validator_signer::{InMemoryValidatorSigner, ValidatorSigner};
-use near_primitives::version::PROTOCOL_VERSION;
+use near_primitives::version::{ProtocolVersion, PROTOCOL_VERSION};
 #[cfg(feature = "rosetta_rpc")]
 use near_rosetta_rpc::RosettaRpcConfig;
 use near_store::config::StateSnapshotType;
@@ -57,7 +60,6 @@ use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{info, warn};
 
@@ -154,9 +156,15 @@ pub struct Consensus {
     #[serde(with = "near_async::time::serde_duration_as_std")]
     pub header_sync_stall_ban_timeout: Duration,
     /// How much to wait for a state sync response before re-requesting
-    #[serde(default = "default_state_sync_timeout")]
+    #[serde(default = "default_state_sync_external_timeout")]
     #[serde(with = "near_async::time::serde_duration_as_std")]
-    pub state_sync_timeout: Duration,
+    pub state_sync_external_timeout: Duration,
+    #[serde(default = "default_state_sync_p2p_timeout")]
+    #[serde(with = "near_async::time::serde_duration_as_std")]
+    pub state_sync_p2p_timeout: Duration,
+    #[serde(default = "default_state_sync_retry_timeout")]
+    #[serde(with = "near_async::time::serde_duration_as_std")]
+    pub state_sync_retry_timeout: Duration,
     /// Expected increase of header head weight per second during header sync
     #[serde(default = "default_header_sync_expected_height_per_second")]
     pub header_sync_expected_height_per_second: u64,
@@ -197,7 +205,9 @@ impl Default for Consensus {
             header_sync_initial_timeout: default_header_sync_initial_timeout(),
             header_sync_progress_timeout: default_header_sync_progress_timeout(),
             header_sync_stall_ban_timeout: default_header_sync_stall_ban_timeout(),
-            state_sync_timeout: default_state_sync_timeout(),
+            state_sync_external_timeout: default_state_sync_external_timeout(),
+            state_sync_p2p_timeout: default_state_sync_p2p_timeout(),
+            state_sync_retry_timeout: default_state_sync_retry_timeout(),
             header_sync_expected_height_per_second: default_header_sync_expected_height_per_second(
             ),
             sync_check_period: default_sync_check_period(),
@@ -550,7 +560,9 @@ impl NearConfig {
                 header_sync_expected_height_per_second: config
                     .consensus
                     .header_sync_expected_height_per_second,
-                state_sync_timeout: config.consensus.state_sync_timeout,
+                state_sync_external_timeout: config.consensus.state_sync_external_timeout,
+                state_sync_p2p_timeout: config.consensus.state_sync_p2p_timeout,
+                state_sync_retry_timeout: config.consensus.state_sync_retry_timeout,
                 min_num_peers: config.consensus.min_num_peers,
                 log_summary_period: config.log_summary_period,
                 produce_empty_blocks: config.consensus.produce_empty_blocks,
@@ -815,6 +827,7 @@ pub fn init_configs(
     download_config_url: Option<&str>,
     boot_nodes: Option<&str>,
     max_gas_burnt_view: Option<Gas>,
+    dump_epoch_config: Option<ProtocolVersion>,
 ) -> anyhow::Result<()> {
     fs::create_dir_all(dir).with_context(|| anyhow!("Failed to create directory {:?}", dir))?;
 
@@ -964,19 +977,7 @@ pub fn init_configs(
                 CryptoHash::default(),
             );
             add_protocol_account(&mut records);
-            let shards = if num_shards > 1 {
-                ShardLayout::v1(
-                    (1..num_shards)
-                        .map(|f| {
-                            AccountId::from_str(format!("shard{f}.test.near").as_str()).unwrap()
-                        })
-                        .collect(),
-                    None,
-                    1,
-                )
-            } else {
-                ShardLayout::v0_single_shard()
-            };
+            let shards = ShardLayout::multi_shard(num_shards, 0);
 
             let genesis_config = GenesisConfig {
                 protocol_version: PROTOCOL_VERSION,
@@ -1020,6 +1021,21 @@ pub fn init_configs(
             info!(target: "near", "Generated node key, validator key, genesis file in {}", dir.display());
         }
     }
+
+    if let Some(first_version) = dump_epoch_config {
+        let epoch_config_dir = dir.join("epoch_configs");
+        fs::create_dir_all(epoch_config_dir.clone())
+            .with_context(|| anyhow!("Failed to create directory {:?}", epoch_config_dir))?;
+        EpochConfigStore::for_chain_id(MAINNET, None)
+            .expect("Could not load the EpochConfigStore for mainnet.")
+            .dump_epoch_configs_between(
+                &first_version,
+                &PROTOCOL_VERSION,
+                epoch_config_dir.to_str().unwrap(),
+            );
+        info!(target: "near", "Generated epoch configs files in {}", epoch_config_dir.display());
+    }
+
     Ok(())
 }
 
@@ -1087,7 +1103,7 @@ pub fn create_localnet_configs_from_seeds(
         .map(|seed| InMemorySigner::from_seed("node".parse().unwrap(), KeyType::ED25519, seed))
         .collect::<Vec<_>>();
 
-    let shard_layout = ShardLayout::v0(num_shards, 0);
+    let shard_layout = ShardLayout::multi_shard(num_shards, 0);
     let accounts_to_add_to_genesis: Vec<AccountId> =
         seeds.iter().map(|s| s.parse().unwrap()).collect();
 
@@ -1518,6 +1534,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::str::FromStr;
 
+    use itertools::Itertools;
     use near_async::time::Duration;
     use near_chain_configs::{GCConfig, Genesis, GenesisValidationMode};
     use near_crypto::InMemorySigner;
@@ -1548,6 +1565,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         )
         .unwrap();
         let genesis = Genesis::from_file(
@@ -1556,27 +1574,26 @@ mod tests {
         )
         .unwrap();
         assert_eq!(genesis.config.chain_id, "localnet");
-        assert_eq!(genesis.config.shard_layout.shard_ids().count(), 3);
+        let shard_layout = &genesis.config.shard_layout;
+        let shard_ids = shard_layout.shard_ids().collect_vec();
+        let [s0, s1, s2] = shard_ids[..] else {
+            panic!("Expected 3 shards, got {:?}", shard_ids);
+        };
         assert_eq!(
-            account_id_to_shard_id(
-                &AccountId::from_str("foobar.near").unwrap(),
-                &genesis.config.shard_layout,
-            ),
-            ShardId::new(0)
+            account_id_to_shard_id(&AccountId::from_str("foobar.near").unwrap(), &shard_layout),
+            s0
         );
         assert_eq!(
-            account_id_to_shard_id(
-                &AccountId::from_str("shard1.test.near").unwrap(),
-                &genesis.config.shard_layout,
-            ),
-            ShardId::new(1)
+            account_id_to_shard_id(&AccountId::from_str("test0.near").unwrap(), &shard_layout,),
+            s0
         );
         assert_eq!(
-            account_id_to_shard_id(
-                &AccountId::from_str("shard2.test.near").unwrap(),
-                &genesis.config.shard_layout,
-            ),
-            ShardId::new(2)
+            account_id_to_shard_id(&AccountId::from_str("test1.near").unwrap(), &shard_layout,),
+            s1
+        );
+        assert_eq!(
+            account_id_to_shard_id(&AccountId::from_str("test2.near").unwrap(), &shard_layout,),
+            s2
         );
     }
 
@@ -1600,6 +1617,7 @@ mod tests {
             false,
             None,
             false,
+            None,
             None,
             None,
             None,
@@ -1633,6 +1651,7 @@ mod tests {
             false,
             None,
             false,
+            None,
             None,
             None,
             None,

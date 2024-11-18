@@ -16,11 +16,11 @@ use near_network::{
     types::{NetworkRequests, PeerManagerMessageRequest},
 };
 use near_o11y::testonly::init_test_logger;
-use near_primitives::utils::from_timestamp;
 use near_primitives::{
     shard_layout::ShardLayout,
     types::{AccountId, EpochId, ShardId},
 };
+use near_primitives::{stateless_validation::ChunkProductionKey, utils::from_timestamp};
 use near_primitives_core::{checked_feature, version::PROTOCOL_VERSION};
 use nearcore::test_utils::TestEnvNightshadeSetupExt;
 use tracing::log::debug;
@@ -48,7 +48,7 @@ impl AdversarialBehaviorTestData {
             let config = &mut genesis.config;
             config.genesis_time = from_timestamp(clock.now_utc().unix_timestamp_nanos() as u64);
             config.epoch_length = epoch_length;
-            config.shard_layout = ShardLayout::v1_test();
+            config.shard_layout = ShardLayout::multi_shard(4, 3);
             config.num_block_producer_seats_per_shard = vec![
                 num_block_producers as u64,
                 num_block_producers as u64,
@@ -136,7 +136,7 @@ impl AdversarialBehaviorTestData {
 }
 
 #[test]
-fn test_non_adversarial_case() {
+fn slow_test_non_adversarial_case() {
     init_test_logger();
     let mut test = AdversarialBehaviorTestData::new();
     let epoch_manager = test.env.clients[0].epoch_manager.clone();
@@ -251,12 +251,13 @@ fn test_banning_chunk_producer_when_seeing_invalid_chunk_base(
             }
             for shard_id in shard_layout.shard_ids() {
                 let chunk_producer = epoch_manager
-                    .get_chunk_producer(
-                        &epoch_id,
-                        block.header().prev_height().unwrap() + 1,
+                    .get_chunk_producer_info(&ChunkProductionKey {
+                        epoch_id,
+                        height_created: block.header().prev_height().unwrap() + 1,
                         shard_id,
-                    )
-                    .unwrap();
+                    })
+                    .unwrap()
+                    .take_account_id();
                 if &chunk_producer == &bad_chunk_producer {
                     invalid_chunks_in_this_block.insert(shard_id);
                     if !epochs_seen_invalid_chunk.contains(&epoch_id) {
@@ -288,7 +289,7 @@ fn test_banning_chunk_producer_when_seeing_invalid_chunk_base(
             let prev_block =
                 test.env.clients[0].chain.get_block(&block.header().prev_hash()).unwrap();
             for shard_id in shard_layout.shard_ids() {
-                let shard_index = shard_layout.get_shard_index(shard_id);
+                let shard_index = shard_layout.get_shard_index(shard_id).unwrap();
                 if invalid_chunks_in_this_block.contains(&shard_id) && !this_block_should_be_skipped
                 {
                     assert_eq!(
@@ -373,20 +374,15 @@ fn test_banning_chunk_producer_when_seeing_invalid_chunk() {
     init_test_logger();
     let mut test = AdversarialBehaviorTestData::new();
     test.env.clients[7].produce_invalid_chunks = true;
-    for client in test.env.clients.iter_mut() {
-        client.chunk_validator.set_should_panic_on_validation_error(false);
-    }
     test_banning_chunk_producer_when_seeing_invalid_chunk_base(test);
 }
 
 #[test]
 #[cfg(feature = "test_features")]
+#[cfg_attr(feature = "protocol_feature_relaxed_chunk_validation", ignore)]
 fn test_banning_chunk_producer_when_seeing_invalid_tx_in_chunk() {
     init_test_logger();
     let mut test = AdversarialBehaviorTestData::new();
     test.env.clients[7].produce_invalid_tx_in_chunks = true;
-    for client in test.env.clients.iter_mut() {
-        client.chunk_validator.set_should_panic_on_validation_error(false);
-    }
     test_banning_chunk_producer_when_seeing_invalid_chunk_base(test);
 }

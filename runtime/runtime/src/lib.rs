@@ -36,7 +36,7 @@ use near_primitives::receipt::{
 use near_primitives::runtime::migration_data::{MigrationData, MigrationFlags};
 use near_primitives::sandbox::state_patch::SandboxStatePatch;
 use near_primitives::state_record::StateRecord;
-use near_primitives::stateless_validation::contract_distribution::CodeHash;
+use near_primitives::stateless_validation::contract_distribution::ContractUpdates;
 #[cfg(feature = "protocol_feature_nonrefundable_transfer_nep491")]
 use near_primitives::transaction::NonrefundableStorageTransferAction;
 use near_primitives::transaction::{
@@ -72,7 +72,7 @@ use near_vm_runner::ContractRuntimeCache;
 use near_vm_runner::ProfileDataV3;
 use pipelining::ReceiptPreparationPipeline;
 use std::cmp::max;
-use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -97,9 +97,8 @@ const EXPECT_ACCOUNT_EXISTS: &str = "account exists, checked above";
 
 #[derive(Debug)]
 pub struct ApplyState {
-    /// Represents a phase of the chain lifecycle that we want to run apply for.
-    /// This is currently represented as a static string and used as dimension in some metrics.
-    pub apply_reason: Option<ApplyChunkReason>,
+    /// Points to a phase of the chain lifecycle that we want to run apply for.
+    pub apply_reason: ApplyChunkReason,
     /// Currently building block height.
     pub block_height: BlockHeight,
     /// Prev block hash
@@ -202,8 +201,8 @@ pub struct ApplyResult {
     pub bandwidth_requests: Option<BandwidthRequests>,
     /// Used only for a sanity check.
     pub bandwidth_scheduler_state_hash: CryptoHash,
-    pub contract_accesses: BTreeSet<CodeHash>,
-    pub contract_deploys: BTreeSet<CodeHash>,
+    /// Contracts accessed and deployed while applying the chunk.
+    pub contract_updates: ContractUpdates,
 }
 
 #[derive(Debug)]
@@ -290,13 +289,17 @@ impl Runtime {
         debug!(target: "runtime", "{}", log_str);
     }
 
-    /// Takes one signed transaction, verifies it and converts it to a receipt. Add this receipt
-    /// either to the new local receipts if the signer is the same as receiver or to the new
-    /// outgoing receipts.
+    /// Takes one signed transaction, verifies it and converts it to a receipt.
+    ///
+    /// Add the produced receipt receipt either to the new local receipts if the signer is the same
+    /// as receiver or to the new outgoing receipts.
+    ///
     /// When transaction is converted to a receipt, the account is charged for the full value of
     /// the generated receipt.
-    /// In case of successful verification (expected for valid chunks), returns the receipt and
-    /// `ExecutionOutcomeWithId` for the transaction.
+    ///
+    /// In case of successful verification, returns the receipt and `ExecutionOutcomeWithId` for
+    /// the transaction.
+    ///
     /// In case of an error, returns either `InvalidTxError` if the transaction verification failed
     /// or a `StorageError` wrapped into `RuntimeError`.
     #[instrument(target = "runtime", level = "debug", "process_transaction", skip_all, fields(
@@ -1389,13 +1392,17 @@ impl Runtime {
 
     /// Applies new signed transactions and incoming receipts for some chunk/shard on top of
     /// given trie and the given state root.
+    ///
     /// If the validator accounts update is provided, updates validators accounts.
-    /// All new signed transactions should be valid and already verified by the chunk producer.
-    /// If any transaction is invalid, it would return an `InvalidTxError`.
+    ///
     /// Returns an `ApplyResult` that contains the new state root, trie changes,
-    /// new outgoing receipts, execution outcomes for
-    /// all transactions, local action receipts (generated from transactions with signer ==
-    /// receivers) and incoming action receipts.
+    /// new outgoing receipts, execution outcomes for all transactions, local action receipts
+    /// (generated from transactions with signer == receivers) and incoming action receipts.
+    ///
+    /// Invalid transactions should have been filtered out by the chunk producer, but if a chunk
+    /// containing invalid transactions does make it to here, these transactions are skipped. This
+    /// does pollute the chain with junk data, but it also allows the protocol to make progress, as
+    /// the only alternative way to handle these transactions is to make the entire chunk invalid.
     #[instrument(target = "runtime", level = "debug", "apply", skip_all, fields(
         protocol_version = apply_state.current_protocol_version,
         num_transactions = transactions.len(),
@@ -1557,6 +1564,9 @@ impl Runtime {
     ///
     /// Fills the `processing_state` with local receipts generated during processing of the
     /// transactions.
+    ///
+    /// Any transactions that fail to validate (e.g. invalid nonces, unknown signing keys,
+    /// insufficient NEAR balance, etc.) will be skipped, producing no receipts.
     fn process_transactions<'a>(
         &self,
         processing_state: &mut ApplyProcessingReceiptState<'a>,
@@ -1566,12 +1576,32 @@ impl Runtime {
         let apply_state = &mut processing_state.apply_state;
         let state_update = &mut processing_state.state_update;
         for signed_transaction in processing_state.transactions {
-            let (receipt, outcome_with_id) = self.process_transaction(
+            let tx_result = self.process_transaction(
                 state_update,
                 apply_state,
                 signed_transaction,
                 &mut processing_state.stats,
-            )?;
+            );
+            let (receipt, outcome_with_id) = match tx_result {
+                Ok(v) => v,
+                Err(e) => {
+                    if checked_feature!(
+                        "protocol_feature_relaxed_chunk_validation",
+                        RelaxedChunkValidation,
+                        processing_state.protocol_version
+                    ) {
+                        // NB: number of invalid transactions are noted in metrics.
+                        tracing::debug!(
+                            target: "runtime",
+                            message="invalid transaction ignored",
+                            tx_hash=%signed_transaction.get_hash()
+                        );
+                        continue;
+                    } else {
+                        return Err(e.into());
+                    }
+                }
+            };
             if receipt.receiver_id() == signed_transaction.transaction.signer_id() {
                 processing_state.local_receipts.push_back(receipt);
             } else {
@@ -1687,8 +1717,8 @@ impl Runtime {
         validator_proposals: &mut Vec<ValidatorStake>,
     ) -> Result<(), RuntimeError> {
         let local_processing_start = std::time::Instant::now();
-        let local_receipts = std::mem::take(&mut processing_state.local_receipts);
         let local_receipt_count = processing_state.local_receipts.len();
+        let local_receipts = std::mem::take(&mut processing_state.local_receipts);
         if let Some(prefetcher) = &mut processing_state.prefetcher {
             // Prefetcher is allowed to fail
             let (front, back) = local_receipts.as_slices();
@@ -2080,13 +2110,8 @@ impl Runtime {
         metrics::CHUNK_RECORDED_SIZE_UPPER_BOUND
             .with_label_values(&[shard_id_str.as_str()])
             .observe(chunk_recorded_size_upper_bound);
-        let TrieUpdateResult {
-            trie,
-            trie_changes,
-            state_changes,
-            contract_accesses,
-            contract_deploys,
-        } = state_update.finalize()?;
+        let TrieUpdateResult { trie, trie_changes, state_changes, contract_updates } =
+            state_update.finalize()?;
 
         if let Some(prefetcher) = &processing_state.prefetcher {
             // Only clear the prefetcher queue after finalize is done because as part of receipt
@@ -2146,8 +2171,7 @@ impl Runtime {
                 .as_ref()
                 .map(|o| o.scheduler_state_hash)
                 .unwrap_or_default(),
-            contract_accesses,
-            contract_deploys,
+            contract_updates,
         })
     }
 }
@@ -2235,7 +2259,7 @@ fn missing_chunk_apply_result(
     processing_state: ApplyProcessingState,
     bandwidth_scheduler_output: &Option<BandwidthSchedulerOutput>,
 ) -> Result<ApplyResult, RuntimeError> {
-    let TrieUpdateResult { trie, trie_changes, state_changes, contract_accesses, contract_deploys } =
+    let TrieUpdateResult { trie, trie_changes, state_changes, contract_updates } =
         processing_state.state_update.finalize()?;
     let proof = trie.recorded_storage();
 
@@ -2276,8 +2300,7 @@ fn missing_chunk_apply_result(
             .as_ref()
             .map(|o| o.scheduler_state_hash)
             .unwrap_or_default(),
-        contract_accesses,
-        contract_deploys,
+        contract_updates,
     });
 }
 
@@ -2468,7 +2491,7 @@ impl<'a> ApplyProcessingState<'a> {
             Arc::clone(&self.apply_state.config),
             self.apply_state.cache.as_ref().map(|v| v.handle()),
             self.apply_state.current_protocol_version,
-            self.state_update.contract_storage.clone(),
+            self.state_update.contract_storage(),
         );
         ApplyProcessingReceiptState {
             pipeline_manager,
@@ -2657,7 +2680,7 @@ pub mod estimator {
             std::sync::Arc::clone(&apply_state.config),
             apply_state.cache.as_ref().map(|c| c.handle()),
             apply_state.current_protocol_version,
-            state_update.contract_storage.clone(),
+            state_update.contract_storage(),
         );
         Runtime {}.apply_action_receipt(
             state_update,

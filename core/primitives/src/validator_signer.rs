@@ -12,10 +12,6 @@ use crate::sharding::ChunkHash;
 use crate::stateless_validation::chunk_endorsement::{
     ChunkEndorsementInner, ChunkEndorsementMetadata,
 };
-use crate::stateless_validation::contract_distribution::{
-    ChunkContractAccessesInner, ChunkContractDeploymentsInner, ContractCodeRequestInner,
-    ContractCodeResponseInner,
-};
 use crate::stateless_validation::partial_witness::PartialEncodedStateWitnessInner;
 use crate::stateless_validation::state_witness::EncodedChunkStateWitness;
 use crate::telemetry::TelemetryInfo;
@@ -150,56 +146,10 @@ impl ValidatorSigner {
         }
     }
 
-    /// Signs the inner contents of a ChunkContractAccesses message.
-    pub fn sign_chunk_contract_accesses(&self, inner: &ChunkContractAccessesInner) -> Signature {
+    pub fn sign_bytes(&self, data: &[u8]) -> Signature {
         match self {
-            ValidatorSigner::Empty(signer) => signer.sign_chunk_contract_accesses(inner),
-            ValidatorSigner::InMemory(signer) => signer.sign_chunk_contract_accesses(inner),
-        }
-    }
-
-    /// Signs the inner contents of a ChunkContractDeployments message.
-    pub fn sign_chunk_contract_deployments(
-        &self,
-        inner: &ChunkContractDeploymentsInner,
-    ) -> Signature {
-        match self {
-            ValidatorSigner::Empty(signer) => signer.sign_chunk_contract_deployments(inner),
-            ValidatorSigner::InMemory(signer) => signer.sign_chunk_contract_deployments(inner),
-        }
-    }
-
-    /// Signs the inner contents of a ContractCodeRequest message.
-    pub fn sign_contract_code_request(&self, inner: &ContractCodeRequestInner) -> Signature {
-        match self {
-            ValidatorSigner::Empty(signer) => signer.sign_contract_code_request(inner),
-            ValidatorSigner::InMemory(signer) => signer.sign_contract_code_request(inner),
-        }
-    }
-
-    /// Signs the inner contents of a ContractCodeResponse message.
-    pub fn sign_contract_code_response(&self, inner: &ContractCodeResponseInner) -> Signature {
-        match self {
-            ValidatorSigner::Empty(signer) => signer.sign_contract_code_response(inner),
-            ValidatorSigner::InMemory(signer) => signer.sign_contract_code_response(inner),
-        }
-    }
-
-    /// Signs a proto-serialized AccountKeyPayload (see
-    /// chain/network/src/network_protocol/network.proto).
-    /// Making it typesafe would require moving the definition of
-    /// AccountKeyPayload proto to this crate to avoid a dependency cycle,
-    /// so for now we are just signing an already-serialized byte sequence.
-    /// We are serializing a proto rather than borsh here (as an experiment,
-    /// to allow the network protocol to evolve faster than on-chain stuff),
-    /// but we can always revert that decision, because these signatures are
-    /// used only for networking purposes and are not persisted on chain.
-    /// Moving to proto serialization for stuff stored on chain would be way
-    /// harder.
-    pub fn sign_account_key_payload(&self, proto_bytes: &[u8]) -> Signature {
-        match self {
-            ValidatorSigner::Empty(signer) => signer.sign_account_key_payload(proto_bytes),
-            ValidatorSigner::InMemory(signer) => signer.sign_account_key_payload(proto_bytes),
+            ValidatorSigner::Empty(signer) => signer.noop_signature(),
+            ValidatorSigner::InMemory(signer) => signer.sign_bytes(data),
         }
     }
 
@@ -255,6 +205,10 @@ impl EmptyValidatorSigner {
         PublicKey::empty(KeyType::ED25519)
     }
 
+    fn noop_signature(&self) -> Signature {
+        Signature::default()
+    }
+
     fn sign_telemetry(&self, _info: &TelemetryInfo) -> serde_json::Value {
         serde_json::Value::default()
     }
@@ -306,26 +260,6 @@ impl EmptyValidatorSigner {
         _peer_id: &PeerId,
         _epoch_id: &EpochId,
     ) -> Signature {
-        Signature::default()
-    }
-
-    fn sign_account_key_payload(&self, _proto_bytes: &[u8]) -> Signature {
-        Signature::default()
-    }
-
-    fn sign_chunk_contract_accesses(&self, _inner: &ChunkContractAccessesInner) -> Signature {
-        Signature::default()
-    }
-
-    fn sign_chunk_contract_deployments(&self, _inner: &ChunkContractDeploymentsInner) -> Signature {
-        Signature::default()
-    }
-
-    fn sign_contract_code_request(&self, _inner: &ContractCodeRequestInner) -> Signature {
-        Signature::default()
-    }
-
-    fn sign_contract_code_response(&self, _inner: &ContractCodeResponseInner) -> Signature {
         Signature::default()
     }
 }
@@ -429,24 +363,8 @@ impl InMemoryValidatorSigner {
         self.signer.sign(hash.as_ref())
     }
 
-    fn sign_account_key_payload(&self, proto_bytes: &[u8]) -> Signature {
-        self.signer.sign(proto_bytes)
-    }
-
-    fn sign_chunk_contract_accesses(&self, inner: &ChunkContractAccessesInner) -> Signature {
-        self.signer.sign(&borsh::to_vec(inner).unwrap())
-    }
-
-    fn sign_chunk_contract_deployments(&self, inner: &ChunkContractDeploymentsInner) -> Signature {
-        self.signer.sign(&borsh::to_vec(inner).unwrap())
-    }
-
-    fn sign_contract_code_request(&self, inner: &ContractCodeRequestInner) -> Signature {
-        self.signer.sign(&borsh::to_vec(inner).unwrap())
-    }
-
-    fn sign_contract_code_response(&self, inner: &ContractCodeResponseInner) -> Signature {
-        self.signer.sign(&borsh::to_vec(inner).unwrap())
+    fn sign_bytes(&self, bytes: &[u8]) -> Signature {
+        self.signer.sign(bytes)
     }
 
     fn compute_vrf_with_proof(

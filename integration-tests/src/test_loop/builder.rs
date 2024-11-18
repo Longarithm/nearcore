@@ -473,7 +473,9 @@ impl TestLoopBuilder {
         let mut client_config = ClientConfig::test(true, 600, 2000, 4, is_archival, true, false);
         client_config.max_block_wait_delay = Duration::seconds(6);
         client_config.state_sync_enabled = true;
-        client_config.state_sync_timeout = Duration::milliseconds(100);
+        client_config.state_sync_external_timeout = Duration::milliseconds(100);
+        client_config.state_sync_p2p_timeout = Duration::milliseconds(100);
+        client_config.state_sync_retry_timeout = Duration::milliseconds(100);
         if let Some(num_epochs) = self.gc_num_epochs_to_keep {
             client_config.gc.gc_num_epochs_to_keep = num_epochs;
         }
@@ -546,8 +548,8 @@ impl TestLoopBuilder {
         let shard_tracker =
             ShardTracker::new(TrackedConfig::from_config(&client_config), epoch_manager.clone());
 
-        let contract_cache = FilesystemContractRuntimeCache::new(&homedir, None::<&str>)
-            .expect("filesystem contract cache");
+        let contract_cache =
+            FilesystemContractRuntimeCache::test().expect("filesystem contract cache");
         let runtime_adapter = NightshadeRuntime::test_with_trie_config(
             &homedir,
             store.clone(),
@@ -687,6 +689,7 @@ impl TestLoopBuilder {
             validator_signer.clone(),
             epoch_manager.clone(),
             runtime_adapter.clone(),
+            Arc::new(self.test_loop.async_computation_spawner(|_| Duration::milliseconds(80))),
         );
 
         let gc_actor = GCActor::new(
@@ -700,7 +703,8 @@ impl TestLoopBuilder {
         // We don't send messages to `GCActor` so adapter is not needed.
         self.test_loop.register_actor_for_index(idx, gc_actor, None);
 
-        let resharding_actor = ReshardingActor::new();
+        let resharding_actor =
+            ReshardingActor::new(runtime_adapter.store().clone(), chain_genesis.height);
 
         let future_spawner = self.test_loop.future_spawner();
         let state_sync_dumper = StateSyncDumper {

@@ -27,8 +27,8 @@ use near_primitives::epoch_info::RngSeed;
 use near_primitives::errors::InvalidTxError;
 use near_primitives::hash::CryptoHash;
 use near_primitives::sharding::{ChunkHash, PartialEncodedChunk};
-use near_primitives::stateless_validation::chunk_endorsement::ChunkEndorsement;
 use near_primitives::stateless_validation::state_witness::ChunkStateWitness;
+use near_primitives::stateless_validation::ChunkProductionKey;
 use near_primitives::test_utils::create_test_signer;
 use near_primitives::transaction::{Action, FunctionCallAction, SignedTransaction};
 use near_primitives::types::{AccountId, Balance, BlockHeight, EpochId, NumSeats, ShardId};
@@ -137,6 +137,28 @@ impl TestEnv {
     pub fn produce_block(&mut self, id: usize, height: BlockHeight) {
         let block = self.clients[id].produce_block(height).unwrap();
         self.process_block(id, block.unwrap(), Provenance::PRODUCED);
+    }
+
+    // Produces block by the client that is the block producer for the given height.
+    pub fn produce_block_simple(&mut self, height: BlockHeight) {
+        let client = &self.clients[0];
+
+        let tip = client.chain.head().unwrap();
+        let parent_hash = tip.last_block_hash;
+        let epoch_id = client.epoch_manager.get_epoch_id_from_prev_block(&parent_hash).unwrap();
+        let block_producer = client.epoch_manager.get_block_producer(&epoch_id, height).unwrap();
+
+        for id in 0..self.clients.len() {
+            let validator_signer = self.clients[id].validator_signer.get().unwrap();
+            let validator_id = validator_signer.validator_id().clone();
+            if validator_id != block_producer {
+                continue;
+            }
+            let block = self.clients[id].produce_block(height).unwrap().unwrap();
+            self.process_block(id, block, Provenance::PRODUCED);
+            return;
+        }
+        panic!("No client found for block producer {}", block_producer);
     }
 
     /// Pause processing of the given block, which means that the background
@@ -310,6 +332,7 @@ impl TestEnv {
                     chunk_producer,
                 } => {
                     self.clients[id]
+                        .chunk_inclusion_tracker
                         .mark_chunk_header_ready_for_inclusion(chunk_header, chunk_producer);
                 }
             }
@@ -359,16 +382,15 @@ impl TestEnv {
         let partial_witness_adapters = self.partial_witness_adapters.clone();
         for (client_idx, partial_witness_adapter) in partial_witness_adapters.iter().enumerate() {
             while let Some(request) = partial_witness_adapter.pop_distribution_request() {
-                let DistributeStateWitnessRequest { epoch_id, chunk_header, state_witness } =
-                    request;
-
+                let DistributeStateWitnessRequest { state_witness, .. } = request;
                 let raw_witness_size = borsh::to_vec(&state_witness).unwrap().len();
+                let key = state_witness.chunk_production_key();
                 let chunk_validators = self.clients[client_idx]
                     .epoch_manager
                     .get_chunk_validator_assignments(
-                        &epoch_id,
-                        chunk_header.shard_id(),
-                        chunk_header.height_created(),
+                        &key.epoch_id,
+                        key.shard_id,
+                        key.height_created,
                     )
                     .unwrap()
                     .ordered_chunk_validators();
@@ -412,8 +434,10 @@ impl TestEnv {
                     account_id,
                     endorsement,
                 )) => {
-                    let processing_result =
-                        self.client(&account_id).process_chunk_endorsement(endorsement);
+                    let processing_result = self
+                        .client(&account_id)
+                        .chunk_endorsement_tracker
+                        .process_chunk_endorsement(endorsement);
                     if !allow_errors {
                         processing_result.unwrap();
                     }
@@ -447,11 +471,7 @@ impl TestEnv {
                     PeerManagerMessageRequest::NetworkRequests(
                         NetworkRequests::ChunkEndorsement(_, endorsement),
                     ) => {
-                        let endorsement_chunk_hash = match endorsement {
-                            ChunkEndorsement::V1(endorsement) => endorsement.chunk_hash(),
-                            ChunkEndorsement::V2(endorsement) => endorsement.chunk_hash(),
-                        };
-                        endorsement_found = endorsement_chunk_hash == chunk_hash;
+                        endorsement_found = endorsement.chunk_hash() == *chunk_hash;
                     }
                     _ => {}
                 };
@@ -525,7 +545,7 @@ impl TestEnv {
         let shard_id =
             client.epoch_manager.account_id_to_shard_id(&account_id, &head.epoch_id).unwrap();
         let shard_layout = client.epoch_manager.get_shard_layout(&head.epoch_id).unwrap();
-        let shard_index = shard_layout.get_shard_index(shard_id);
+        let shard_index = shard_layout.get_shard_index(shard_id).unwrap();
         let shard_uid = client.epoch_manager.shard_id_to_uid(shard_id, &head.epoch_id).unwrap();
         let last_chunk_header = &last_block.chunks()[shard_index];
 
@@ -585,7 +605,7 @@ impl TestEnv {
             client.epoch_manager.account_id_to_shard_id(&account_id, &head.epoch_id).unwrap();
         let shard_uid = client.epoch_manager.shard_id_to_uid(shard_id, &head.epoch_id).unwrap();
         let shard_layout = client.epoch_manager.get_shard_layout(&head.epoch_id).unwrap();
-        let shard_index = shard_layout.get_shard_index(shard_id);
+        let shard_index = shard_layout.get_shard_index(shard_id).unwrap();
         let last_chunk_header = &last_block.chunks()[shard_index];
         let response = client
             .runtime_adapter
@@ -688,7 +708,14 @@ impl TestEnv {
         let epoch_id = epoch_manager.get_epoch_id_from_prev_block(parent_hash).unwrap();
         let height = head.height + height_offset;
 
-        epoch_manager.get_chunk_producer(&epoch_id, height, shard_id).unwrap()
+        epoch_manager
+            .get_chunk_producer_info(&ChunkProductionKey {
+                epoch_id,
+                height_created: height,
+                shard_id,
+            })
+            .unwrap()
+            .take_account_id()
     }
 
     pub fn get_runtime_config(&self, idx: usize, epoch_id: EpochId) -> RuntimeConfig {
@@ -771,8 +798,7 @@ impl TestEnv {
         let max_iters = 100;
         let tip = self.clients[0].chain.head().unwrap();
         for i in 0..max_iters {
-            let block = self.clients[0].produce_block(tip.height + i + 1).unwrap().unwrap();
-            self.process_block(0, block.clone(), Provenance::PRODUCED);
+            self.produce_block_simple(tip.height + i + 1);
             if let Ok(outcome) = self.clients[0].chain.get_final_transaction_result(&tx_hash) {
                 return Ok(outcome);
             }

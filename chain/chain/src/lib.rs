@@ -13,6 +13,7 @@ pub use store::{
 pub use store_validator::{ErrorMessage, StoreValidator};
 pub use types::{Block, BlockHeader, BlockStatus, ChainGenesis, LatestKnown, Provenance};
 
+mod approval_verification;
 mod block_processing_utils;
 pub mod blocks_delay_tracker;
 pub mod chain;
@@ -31,6 +32,7 @@ pub mod resharding;
 pub mod runtime;
 mod state_request_tracker;
 pub mod state_snapshot_actor;
+mod state_sync;
 pub mod stateless_validation;
 mod store;
 pub mod store_validator;
