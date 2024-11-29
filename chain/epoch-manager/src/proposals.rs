@@ -47,6 +47,7 @@ pub fn proposals_to_epoch_info(
     minted_amount: Balance,
     current_version: ProtocolVersion,
     next_version: ProtocolVersion,
+    will_shard_layout_change: bool,
 ) -> Result<EpochInfo, EpochError> {
     if checked_feature!("stable", AliasValidatorSelectionAlgorithm, current_version) {
         return crate::validator_selection::proposals_to_epoch_info(
@@ -58,6 +59,7 @@ pub fn proposals_to_epoch_info(
             validator_reward,
             minted_amount,
             next_version,
+            will_shard_layout_change,
         );
     } else {
         return old_validator_selection::proposals_to_epoch_info(
