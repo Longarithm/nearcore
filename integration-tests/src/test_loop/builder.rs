@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use tempfile::TempDir;
 
 use near_async::futures::FutureSpawner;
 use near_async::messaging::{noop, IntoMultiSender, IntoSender, LateBoundSender};
@@ -40,7 +41,6 @@ use near_store::{ShardUId, Store, StoreConfig, TrieConfig};
 use near_vm_runner::logic::ProtocolVersion;
 use near_vm_runner::{ContractRuntimeCache, FilesystemContractRuntimeCache};
 use nearcore::state_sync::StateSyncDumper;
-use tempfile::TempDir;
 
 use super::env::{ClientToShardsManagerSender, TestData, TestLoopChunksStorage, TestLoopEnv};
 use super::utils::network::{chunk_endorsement_dropper, chunk_endorsement_dropper_by_hash};
@@ -498,7 +498,8 @@ impl TestLoopBuilder {
         client_config.state_sync_enabled = true;
         client_config.state_sync_external_timeout = Duration::milliseconds(100);
         client_config.state_sync_p2p_timeout = Duration::milliseconds(100);
-        client_config.state_sync_retry_timeout = Duration::milliseconds(100);
+        client_config.state_sync_retry_backoff = Duration::milliseconds(100);
+        client_config.state_sync_external_backoff = Duration::milliseconds(100);
         if let Some(num_epochs) = self.gc_num_epochs_to_keep {
             client_config.gc.gc_num_epochs_to_keep = num_epochs;
         }

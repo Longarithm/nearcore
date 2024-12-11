@@ -6,6 +6,7 @@ use crate::challenge::Challenges;
 use crate::errors::EpochError;
 use crate::hash::CryptoHash;
 
+use crate::shard_layout::ShardLayout;
 use crate::sharding::{ShardChunkHeader, ShardChunkHeaderV3};
 use crate::stateless_validation::chunk_endorsements_bitmap::ChunkEndorsementsBitmap;
 use crate::transaction::{
@@ -990,22 +991,23 @@ impl Block {
     }
 }
 
-#[derive(Default)]
 pub struct MockEpochInfoProvider {
+    pub shard_layout: ShardLayout,
     pub validators: HashMap<AccountId, Balance>,
-    pub account_id_to_shard_id_map: HashMap<AccountId, ShardId>,
+}
+
+impl Default for MockEpochInfoProvider {
+    fn default() -> Self {
+        MockEpochInfoProvider {
+            shard_layout: ShardLayout::single_shard(),
+            validators: HashMap::new(),
+        }
+    }
 }
 
 impl MockEpochInfoProvider {
-    pub fn new(validators: impl Iterator<Item = (AccountId, Balance)>) -> Self {
-        MockEpochInfoProvider {
-            validators: validators.collect(),
-            account_id_to_shard_id_map: HashMap::new(),
-        }
-    }
-
-    pub fn set_shard_id_for_account_id(&mut self, account_id: &AccountId, shard_id: ShardId) {
-        self.account_id_to_shard_id_map.insert(account_id.clone(), shard_id);
+    pub fn new(shard_layout: ShardLayout) -> Self {
+        MockEpochInfoProvider { shard_layout, validators: HashMap::new() }
     }
 }
 
@@ -1040,7 +1042,11 @@ impl EpochInfoProvider for MockEpochInfoProvider {
         account_id: &AccountId,
         _epoch_id: &EpochId,
     ) -> Result<ShardId, EpochError> {
-        Ok(self.account_id_to_shard_id_map.get(account_id).cloned().unwrap_or(ShardId::new(0)))
+        Ok(self.shard_layout.account_id_to_shard_id(account_id))
+    }
+
+    fn shard_layout(&self, _epoch_id: &EpochId) -> Result<ShardLayout, EpochError> {
+        Ok(self.shard_layout.clone())
     }
 }
 
@@ -1069,13 +1075,14 @@ pub fn create_test_signer(account_name: &str) -> ValidatorSigner {
 #[cfg(feature = "rand")]
 pub fn create_user_test_signer(
     account_name: &near_primitives_core::account::id::AccountIdRef,
-) -> near_crypto::InMemorySigner {
+) -> near_crypto::Signer {
     let account_id = account_name.to_owned();
     if account_id == near_implicit_test_account() {
         near_crypto::InMemorySigner::from_secret_key(
             account_id,
             near_implicit_test_account_secret(),
         )
+        .into()
     } else {
         near_crypto::InMemorySigner::from_seed(
             account_id,

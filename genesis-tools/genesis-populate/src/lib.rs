@@ -164,7 +164,7 @@ impl GenesisBuilder {
         let bar = ProgressBar::new(total_accounts_num as _);
         bar.set_style(ProgressStyle::default_bar().template(
             "[elapsed {elapsed_precise} remaining {eta_precise}] Writing into storage {bar} {pos:>7}/{len:7}",
-        ));
+        ).unwrap());
         // Add records in chunks of 3000 per shard for memory efficiency reasons.
         for i in 0..total_accounts_num {
             let account_id = get_account_id(i);
@@ -333,7 +333,7 @@ impl GenesisBuilder {
         let mut state_update =
             self.state_updates.remove(&shard_id).expect("State update should have been added");
 
-        let signer = InMemorySigner::test(&account_id);
+        let signer = InMemorySigner::test_signer(&account_id);
         let account = Account::new(
             testing_init_balance,
             testing_init_stake,
@@ -347,13 +347,13 @@ impl GenesisBuilder {
         records.push(account_record);
         let access_key_record = StateRecord::AccessKey {
             account_id: account_id.clone(),
-            public_key: signer.public_key.clone(),
+            public_key: signer.public_key(),
             access_key: AccessKey::full_access(),
         };
         set_access_key(
             &mut state_update,
             account_id.clone(),
-            signer.public_key,
+            signer.public_key(),
             &AccessKey::full_access(),
         );
         records.push(access_key_record);
