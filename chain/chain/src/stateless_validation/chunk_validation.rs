@@ -159,6 +159,7 @@ fn get_state_witness_block_range(
     let mut implicit_transition_params = Vec::new();
     let mut blocks_after_last_last_chunk = Vec::new();
 
+    #[derive(Debug)]
     /// Position in the chain while traversing the blocks backwards.
     struct TraversalPosition {
         /// Shard ID of chunk, needed to validate state transitions, in the
@@ -190,7 +191,9 @@ fn get_state_witness_block_range(
         last_chunk_shard_id: initial_shard_id,
     };
 
+    println!("LOOP");
     loop {
+        println!("{} {}", position.prev_block.header().height(), position.shard_id);
         let prev_hash = position.prev_block.hash();
         let prev_prev_hash = position.prev_block.header().prev_hash();
         let epoch_id = epoch_manager.get_epoch_id_from_prev_block(prev_hash)?;
