@@ -683,6 +683,7 @@ fn test_resharding_v3_base(params: TestReshardingParameters) {
         // println!("State after resharding:");
         print_and_assert_shard_accounts(&clients, &tip);
         check_state_shard_uid_mapping_after_resharding(&client, parent_shard_uid);
+        // return true;
         return epoch_height >= 10;
     };
 
