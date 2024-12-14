@@ -300,25 +300,25 @@ fn apply_block_from_range(
         (_, StorageSource::Trie | StorageSource::TrieFree) => {}
         (_, StorageSource::FlatStorage | StorageSource::Memtrie) => {
             // Compute delta and immediately apply to flat storage.
-            let changes =
-                FlatStateChanges::from_state_changes(apply_result.trie_changes.state_changes());
-            let delta = near_store::flat::FlatStateDelta {
-                metadata: near_store::flat::FlatStateDeltaMetadata {
-                    block: BlockInfo {
-                        hash: block_hash,
-                        height: block.header().height(),
-                        prev_hash: *block.header().prev_hash(),
-                    },
-                    prev_block_with_changes: None,
-                },
-                changes,
-            };
+            // let changes =
+            //     FlatStateChanges::from_state_changes(apply_result.trie_changes.state_changes());
+            // let delta = near_store::flat::FlatStateDelta {
+            //     metadata: near_store::flat::FlatStateDeltaMetadata {
+            //         block: BlockInfo {
+            //             hash: block_hash,
+            //             height: block.header().height(),
+            //             prev_hash: *block.header().prev_hash(),
+            //         },
+            //         prev_block_with_changes: None,
+            //     },
+            //     changes,
+            // };
 
-            let flat_storage_manager = runtime_adapter.get_flat_storage_manager();
-            let flat_storage = flat_storage_manager.get_flat_storage_for_shard(shard_uid).unwrap();
-            let store_update = flat_storage.add_delta(delta).unwrap();
-            store_update.commit().unwrap();
-            flat_storage.update_flat_head(&block_hash).unwrap();
+            // let flat_storage_manager = runtime_adapter.get_flat_storage_manager();
+            // let flat_storage = flat_storage_manager.get_flat_storage_for_shard(shard_uid).unwrap();
+            // let store_update = flat_storage.add_delta(delta).unwrap();
+            // store_update.commit().unwrap();
+            // flat_storage.update_flat_head(&block_hash).unwrap();
         }
     }
     match (mode, storage) {
