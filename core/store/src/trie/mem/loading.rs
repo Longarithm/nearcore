@@ -140,6 +140,7 @@ pub fn load_trie_from_flat_state_and_delta(
     let mut mem_tries =
         load_trie_from_flat_state(&store, shard_uid, state_root, flat_head.height, parallelize)
             .unwrap();
+    return Ok(mem_tries);
 
     debug!(target: "memtrie", %shard_uid, "Loading flat state deltas...");
     // We load the deltas in order of height, so that we always have the previous state root
