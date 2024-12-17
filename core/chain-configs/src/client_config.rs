@@ -657,7 +657,7 @@ impl ClientConfig {
             orphan_state_witness_pool_size: default_orphan_state_witness_pool_size(),
             orphan_state_witness_max_size: default_orphan_state_witness_max_size(),
             save_latest_witnesses: false,
-            p_produce_chunk: 1.0,
+            p_produce_chunk: 0.5,
         }
     }
 }
