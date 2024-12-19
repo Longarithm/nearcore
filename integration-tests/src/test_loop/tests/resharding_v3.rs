@@ -190,7 +190,7 @@ impl TestReshardingParametersBuilder {
             limit_outgoing_gas: self.limit_outgoing_gas.unwrap_or(false),
             delay_flat_state_resharding: self.delay_flat_state_resharding.unwrap_or(0),
             short_yield_timeout: self.short_yield_timeout.unwrap_or(false),
-            allow_negative_refcount: self.allow_negative_refcount.unwrap_or(false),
+            allow_negative_refcount: self.allow_negative_refcount.unwrap_or(true),
         }
     }
 
@@ -765,6 +765,7 @@ fn test_resharding_v3_base(params: TestReshardingParameters) {
             }
             trie_sanity_check.assert_state_sanity(&clients, expected_num_shards);
             latest_block_height.set(tip.height);
+
             let shard_layout =
                 client.epoch_manager.get_epoch_config(&tip.epoch_id).unwrap().shard_layout;
             println!(
@@ -777,6 +778,7 @@ fn test_resharding_v3_base(params: TestReshardingParameters) {
             // if params.all_chunks_expected && params.chunk_ranges_to_drop.is_empty() {
             //     assert!(block_header.chunk_mask().iter().all(|chunk_bit| *chunk_bit));
             // }
+            tracing::info!(target: "test", epoch_id=?tip.epoch_id, height=?tip.height, "new block");
         }
 
         // Return true if we passed an epoch with increased number of shards.
