@@ -300,6 +300,7 @@ impl RuntimeStorageConfig {
 #[derive(Clone)]
 pub struct ApplyChunkBlockContext {
     pub height: BlockHeight,
+    /// DO NOT USE THIS FIELD. With the intorduction of Optimistic block, this field is not reliable anymore.
     pub block_hash: CryptoHash,
     pub prev_block_hash: CryptoHash,
     pub block_timestamp: u64,

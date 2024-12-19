@@ -104,6 +104,7 @@ pub struct ApplyState {
     /// Prev block hash
     pub prev_block_hash: CryptoHash,
     /// Current block hash
+    /// DO NOT USE THIS FIELD. With the intorduction of Optimistic block, this field is not reliable anymore.
     pub block_hash: CryptoHash,
     /// To which shard the applied chunk belongs.
     pub shard_id: ShardId,
