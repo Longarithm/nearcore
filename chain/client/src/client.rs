@@ -51,7 +51,7 @@ use near_network::types::{
 };
 
 use near_pool::InsertTransactionResult;
-use near_primitives::block::{Approval, ApprovalInner, ApprovalMessage, Block, BlockHeader, Tip};
+use near_primitives::block::{Approval, ApprovalInner, ApprovalMessage, Block, BlockHeader, OptimisticBlock, Tip};
 use near_primitives::block_header::ApprovalType;
 use near_primitives::challenge::{Challenge, ChallengeBody, PartialState};
 use near_primitives::epoch_info::RngSeed;
@@ -545,6 +545,196 @@ impl Client {
         }
 
         Ok(true)
+    }
+
+
+    pub fn produce_optimistic_block(&mut self, height: BlockHeight) -> Result<Option<OptimisticBlock>, Error> {
+        self.produce_optimistic_block_on_head(height)
+        //self.produce_block_on_head(height, true)
+    }
+
+    /// Produce optimistic block for given `height` on top of chain head.
+    /// Either returns produced block (not applied) or error.
+    pub fn produce_optimistic_block_on_head(
+        &mut self,
+        height: BlockHeight,
+    ) -> Result<Option<OptimisticBlock>, Error> {
+        let _span =
+            tracing::debug_span!(target: "client", "produce_optimistic_block_on_head", height).entered();
+
+        let head = self.chain.head()?;
+        assert_eq!(
+            head.epoch_id,
+            self.epoch_manager.get_epoch_id_from_prev_block(&head.prev_block_hash).unwrap()
+        );
+
+        let prev_hash = head.last_block_hash;
+
+
+        let validator_signer = self.validator_signer.get().ok_or_else(|| {
+            Error::BlockProducer("Called without block producer info.".to_string())
+        })?;
+
+        // Check that we are were called at the block that we are producer for.
+        let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(&prev_hash).unwrap();
+        let next_block_proposer = self.epoch_manager.get_block_producer(&epoch_id, height)?;
+
+        let prev = self.chain.get_block_header(&prev_hash)?;
+        let prev_height = prev.height();
+        let prev_epoch_id = *prev.epoch_id();
+        let prev_next_bp_hash = *prev.next_bp_hash();
+
+        // Check and update the doomslug tip here. This guarantees that our endorsement will be in the
+        // doomslug witness. Have to do it before checking the ability to produce a block.
+        // DO WE NEED THIS FOR OPTIMISTIC BLOCKS?
+        let _ = self.check_and_update_doomslug_tip()?;
+
+        // CHECK WORKS FOR OPTIMISTIC BLOCK AS WELL
+        if !self.can_produce_block(
+            &prev,
+            height,
+            validator_signer.validator_id(),
+            &next_block_proposer,
+        )? {
+            debug!(target: "client", me=?validator_signer.validator_id(), ?next_block_proposer, "Should reschedule block");
+            return Ok(None);
+        }
+
+
+
+
+
+        let (validator_stake, _) = self.epoch_manager.get_validator_by_account_id(
+            &epoch_id,
+            &prev_hash,
+            &next_block_proposer,
+        )?;
+
+        let validator_pk = validator_stake.take_public_key();
+        if validator_pk != validator_signer.public_key() {
+            debug!(target: "client",
+                local_validator_key = ?validator_signer.public_key(),
+                ?validator_pk,
+                "Local validator key does not match expected validator key, skipping block production");
+            return Ok(None);
+        }
+
+        
+        debug!(
+            target: "client",
+            validator=?validator_signer.validator_id(),
+            height=height,
+            prev_height=prev.height(),
+            prev_hash=format_hash(prev_hash),
+            "Producing optimistic block",
+        );
+
+        let protocol_version = self
+            .epoch_manager
+            .get_epoch_protocol_version(&epoch_id)
+            .expect("Epoch info should be ready at this point");
+        if protocol_version > PROTOCOL_VERSION {
+            panic!("The client protocol version is older than the protocol version of the network. Please update nearcore. Client protocol version:{}, network protocol version {}", PROTOCOL_VERSION, protocol_version);
+        }
+
+        let next_epoch_id = self
+            .epoch_manager
+            .get_next_epoch_id_from_prev_block(&prev_hash)
+            .expect("Epoch hash should exist at this point");
+
+        let gas_price_adjustment_rate =
+            self.chain.block_economics_config.gas_price_adjustment_rate(protocol_version);
+        let min_gas_price = self.chain.block_economics_config.min_gas_price(protocol_version);
+        let max_gas_price = self.chain.block_economics_config.max_gas_price(protocol_version);
+
+        let next_bp_hash = if prev_epoch_id != epoch_id {
+            Chain::compute_bp_hash(
+                self.epoch_manager.as_ref(),
+                next_epoch_id,
+                epoch_id,
+                &prev_hash,
+            )?
+        } else {
+            prev_next_bp_hash
+        };
+
+        #[cfg(feature = "sandbox")]
+        let sandbox_delta_time = Some(self.sandbox_delta_time());
+        #[cfg(not(feature = "sandbox"))]
+        let sandbox_delta_time = None;
+
+        // Get block extra from previous block.
+        let block_merkle_tree = self.chain.chain_store().get_block_merkle_tree(&prev_hash)?;
+        let mut block_merkle_tree = PartialMerkleTree::clone(&block_merkle_tree);
+        block_merkle_tree.insert(prev_hash);
+        let block_merkle_root = block_merkle_tree.root();
+        // The number of leaves in Block Merkle Tree is the amount of Blocks on the Canonical Chain by construction.
+        // The ordinal of the next Block will be equal to this amount plus one.
+        let block_ordinal: NumBlocks = block_merkle_tree.size() + 1;
+        let prev_block_extra = self.chain.get_block_extra(&prev_hash)?;
+        let prev_block = self.chain.get_block(&prev_hash)?;
+        let mut chunk_headers =
+            Chain::get_prev_chunk_headers(self.epoch_manager.as_ref(), &prev_block)?;
+        let mut chunk_endorsements = vec![vec![]; chunk_headers.len()];
+
+        // Add debug information about the block production (and info on when did the chunks arrive).
+        /*self.block_production_info.record_block_production(
+            height,
+            BlockProductionTracker::construct_chunk_collection_info(
+                height,
+                &epoch_id,
+                chunk_headers.len(),
+                &new_chunks,
+                self.epoch_manager.as_ref(),
+                &self.chunk_inclusion_tracker,
+            )?,
+        );*/
+       
+        let prev_header = &prev_block.header();
+
+        let next_epoch_id = self.epoch_manager.get_next_epoch_id_from_prev_block(&prev_hash)?;
+
+        let minted_amount = if self.epoch_manager.is_next_block_epoch_start(&prev_hash)? {
+            Some(self.epoch_manager.get_epoch_info(&next_epoch_id)?.minted_amount())
+        } else {
+            None
+        };
+
+        let this_epoch_protocol_version = protocol_version;
+        let next_epoch_protocol_version =
+            self.epoch_manager.get_epoch_protocol_version(&next_epoch_id)?;
+
+        let optimistic_block = OptimisticBlock::produce_optimistic(
+            this_epoch_protocol_version,
+            next_epoch_protocol_version,
+            self.upgrade_schedule.protocol_version_to_vote_for(self.clock.now_utc(), next_epoch_protocol_version),
+            prev_header,
+            height,
+            block_ordinal,
+            epoch_id,
+            next_epoch_id,
+            gas_price_adjustment_rate,
+            min_gas_price,
+            max_gas_price,
+            minted_amount,
+            //prev_block_extra.challenges_result.clone(),
+            //vec![],
+            &*validator_signer,
+            next_bp_hash,
+            block_merkle_root,
+            self.clock.clone(),
+            sandbox_delta_time,
+        );
+
+        // Update latest known even before returning block out, to prevent race conditions.
+        self.chain
+            .mut_chain_store()
+            .save_latest_known(LatestKnown { height, seen: block.header().raw_timestamp() })?;
+
+        // metrics::BLOCK_PRODUCED_TOTAL.inc();
+
+        Ok(Some(block))
+
     }
 
     /// Produce block if we are block producer for given block `height`.
@@ -2255,8 +2445,7 @@ impl Client {
             validators.remove(account_id);
         }
         for validator in validators {
-            let tx_hash = tx.get_hash();
-            trace!(target: "client", me = ?signer.as_ref().map(|bp| bp.validator_id()), ?tx_hash, ?validator, ?shard_id, "Routing a transaction");
+            trace!(target: "client", me = ?signer.as_ref().map(|bp| bp.validator_id()), ?tx, ?validator, ?shard_id, "Routing a transaction");
 
             // Send message to network to actually forward transaction.
             self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(

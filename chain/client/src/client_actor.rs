@@ -1124,6 +1124,11 @@ impl ClientActorInner {
                 self.client.epoch_manager.get_block_producer(&epoch_id, height)?;
 
             if me == next_block_producer_account {
+                if let Err(err) = self.produce_optimistic_block(height, signer) {
+                    // If there is an error, report it and let it retry on the next loop step.
+                    error!(target: "client", height, "Optimistic block production failed: {}", err);
+                }
+
                 self.client.chunk_inclusion_tracker.prepare_chunk_headers_ready_for_inclusion(
                     &head.last_block_hash,
                     &mut self.client.chunk_endorsement_tracker,
@@ -1370,6 +1375,29 @@ impl ClientActorInner {
                 Err(error.into())
             }
         }
+    }
+
+    /// Produce optimistic block if we are block producer for given `next_height` height.
+    fn produce_optimistic_block(
+        &mut self,
+        next_height: BlockHeight,
+        signer: &Option<Arc<ValidatorSigner>>,
+    ) -> Result<(), Error> {
+        let _span = tracing::debug_span!(target: "client", "produce_optimistic_block", next_height).entered();
+        if self.client.is_optimistic_block_as_done(next_height) {
+            return Ok(());
+        }
+        let Some(block) = self.client.produce_optimistic_block(next_height)? else {
+            return Ok(());
+        };
+
+        // If we produced the block, send it out before we save the optimistic block.
+        self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(
+            NetworkRequests::OptimisticBlock { optimistic_block: block.clone() },
+        ));
+
+        // We’ve produced the optimistic block, mark it as done so we don't produce it again.
+        self.client.mark_optimistic_block_as_done(next_height);
     }
 
     fn send_chunks_metrics(&mut self, block: &Block) {

@@ -5,7 +5,7 @@ use crate::block::BlockValidityError::{
 };
 use crate::block_body::{BlockBody, BlockBodyV1, ChunkEndorsementSignatures};
 pub use crate::block_header::*;
-use crate::challenge::Challenges;
+use crate::challenge::{Challenges, ChallengesResult};
 use crate::checked_feature;
 use crate::congestion_info::{BlockCongestionInfo, ExtendedCongestionInfo};
 use crate::hash::CryptoHash;
@@ -15,6 +15,7 @@ use crate::sharding::{ChunkHashHeight, ShardChunkHeader, ShardChunkHeaderV1};
 use crate::types::{Balance, BlockHeight, EpochId, Gas};
 use crate::version::{ProtocolVersion, SHARD_CHUNK_HEADER_UPGRADE_VERSION};
 use borsh::{BorshDeserialize, BorshSerialize};
+use near_crypto::Signature;
 use near_primitives_core::types::ShardIndex;
 use near_schema_checker_lib::ProtocolSchema;
 use near_time::Utc;
@@ -85,6 +86,27 @@ pub enum Block {
     BlockV2(Arc<BlockV2>),
     BlockV3(Arc<BlockV3>),
     BlockV4(Arc<BlockV4>),
+}
+
+pub struct OptimisticBlock {
+    // Maybe add BlockHeaderInnerLite
+    // pub inner_header: BlockHeaderInnerLite,
+    pub block_height: BlockHeight,
+    pub prev_block_hash: CryptoHash,
+    pub block_timestamp: u64,
+    pub gas_price: Balance,
+    pub random_value: CryptoHash,
+
+    /// Do we need these fields? Maybe we get them from chunks 
+    // pub congestion_info: BlockCongestionInfo,
+    // pub bandwidth_requests: BlockBandwidthRequests,
+
+    /// Signature of the block producer.
+    pub signature: Signature,
+
+    // Data to confirm the correctness of randomness beacon output
+    pub vrf_value: near_crypto::vrf::Value,
+    pub vrf_proof: near_crypto::vrf::Proof,
 }
 
 #[cfg(feature = "solomon")]
@@ -170,6 +192,57 @@ fn genesis_chunk(
     )
     .expect("Failed to decode genesis chunk");
     encoded_chunk
+}
+
+impl OptimisticBlock {
+    #[cfg(feature = "clock")]
+    pub fn produce_optimistic(
+        this_epoch_protocol_version: ProtocolVersion,
+        next_epoch_protocol_version: ProtocolVersion,
+        latest_protocol_version: ProtocolVersion,
+        prev: &BlockHeader,
+        height: BlockHeight,
+        block_ordinal: crate::types::NumBlocks,
+        epoch_id: EpochId,
+        next_epoch_id: EpochId,
+        //approvals: Vec<Option<Box<near_crypto::Signature>>>,
+        gas_price_adjustment_rate: Rational32,
+        min_gas_price: Balance,
+        max_gas_price: Balance,
+        minted_amount: Option<Balance>,
+        // challenges_result: crate::challenge::ChallengesResult,
+        // challenges: Challenges,
+        signer: &crate::validator_signer::ValidatorSigner,
+        next_bp_hash: CryptoHash,
+        block_merkle_root: CryptoHash,
+        clock: near_time::Clock,
+        sandbox_delta_time: Option<near_time::Duration>,
+    ) -> Self {
+        use crate::hash::hash;
+        let prev_block_hash = *prev.hash();
+        let (vrf_value, vrf_proof) = signer.compute_vrf_with_proof(prev.random_value().as_ref());
+        let random_value = hash(vrf_value.0.as_ref());
+
+        let now = clock.now_utc().unix_timestamp_nanos() as u64;
+        #[cfg(feature = "sandbox")]
+        let now = now + sandbox_delta_time.unwrap().whole_nanoseconds() as u64;
+        #[cfg(not(feature = "sandbox"))]
+        debug_assert!(sandbox_delta_time.is_none());
+        let time = if now <= prev.raw_timestamp() { prev.raw_timestamp() + 1 } else { now };
+
+        SignatureSource::Signer(signer),
+
+        Self {
+            block_height: height,
+            prev_block_hash,
+            block_timestamp: time,
+            random_value,
+            vrf_value,
+            vrf_proof,
+            gas_price: todo!(),
+            signature: todo!(),
+        }
+    }
 }
 
 impl Block {
