@@ -1123,33 +1123,41 @@ impl ClientActorInner {
             let next_block_producer_account =
                 self.client.epoch_manager.get_block_producer(&epoch_id, height)?;
 
-            if me == next_block_producer_account {
-                self.client.chunk_inclusion_tracker.prepare_chunk_headers_ready_for_inclusion(
-                    &head.last_block_hash,
-                    &mut self.client.chunk_endorsement_tracker,
-                )?;
-                let num_chunks = self
-                    .client
-                    .chunk_inclusion_tracker
-                    .num_chunk_headers_ready_for_inclusion(&epoch_id, &head.last_block_hash);
-                let shard_ids = self.client.epoch_manager.shard_ids(&epoch_id).unwrap();
-                let have_all_chunks = head.height == 0 || num_chunks == shard_ids.len();
+            if me != next_block_producer_account {
+                continue;
+            }
 
-                if self.client.doomslug.ready_to_produce_block(
-                    height,
-                    have_all_chunks,
-                    log_block_production_info,
-                ) {
-                    self.client
-                        .chunk_inclusion_tracker
-                        .record_endorsement_metrics(&head.last_block_hash, &shard_ids);
-                    if let Err(err) = self.produce_block(height, signer) {
-                        // If there is an error, report it and let it retry on the next loop step.
-                        error!(target: "client", height, "Block production failed: {}", err);
-                    } else {
-                        self.post_block_production();
-                    }
+            self.client.chunk_inclusion_tracker.prepare_chunk_headers_ready_for_inclusion(
+                &head.last_block_hash,
+                &mut self.client.chunk_endorsement_tracker,
+            )?;
+            let num_chunks = self
+                .client
+                .chunk_inclusion_tracker
+                .num_chunk_headers_ready_for_inclusion(&epoch_id, &head.last_block_hash);
+            let shard_ids = self.client.epoch_manager.shard_ids(&epoch_id).unwrap();
+            let have_all_chunks = head.height == 0 || num_chunks == shard_ids.len();
+
+            if self.client.doomslug.ready_to_produce_block(
+                height,
+                have_all_chunks,
+                log_block_production_info,
+            ) {
+                self.client
+                    .chunk_inclusion_tracker
+                    .record_endorsement_metrics(&head.last_block_hash, &shard_ids);
+                if let Err(err) = self.produce_block(height, signer) {
+                    // If there is an error, report it and let it retry on the next loop step.
+                    error!(target: "client", height, "Block production failed: {}", err);
+                } else {
+                    self.post_block_production();
+                    continue;
                 }
+            }
+
+            if self.client.doomslug.ready_to_produce_block(height, true, log_block_production_info)
+            {
+                self.client.chain.produce_optimistic_block(height)?;
             }
         }
 
