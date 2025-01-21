@@ -77,4 +77,12 @@ impl OptimisticBlock {
     pub fn init(&mut self) {
         self.hash = hash(&borsh::to_vec(&self.inner).expect("Failed to serialize"));
     }
+
+    pub fn height(&self) -> BlockHeight {
+        self.inner.block_height
+    }
+
+    pub fn hash(&self) -> &CryptoHash {
+        &self.hash
+    }
 }

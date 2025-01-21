@@ -1,6 +1,7 @@
 use near_primitives::hash::CryptoHash;
-use near_primitives::sharding::ChunkHash;
-use near_primitives::types::BlockHeight;
+use near_primitives::optimistic_block::OptimisticBlock;
+use near_primitives::sharding::{ChunkHash, ShardChunkHeader};
+use near_primitives::types::{BlockHeight, ShardId, ShardIndex};
 use std::cmp::Ordering;
 use std::collections::{
     btree_map::{self, BTreeMap},
@@ -182,6 +183,90 @@ impl<Block: BlockLike> MissingChunksPool<Block> {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct OptimisticBlockChunks {
+    remaining_chunks: usize,
+    chunks: Vec<Option<ShardChunkHeader>>,
+}
+
+/// Stores optimistic blocks which are waiting for chunks to be received.
+#[derive(Debug, Default)]
+pub struct OptimisticBlockChunksPool {
+    /// Maps previous block hash to received optimistic block on top of it.
+    blocks_waiting_for_chunks: HashMap<CryptoHash, OptimisticBlock>,
+    /// Maps previous block hash to the vector of chunk headers existing for
+    /// now.
+    block_chunks_tracker: HashMap<CryptoHash, OptimisticBlockChunks>,
+    /// Latest ready block with all chunks received.
+    latest_ready_block: Option<(OptimisticBlock, Vec<ShardChunkHeader>)>,
+    /// Maps block height to the set of block hashes which are waiting for chunks.
+    height_idx: BTreeMap<BlockHeight, HashSet<BlockHash>>,
+}
+
+impl OptimisticBlockChunksPool {
+    pub fn new() -> Self {
+        Self {
+            blocks_waiting_for_chunks: Default::default(),
+            block_chunks_tracker: Default::default(),
+            latest_ready_block: None,
+            height_idx: Default::default(),
+        }
+    }
+
+    pub fn add_block_with_chunks(&mut self, block: OptimisticBlock, chunks: OptimisticBlockChunks) {
+        if chunks.remaining_chunks == 0 {
+            warn!(target: "chunks", hash = ?block.hash(), height = block.height(), "OptimisticBlockalready was ready to process.");
+            return;
+        }
+
+        self.block_chunks_tracker.insert(*block.hash(), chunks);
+        self.blocks_waiting_for_chunks.insert(*block.hash(), block);
+    }
+
+    pub fn accept_chunk(&mut self, shard_index: ShardIndex, chunk_header: ShardChunkHeader) {
+        let prev_block_hash = *chunk_header.prev_block_hash();
+
+        match self.block_chunks_tracker.entry(prev_block_hash) {
+            hash_map::Entry::Occupied(mut missing_chunks_entry) => {
+                debug!(target: "chunks", ?prev_block_hash, "Chunk accepted, OptimisticBlock was waiting for it.");
+
+                let missing_chunks = missing_chunks_entry.get_mut();
+                if missing_chunks.chunks[shard_index].is_none() {
+                    missing_chunks.chunks[shard_index] = Some(chunk_header);
+                    missing_chunks.remaining_chunks -= 1;
+                }
+
+                if missing_chunks.remaining_chunks == 0 {
+                    debug!(target: "chunks", %prev_block_hash, "Block is ready - last chunk received.");
+                    self.mark_block_as_ready(&prev_block_hash);
+                } else {
+                    debug!(target: "chunks", %prev_block_hash, remaining_chunks = missing_chunks.remaining_chunks, "Block is still waiting for chunks");
+                }
+            }
+            hash_map::Entry::Vacant(_) => {}
+        }
+    }
+
+    fn mark_block_as_ready(&mut self, prev_block_hash: &CryptoHash) {
+        if let Some(block) = self.blocks_waiting_for_chunks.remove(prev_block_hash) {
+            let chunks = self.block_chunks_tracker.remove(prev_block_hash).unwrap();
+            self.latest_ready_block = Some((block, chunks));
+        }
+    }
+
+    pub fn prune_blocks_below_height(&mut self, height: BlockHeight) {
+        let heights_to_remove: Vec<BlockHeight> =
+            self.height_idx.keys().copied().take_while(|h| *h < height).collect();
+        for h in heights_to_remove {
+            if let Some(block_hashes) = self.height_idx.remove(&h) {
+                for block_hash in block_hashes {
+                    self.blocks_waiting_for_chunks.remove(&block_hash);
                 }
             }
         }
