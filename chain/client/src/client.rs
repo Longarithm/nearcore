@@ -57,6 +57,7 @@ use near_primitives::errors::EpochError;
 use near_primitives::hash::CryptoHash;
 use near_primitives::merkle::{merklize, MerklePath, PartialMerkleTree};
 use near_primitives::network::PeerId;
+use near_primitives::optimistic_block::OptimisticBlock;
 use near_primitives::receipt::Receipt;
 use near_primitives::sharding::{
     EncodedShardChunk, PartialEncodedChunk, ShardChunk, ShardChunkHeader, StateSyncInfo,
@@ -1214,6 +1215,10 @@ impl Client {
             }
         }
         res
+    }
+
+    pub fn receive_optimistic_block(&mut self, block: OptimisticBlock) {
+        let _span = debug_span!(target: "client", "receive_optimistic_block").entered();
     }
 
     /// To protect ourselves from spamming, we do some pre-check on block height before we do any
