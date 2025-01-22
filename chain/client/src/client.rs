@@ -1502,6 +1502,7 @@ impl Client {
             .expect("Could not persist chunk");
         // We're marking chunk as accepted.
         self.chain.blocks_with_missing_chunks.accept_chunk(&chunk_header.chunk_hash());
+        self.chain.optimistic_block_chunks.accept_chunk(shard_index, chunk_header);
         // If this was the last chunk that was missing for a block, it will be processed now.
         self.process_blocks_with_missing_chunks(apply_chunks_done_sender, &signer);
     }

@@ -206,7 +206,7 @@ pub struct OptimisticBlockChunksPool {
     /// Latest ready block with all chunks received.
     latest_ready_block: Option<(OptimisticBlock, Vec<ShardChunkHeader>)>,
     /// Maps block height to the set of block hashes which are waiting for chunks.
-    height_idx: BTreeMap<BlockHeight, HashSet<BlockHash>>,
+    height_idx: BTreeMap<BlockHeight, HashSet<CryptoHash>>,
 }
 
 impl OptimisticBlockChunksPool {
@@ -221,7 +221,7 @@ impl OptimisticBlockChunksPool {
 
     pub fn add_block_with_chunks(&mut self, block: OptimisticBlock, chunks: OptimisticBlockChunks) {
         if chunks.remaining_chunks == 0 {
-            warn!(target: "chunks", hash = ?block.hash(), height = block.height(), "OptimisticBlockalready was ready to process.");
+            warn!(target: "chunks", hash = ?block.hash(), height = block.height(), "OptimisticBlock already was ready to process.");
             return;
         }
 
