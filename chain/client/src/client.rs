@@ -1490,6 +1490,7 @@ impl Client {
             .epoch_manager
             .get_shard_layout_from_prev_block(&parent_hash)
             .expect("Could not obtain shard layout");
+        let prev_block_height = self.chain.get_block_header(&parent_hash)?.height();
 
         let shard_id = partial_chunk.shard_id();
         let shard_index =
@@ -1502,9 +1503,14 @@ impl Client {
             .expect("Could not persist chunk");
         // We're marking chunk as accepted.
         self.chain.blocks_with_missing_chunks.accept_chunk(&chunk_header.chunk_hash());
-        self.chain.optimistic_block_chunks.accept_chunk(shard_index, chunk_header);
+        self.chain.optimistic_block_chunks.accept_chunk(
+            &shard_layout,
+            prev_block_height,
+            chunk_header,
+        );
         // If this was the last chunk that was missing for a block, it will be processed now.
         self.process_blocks_with_missing_chunks(apply_chunks_done_sender, &signer);
+        self.maybe_process_optimistic_block();
     }
 
     /// Called asynchronously when the ShardsManager finishes processing a chunk but the chunk
@@ -2008,6 +2014,16 @@ impl Client {
             apply_chunks_done_sender,
         );
         self.process_block_processing_artifact(blocks_processing_artifacts, signer);
+    }
+
+    pub fn maybe_process_optimistic_block(&mut self) {
+        let Some((block, chunks)) = self.chain.optimistic_block_chunks.take_latest_ready_block()
+        else {
+            return;
+        };
+
+        let me = self.validator_signer.as_ref().map(|signer| signer.validator_id());
+        self.chain.process_optimistic_block(me, block, chunks);
     }
 
     pub fn is_validator(

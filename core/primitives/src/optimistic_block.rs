@@ -85,4 +85,16 @@ impl OptimisticBlock {
     pub fn hash(&self) -> &CryptoHash {
         &self.hash
     }
+
+    pub fn prev_block_hash(&self) -> &CryptoHash {
+        &self.inner.prev_block_hash
+    }
+
+    pub fn block_timestamp(&self) -> u64 {
+        self.inner.block_timestamp
+    }
+
+    pub fn random_value(&self) -> &CryptoHash {
+        &self.inner.random_value
+    }
 }

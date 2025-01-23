@@ -67,6 +67,7 @@ use near_primitives::epoch_block_info::BlockInfo;
 use near_primitives::errors::EpochError;
 use near_primitives::hash::{hash, CryptoHash};
 use near_primitives::merkle::{merklize, verify_path, PartialMerkleTree};
+use near_primitives::optimistic_block::OptimisticBlock;
 use near_primitives::receipt::Receipt;
 use near_primitives::sandbox::state_patch::SandboxStatePatch;
 use near_primitives::shard_layout::{ShardLayout, ShardUId};
@@ -396,6 +397,7 @@ impl Chain {
             runtime_adapter,
             orphans: OrphanBlockPool::new(),
             blocks_with_missing_chunks: MissingChunksPool::new(),
+            optimistic_block_chunks: OptimisticBlockChunksPool::new(),
             blocks_in_processing: BlocksInProcessing::new(),
             genesis,
             epoch_length: chain_genesis.epoch_length,
@@ -584,6 +586,7 @@ impl Chain {
             runtime_adapter,
             orphans: OrphanBlockPool::new(),
             blocks_with_missing_chunks: MissingChunksPool::new(),
+            optimistic_block_chunks: OptimisticBlockChunksPool::new(),
             blocks_in_processing: BlocksInProcessing::new(),
             invalid_blocks: LruCache::new(NonZeroUsize::new(INVALID_CHUNKS_POOL_SIZE).unwrap()),
             genesis: genesis.clone(),
@@ -1510,6 +1513,79 @@ impl Chain {
         }
 
         res
+    }
+
+    pub fn process_optimistic_block(
+        &mut self,
+        me: &Option<AccountId>,
+        block: OptimisticBlock,
+        chunk_headers: Vec<ShardChunkHeader>,
+    ) -> Result<(), Error> {
+        // CHECK PROTOCOL VERSION
+
+        let _span = debug_span!(
+            target: "chain",
+            "process_optimistic_block",
+            hash = ?block.hash(),
+            height = ?block.height()
+        )
+        .entered();
+
+        let prev_block_hash = block.prev_block_hash();
+        let prev_block = self.get_block(prev_block_hash)?;
+        let prev_chunk_headers =
+            Chain::get_prev_chunk_headers(self.epoch_manager.as_ref(), &prev_block)?;
+
+        let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(prev_block_hash)?;
+        let shard_layout = self.epoch_manager.get_shard_layout(&epoch_id)?;
+        let protocol_version = self.epoch_manager.get_epoch_protocol_version(&epoch_id)?;
+        let chunks = Chunks::from_chunk_headers(&chunk_headers, block.height());
+
+        let mut maybe_jobs = vec![];
+        for (shard_index, prev_chunk_header) in prev_chunk_headers.iter().enumerate() {
+            let shard_id = shard_layout.get_shard_id(shard_index)?;
+            let chunk_header =
+                chunk_headers.get(shard_index).ok_or(Error::InvalidShardId(shard_id))?;
+
+            let block_context = ApplyChunkBlockContext {
+                height: block.height(),
+                block_hash: *block.hash(),
+                prev_block_hash: *block.prev_block_hash(),
+                block_timestamp: block.block_timestamp(),
+                gas_price: prev_block.header().next_gas_price(),
+                challenges_result: ChallengesResult::default(),
+                random_seed: *block.random_value(),
+                congestion_info: chunks.block_congestion_info(),
+                bandwidth_requests: chunks.block_bandwidth_requests(),
+            };
+            let incoming_receipts = incoming_receipts.get(&shard_id);
+            let storage_context = StorageContext {
+                storage_data_source: StorageDataSource::Db,
+                state_patch: SandboxStatePatch::default(),
+            };
+
+            let stateful_job = self.get_update_shard_job(
+                me,
+                block_context,
+                &chunks,
+                shard_index,
+                &prev_block,
+                prev_chunk_header,
+                ApplyChunksMode::IsCaughtUp,
+                incoming_receipts,
+                storage_context,
+            );
+            maybe_jobs.push((shard_id, stateful_job));
+        }
+
+        let mut jobs = vec![];
+        for (shard_id, maybe_job) in maybe_jobs {
+            match maybe_job {
+                Ok(Some(processor)) => jobs.push(processor),
+                Ok(None) => {}
+                Err(err) => return Err(err),
+            }
+        }
     }
 
     /// Checks if any block has finished applying chunks and postprocesses these blocks to complete
