@@ -1,7 +1,7 @@
-import { Fragment, ReactElement, useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Fragment, ReactElement, useCallback, useMemo, useState } from 'react';
 import Xarrow, { Xwrapper, useXarrow } from 'react-xarrows';
-import { DebugBlockStatus, MissedHeightInfo, fetchBlockStatus, fetchFullStatus } from './api';
+import { DebugBlockStatus, DebugBlocksMode, MissedHeightInfo, fetchBlockStatus, fetchFullStatus } from './api';
 import './LatestBlocksView.scss';
 
 function ellipsify(str: string, maxLen: number): string {
@@ -272,6 +272,10 @@ export const LatestBlocksView = ({ addr }: LatestBlockViewProps) => {
     const [expandAll, setExpandAll] = useState(false);
     const [hideMissingHeights, setHideMissingHeights] = useState(false);
     const [showMissingChunksStats, setShowMissingChunksStats] = useState(false);
+    const [numBlocks, setNumBlocks] = useState<number | null>(null);
+    const [numBlocksInInput, setNumBlocksInInput] = useState<string>('');
+    const [mode, setMode] = useState<DebugBlocksMode | null>(null);
+    const [modeInInput, setModeInInput] = useState<string>('');
     const updateXarrow = useXarrow();
 
     const { data: status } = useQuery(
@@ -282,7 +286,9 @@ export const LatestBlocksView = ({ addr }: LatestBlockViewProps) => {
         data: blockData,
         error,
         isLoading,
-    } = useQuery(['latestBlocks', addr, height], async () => await fetchBlockStatus(addr, height));
+    } = useQuery(['latestBlocks', addr, height, mode, numBlocks], async () => {
+        return await fetchBlockStatus(addr, height, mode, numBlocks);
+    });
 
     const { rows, knownProducerSet } = useMemo(() => {
         if (status && blockData) {
@@ -339,18 +345,41 @@ export const LatestBlocksView = ({ addr }: LatestBlockViewProps) => {
     }, [rows]);
 
     const goToHeightCallback = useCallback(() => {
-        const height = parseInt(heightInInput);
-        setHeight(height);
-    }, [heightInInput]);
+        if (heightInInput != '') {
+            const height = parseInt(heightInInput);
+            setHeight(height);
+        } else {
+            setHeight(null);
+        }
+        if (numBlocksInInput != '') {
+            const numBlocks = Math.min(parseInt(numBlocksInInput), 1000);
+            setNumBlocks(numBlocks);
+        } else {
+            setNumBlocks(null);
+        }
+        if (modeInInput != '') {
+            const mode = modeInInput as DebugBlocksMode;
+            setMode(mode);
+        } else {
+            setMode(null);
+        }
+    }, [heightInInput, numBlocksInInput, modeInInput]);
 
     return (
         <Xwrapper>
             <div className="latest-blocks-view">
                 <div className="height-controller">
                     <span className="prompt">
-                        {height == null
-                            ? 'Displaying most recent blocks'
-                            : `Displaying blocks from height ${height}`}
+                        {(() => {
+                            let blocksText = `${numBlocks == null ? '' : numBlocks} blocks`;
+                            let promptText = height == null ? 
+                                `Displaying most recent ${blocksText}` : 
+                                `Displaying ${blocksText} from height ${height}`;
+                            if (mode == DebugBlocksMode.FirstSkip) {
+                                promptText += ' from first skip';
+                            }
+                            return promptText;
+                        })()}
                     </span>
                     <input
                         type="text"
@@ -358,6 +387,19 @@ export const LatestBlocksView = ({ addr }: LatestBlockViewProps) => {
                         value={heightInInput}
                         onChange={(e) => setHeightInInput(e.target.value)}
                     />
+                    <input
+                        type="text"
+                        placeholder="enter number of blocks"
+                        value={numBlocksInInput}
+                        onChange={(e) => setNumBlocksInInput(e.target.value)}
+                    />
+                    <select
+                        value={modeInInput}
+                        onChange={(e) => setModeInInput(e.target.value)}
+                    >
+                        <option value="all">All</option>
+                        <option value="first_skip">From First Skip</option>
+                    </select>
                     <button onClick={goToHeightCallback}>Go</button>
                     <button onClick={() => setHeight(null)}>Show HEADER_HEAD</button>
                 </div>
