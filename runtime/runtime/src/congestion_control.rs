@@ -706,12 +706,16 @@ pub fn bootstrap_congestion_info(
     config: &RuntimeConfig,
     shard_id: ShardId,
 ) -> Result<CongestionInfo, StorageError> {
+    println!("starting bootstrap_congestion_info shard_id: {}", shard_id);
     let mut receipt_bytes: u64 = 0;
     let mut delayed_receipts_gas: u128 = 0;
     let mut buffered_receipts_gas: u128 = 0;
 
+    println!("loading delayed_receipt_queue");
     let delayed_receipt_queue = &DelayedReceiptQueue::load(trie)?;
-    for receipt_result in delayed_receipt_queue.iter(trie, true) {
+    println!("iterating delayed_receipt_queue");
+    for (i, receipt_result) in delayed_receipt_queue.iter(trie, true).enumerate() {
+        println!("processing delayed_receipt_queue: {}", i);
         let receipt = receipt_result?;
         let gas = receipt_congestion_gas(&receipt, config).map_err(int_overflow_to_storage_err)?;
         delayed_receipts_gas =
@@ -721,9 +725,13 @@ pub fn bootstrap_congestion_info(
         receipt_bytes = receipt_bytes.checked_add(memory).ok_or_else(overflow_storage_err)?;
     }
 
+    println!("loading outgoing_buffers");
     let mut outgoing_buffers = ShardsOutgoingReceiptBuffer::load(trie)?;
+    println!("iterating outgoing_buffers");
     for shard in outgoing_buffers.shards() {
-        for receipt_result in outgoing_buffers.to_shard(shard).iter(trie, true) {
+        println!("processing outgoing_buffers: {}", shard);
+        for (i, receipt_result) in outgoing_buffers.to_shard(shard).iter(trie, true).enumerate() {
+            println!("processing receipt: {}", i);
             let receipt = receipt_result?;
             let gas =
                 receipt_congestion_gas(&receipt, config).map_err(int_overflow_to_storage_err)?;

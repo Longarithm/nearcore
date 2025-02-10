@@ -23,7 +23,8 @@ pub fn memtrie_lookup<'a, M: ArenaMemory>(
         let view = node.view();
         if let Some(nodes_accessed) = &mut nodes_accessed {
             let raw_node_serialized = borsh::to_vec(&view.to_raw_trie_node_with_size()).unwrap();
-            nodes_accessed.push((view.node_hash(), raw_node_serialized.into()));
+            let node_hash = view.node_hash();
+            nodes_accessed.push((node_hash, raw_node_serialized.into()));
         }
         match view {
             MemTrieNodeView::Leaf { extension, value } => {
