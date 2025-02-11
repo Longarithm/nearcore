@@ -380,16 +380,18 @@ impl PartialWitnessActor {
         let epoch_manager = self.epoch_manager.clone();
         let runtime_adapter = self.runtime.clone();
 
-        let ChunkProductionKey { shard_id, epoch_id, height_created } =
-            partial_witness.chunk_production_key();
+        let key = partial_witness.chunk_production_key();
+        let ChunkProductionKey { shard_id, epoch_id, height_created } = key.clone();
 
         let chunk_producer = self
             .epoch_manager
             .get_chunk_producer_info(&ChunkProductionKey { epoch_id, height_created, shard_id })?
             .take_account_id();
 
+        tracing::debug!(target: "client", ?key, "PESWM - chunk_producer: {:?}", chunk_producer);
+
         // Forward witness part to chunk validators except the validator that produced the chunk and witness.
-        let target_chunk_validators = self
+        let target_chunk_validators: Vec<_> = self
             .epoch_manager
             .get_chunk_validator_assignments(&epoch_id, shard_id, height_created)?
             .ordered_chunk_validators()
@@ -398,6 +400,8 @@ impl PartialWitnessActor {
             .collect();
 
         let network_adapter = self.network_adapter.clone();
+
+        tracing::debug!(target: "client", ?key, "PESWM - target_chunk_validators {}", target_chunk_validators.len());
 
         self.partial_witness_spawner.spawn("handle_partial_encoded_state_witness", move || {
             // Validate the partial encoded state witness and forward the part to all the chunk validators.

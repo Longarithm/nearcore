@@ -371,6 +371,8 @@ impl PartialEncodedStateWitnessTracker {
         create_if_not_exists: bool,
         update: CacheUpdate,
     ) -> Result<(), Error> {
+        tracing::debug!(target: "client", ?key, "PESWM - process_update START");
+
         if self.processed_witnesses.contains(&key) {
             tracing::debug!(
                 target: "client",
@@ -442,6 +444,8 @@ impl PartialEncodedStateWitnessTracker {
         };
         metrics::PARTIAL_WITNESS_CACHE_SIZE.set(total_size as f64);
 
+        tracing::debug!(target: "client", ?key, "PESWM - process_update END");
+
         Ok(())
     }
 
@@ -458,6 +462,7 @@ impl PartialEncodedStateWitnessTracker {
     // Function to insert a new entry into the cache for the chunk hash if it does not already exist
     // We additionally check if an evicted entry has been fully decoded and processed.
     fn maybe_insert_new_entry_in_parts_cache(&self, key: &ChunkProductionKey) {
+        tracing::debug!(target: "client", ?key, "PESWM - maybe_insert_new_entry_in_parts_cache START");
         let mut parts_cache = self.parts_cache.lock().unwrap();
         if !parts_cache.contains(key) {
             if let Some((evicted_key, evicted_entry)) =
@@ -472,6 +477,7 @@ impl PartialEncodedStateWitnessTracker {
                 );
             }
         }
+        tracing::debug!(target: "client", ?key, "PESWM - maybe_insert_new_entry_in_parts_cache END");
     }
 
     fn decode_state_witness(

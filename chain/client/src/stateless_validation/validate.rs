@@ -31,8 +31,8 @@ pub fn validate_partial_encoded_state_witness(
     validator_account_id: &AccountId,
     store: &Store,
 ) -> Result<bool, Error> {
-    let ChunkProductionKey { shard_id, epoch_id, height_created } =
-        partial_witness.chunk_production_key();
+    let key = partial_witness.chunk_production_key();
+    let ChunkProductionKey { shard_id, epoch_id, height_created } = key.clone();
     let num_parts =
         epoch_manager.get_chunk_validator_assignments(&epoch_id, shard_id, height_created)?.len();
     if partial_witness.part_ord() >= num_parts {
@@ -53,6 +53,8 @@ pub fn validate_partial_encoded_state_witness(
         )));
     }
 
+    tracing::debug!(target: "client", ?key, "PESWM - validate_chunk_relevant_as_validator");
+
     if !validate_chunk_relevant_as_validator(
         epoch_manager,
         &partial_witness.chunk_production_key(),
@@ -61,6 +63,8 @@ pub fn validate_partial_encoded_state_witness(
     )? {
         return Ok(false);
     }
+
+    tracing::debug!(target: "client", ?key, "PESWM - verify");
 
     let chunk_producer =
         epoch_manager.get_chunk_producer_info(&partial_witness.chunk_production_key())?;
