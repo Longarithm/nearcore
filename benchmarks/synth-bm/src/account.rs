@@ -214,6 +214,7 @@ pub async fn create_sub_accounts(args: &CreateSubAccountsArgs) -> anyhow::Result
         .sub_account_prefix
         .as_ref()
         .map(|p| p.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect::<Vec<&str>>());
+    println!("prefixes: {:?}", prefixes);
 
     for i in 0..args.num_sub_accounts {
         let sub_account_key = SecretKey::from_random(KeyType::ED25519);
