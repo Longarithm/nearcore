@@ -570,6 +570,8 @@ impl ForkNetworkCommand {
                 config.num_chunk_validator_seats = *num_seats;
             }
             config.shard_layout = ShardLayout::v2(accounts.clone(), shard_ids.clone(), None);
+            config.num_block_producer_seats_per_shard = vec![100; shard_ids.len()];
+            config.avg_hidden_validator_seats_per_shard = vec![100; shard_ids.len()];
             new_epoch_configs.insert(version, Arc::new(config));
         }
         let first_config = new_epoch_configs.get(&first_version).unwrap().as_ref().clone();
