@@ -2,10 +2,10 @@ use crate::{Doomslug, DoomslugThresholdMode};
 use near_async::time::{Duration, FakeClock, Instant, Utc};
 use near_crypto::{KeyType, SecretKey};
 use near_primitives::block::Approval;
-use near_primitives::hash::{hash, CryptoHash};
+use near_primitives::hash::{CryptoHash, hash};
 use near_primitives::test_utils::create_test_signer;
 use near_primitives::types::{ApprovalStake, BlockHeight};
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use time::ext::InstantExt as _;
@@ -52,6 +52,7 @@ fn one_iter(
     let mut doomslugs: Vec<_> = std::iter::repeat_with(|| {
         Doomslug::new(
             clock.clock(),
+            0,
             0,
             Duration::milliseconds(200),
             Duration::milliseconds(1000),

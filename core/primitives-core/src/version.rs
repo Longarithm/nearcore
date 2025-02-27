@@ -263,6 +263,7 @@ impl ProtocolFeature {
             | ProtocolFeature::CurrentEpochStateSync => 74,
             ProtocolFeature::SimpleNightshadeV4 => 75,
             ProtocolFeature::SimpleNightshadeV5 => 76,
+            ProtocolFeature::BlockHeightForReceiptId | ProtocolFeature::ProduceOptimisticBlock => 77,
 
             // Nightly features:
             #[cfg(feature = "protocol_feature_fix_contract_loading_cost")]
@@ -272,9 +273,6 @@ impl ProtocolFeature {
             // that always enables this for mocknet (see config_mocknet function).
             ProtocolFeature::ShuffleShardAssignments => 143,
             ProtocolFeature::ExcludeExistingCodeFromWitnessForCodeLen => 148,
-            ProtocolFeature::BlockHeightForReceiptId | ProtocolFeature::ProduceOptimisticBlock => {
-                149
-            }
             // Place features that are not yet in Nightly below this line.
         }
     }
@@ -285,7 +283,7 @@ impl ProtocolFeature {
 }
 
 /// Current protocol version used on the mainnet with all stable features.
-const STABLE_PROTOCOL_VERSION: ProtocolVersion = 76;
+const STABLE_PROTOCOL_VERSION: ProtocolVersion = 77;
 
 // On nightly, pick big enough version to support all features.
 const NIGHTLY_PROTOCOL_VERSION: ProtocolVersion = 149;
@@ -303,9 +301,7 @@ pub const PEER_MIN_ALLOWED_PROTOCOL_VERSION: ProtocolVersion = STABLE_PROTOCOL_V
 
 #[macro_export]
 macro_rules! checked_feature {
-    ("stable", $feature:ident, $current_protocol_version:expr) => {{
-        $crate::version::ProtocolFeature::$feature.protocol_version() <= $current_protocol_version
-    }};
+    ("stable", $feature:ident, $current_protocol_version:expr) => {{ $crate::version::ProtocolFeature::$feature.protocol_version() <= $current_protocol_version }};
     ($feature_name:tt, $feature:ident, $current_protocol_version:expr) => {{
         #[cfg(feature = $feature_name)]
         let is_feature_enabled = $crate::version::ProtocolFeature::$feature.protocol_version()
@@ -320,9 +316,7 @@ macro_rules! checked_feature {
         is_feature_enabled
     }};
 
-    ($feature_name:tt, $feature:ident, $current_protocol_version:expr, $feature_block:block) => {{
-        checked_feature!($feature_name, $feature, $current_protocol_version, $feature_block, {})
-    }};
+    ($feature_name:tt, $feature:ident, $current_protocol_version:expr, $feature_block:block) => {{ checked_feature!($feature_name, $feature, $current_protocol_version, $feature_block, {}) }};
 
     ($feature_name:tt, $feature:ident, $current_protocol_version:expr, $feature_block:block, $non_feature_block:block) => {{
         #[cfg(feature = $feature_name)]

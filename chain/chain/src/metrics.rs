@@ -1,7 +1,8 @@
 use near_o11y::metrics::{
-    exponential_buckets, processing_time_buckets, try_create_histogram, try_create_histogram_vec,
-    try_create_histogram_with_buckets, try_create_int_counter, try_create_int_gauge,
-    try_create_int_gauge_vec, Histogram, HistogramVec, IntCounter, IntGauge, IntGaugeVec,
+    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, exponential_buckets,
+    processing_time_buckets, try_create_histogram, try_create_histogram_vec,
+    try_create_histogram_with_buckets, try_create_int_counter, try_create_int_counter_vec,
+    try_create_int_gauge, try_create_int_gauge_vec,
 };
 use std::sync::LazyLock;
 
@@ -87,6 +88,14 @@ pub static BLOCK_ORPHANED_DELAY: LazyLock<Histogram> = LazyLock::new(|| {
     try_create_histogram("near_block_orphaned_delay", "How long blocks stay in the orphan pool")
         .unwrap()
 });
+pub static BLOCK_OPTIMISTIC_DELAY: LazyLock<Histogram> = LazyLock::new(|| {
+    try_create_histogram_with_buckets(
+        "near_block_optimistic_delay",
+        "Delay between optimistic block completion and receiving the full block",
+        exponential_buckets(0.001, 1.6, 20).unwrap(),
+    )
+    .unwrap()
+});
 pub static BLOCK_MISSING_CHUNKS_DELAY: LazyLock<Histogram> = LazyLock::new(|| {
     try_create_histogram(
         "near_block_missing_chunks_delay",
@@ -171,4 +180,26 @@ pub(crate) static SHARD_LAYOUT_NUM_SHARDS: LazyLock<IntGauge> = LazyLock::new(||
         "The number of shards in the shard layout of the current head.",
     )
     .unwrap()
+});
+
+pub(crate) static APPLY_CHUNK_RESULTS_CACHE_HITS: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    try_create_int_counter_vec(
+        "near_apply_chunk_results_cache_hits",
+        "Total number of apply chunk result cache hits",
+        &["shard_id"],
+    )
+    .unwrap()
+});
+
+pub(crate) static APPLY_CHUNK_RESULTS_CACHE_MISSES: LazyLock<IntCounterVec> = LazyLock::new(|| {
+    try_create_int_counter_vec(
+        "near_apply_chunk_results_cache_misses",
+        "Total number of apply chunk result cache misses",
+        &["shard_id"],
+    )
+    .unwrap()
+});
+
+pub(crate) static DOOMSLUG_TIMER_VERSION: LazyLock<IntGauge> = LazyLock::new(|| {
+    try_create_int_gauge("near_doomslug_timer_version", "Version of Doomslug timer").unwrap()
 });

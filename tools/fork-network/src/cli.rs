@@ -15,6 +15,8 @@ use near_primitives::account::id::AccountType;
 use near_primitives::account::{AccessKey, AccessKeyPermission, Account, AccountContract};
 use near_primitives::borsh;
 use near_primitives::epoch_manager::{EpochConfig, EpochConfigStore};
+use near_primitives::hash::CryptoHash;
+use near_primitives::num_rational::Rational32;
 use near_primitives::serialize::dec_format;
 use near_primitives::shard_layout::{ShardLayout, ShardUId};
 use near_primitives::state::FlatStateValue;
@@ -22,23 +24,24 @@ use near_primitives::state_record::StateRecord;
 use near_primitives::trie_key::col;
 use near_primitives::trie_key::trie_key_parsers::parse_account_id_from_account_key;
 use near_primitives::types::{
-    AccountId, AccountInfo, Balance, BlockHeight, EpochId, NumBlocks, NumSeats, StateRoot,
+    AccountId, AccountInfo, Balance, BlockHeight, EpochId, NumBlocks, NumSeats, ShardId, StateRoot,
 };
-use near_primitives::version::{ProtocolVersion, PROTOCOL_VERSION};
+use near_primitives::version::{PROTOCOL_VERSION, ProtocolVersion};
 use near_store::adapter::StoreAdapter;
 use near_store::db::RocksDB;
 use near_store::flat::{BlockInfo, FlatStorageManager, FlatStorageStatus};
 use near_store::{
-    checkpoint_hot_storage_and_cleanup_columns, DBCol, Store, TrieDBStorage, TrieStorage,
-    FINAL_HEAD_KEY,
+    DBCol, FINAL_HEAD_KEY, Store, TrieDBStorage, TrieStorage,
+    checkpoint_hot_storage_and_cleanup_columns,
 };
-use nearcore::{load_config, open_storage, NearConfig, NightshadeRuntime, NightshadeRuntimeExt};
+use nearcore::{NearConfig, NightshadeRuntime, NightshadeRuntimeExt, load_config, open_storage};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 use strum::IntoEnumIterator;
 
@@ -129,6 +132,19 @@ struct SetValidatorsCmd {
     pub num_seats: Option<NumSeats>,
 }
 
+const LEGACY_FORKED_ROOTS_KEY_PREFIX: &str = "FORK_TOOL_SHARD_ID:";
+
+fn parse_legacy_state_roots_key(key: &[u8]) -> anyhow::Result<ShardId> {
+    let key = std::str::from_utf8(key)?;
+    // Sanity check assertion since we should be iterating based on this prefix
+    assert!(key.starts_with(LEGACY_FORKED_ROOTS_KEY_PREFIX));
+    let int_part = &key[LEGACY_FORKED_ROOTS_KEY_PREFIX.len()..];
+    ShardId::from_str(int_part).with_context(|| format!("Failed parsing ShardId from {}", int_part))
+}
+
+const EPOCH_ID_KEY: &[u8; 18] = b"FORK_TOOL_EPOCH_ID";
+const FLAT_HEAD_KEY: &[u8; 19] = b"FORK_TOOL_FLAT_HEAD";
+const SHARD_LAYOUT_KEY: &[u8; 22] = b"FORK_TOOL_SHARD_LAYOUT";
 const FORKED_ROOTS_KEY_PREFIX: &[u8; 20] = b"FORK_TOOL_SHARD_UID:";
 
 fn parse_state_roots_key(key: &[u8]) -> anyhow::Result<ShardUId> {
@@ -351,9 +367,9 @@ impl ForkNetworkCommand {
         );
 
         let mut store_update = store.store_update();
-        store_update.set_ser(DBCol::Misc, b"FORK_TOOL_EPOCH_ID", epoch_id)?;
-        store_update.set_ser(DBCol::Misc, b"FORK_TOOL_FLAT_HEAD", &desired_flat_head)?;
-        store_update.set_ser(DBCol::Misc, b"FORK_TOOL_SHARD_LAYOUT", &target_shard_layout)?;
+        store_update.set_ser(DBCol::Misc, EPOCH_ID_KEY, epoch_id)?;
+        store_update.set_ser(DBCol::Misc, FLAT_HEAD_KEY, &desired_flat_head)?;
+        store_update.set_ser(DBCol::Misc, SHARD_LAYOUT_KEY, &target_shard_layout)?;
         for (shard_uid, state_root) in state_roots.iter() {
             store_update.set_ser(DBCol::Misc, &make_state_roots_key(*shard_uid), state_root)?;
         }
@@ -403,7 +419,7 @@ impl ForkNetworkCommand {
             Some(home_dir),
         );
         let (prev_state_roots, flat_head, epoch_id, target_shard_layout) =
-            self.get_state_roots_and_hash(store.clone())?;
+            self.get_state_roots_and_hash(store.clone(), epoch_manager.as_ref())?;
         tracing::info!(?prev_state_roots, ?epoch_id, ?flat_head);
 
         let source_shard_layout = epoch_manager.get_shard_layout(&epoch_id)?;
@@ -465,7 +481,7 @@ impl ForkNetworkCommand {
         );
 
         let (prev_state_roots, flat_head, _epoch_id, target_shard_layout) =
-            self.get_state_roots_and_hash(store.clone())?;
+            self.get_state_roots_and_hash(store.clone(), epoch_manager.as_ref())?;
 
         let runtime =
             NightshadeRuntime::from_config(home_dir, store.clone(), &near_config, epoch_manager)
@@ -543,14 +559,62 @@ impl ForkNetworkCommand {
         Ok(())
     }
 
+    // Read the values that used to be written before the changes that have us write to FORK_TOOL_FLAT_HEAD
+    // and FORK_TOOL_SHARD_LAYOUT
+    fn legacy_get_state_roots_and_hash(
+        &self,
+        store: Store,
+        epoch_manager: &dyn EpochManagerAdapter,
+    ) -> anyhow::Result<(HashMap<ShardUId, StateRoot>, BlockInfo, EpochId, ShardLayout)> {
+        let epoch_id = EpochId(store.get_ser(DBCol::Misc, EPOCH_ID_KEY)?.unwrap());
+        let block_hash = store.get_ser(DBCol::Misc, b"FORK_TOOL_BLOCK_HASH")?.unwrap();
+        let block_height = store.get(DBCol::Misc, b"FORK_TOOL_BLOCK_HEIGHT")?.unwrap();
+        let block_height = u64::from_le_bytes(block_height.as_slice().try_into().unwrap());
+
+        let flat_head = BlockInfo {
+            hash: block_hash,
+            // The previous code stored fork_head.height + 1 in FORK_TOOL_BLOCK_HEIGHT
+            height: block_height - 1,
+            // If dealing with a legacy setup, the prev hash won't be set, but it should be fine since we should only use
+            // legacy_get_state_roots_and_hash() for the set-validators and finalize commands, and not the amend-access-keys
+            // command, which is the only one that needs this set properly
+            prev_hash: CryptoHash::default(),
+        };
+        let shard_layout = epoch_manager
+            .get_shard_layout(&epoch_id)
+            .with_context(|| format!("Failed getting shard layout for epoch {}", &epoch_id.0))?;
+
+        let mut state_roots = HashMap::new();
+        for item in store.iter_prefix(DBCol::Misc, LEGACY_FORKED_ROOTS_KEY_PREFIX.as_bytes()) {
+            let (key, value) = item?;
+            let shard_id = parse_legacy_state_roots_key(&key)?;
+            let shard_uid = ShardUId::from_shard_id_and_layout(shard_id, &shard_layout);
+            let state_root: StateRoot = borsh::from_slice(&value)?;
+
+            state_roots.insert(shard_uid, state_root);
+        }
+
+        tracing::info!(
+            ?state_roots,
+            ?block_hash,
+            ?epoch_id,
+            block_height,
+            "legacy state roots and hash",
+        );
+        Ok((state_roots, flat_head, epoch_id, shard_layout))
+    }
+
     // The Vec<StateRoot> returned is in ShardIndex order
     fn get_state_roots_and_hash(
         &self,
         store: Store,
+        epoch_manager: &dyn EpochManagerAdapter,
     ) -> anyhow::Result<(HashMap<ShardUId, StateRoot>, BlockInfo, EpochId, ShardLayout)> {
-        let epoch_id = EpochId(store.get_ser(DBCol::Misc, b"FORK_TOOL_EPOCH_ID")?.unwrap());
-        let flat_head = store.get_ser(DBCol::Misc, b"FORK_TOOL_FLAT_HEAD")?.unwrap();
-        let shard_layout = store.get_ser(DBCol::Misc, b"FORK_TOOL_SHARD_LAYOUT")?.unwrap();
+        let Some(flat_head) = store.get_ser(DBCol::Misc, FLAT_HEAD_KEY)? else {
+            return self.legacy_get_state_roots_and_hash(store, epoch_manager);
+        };
+        let epoch_id = EpochId(store.get_ser(DBCol::Misc, EPOCH_ID_KEY)?.unwrap());
+        let shard_layout = store.get_ser(DBCol::Misc, SHARD_LAYOUT_KEY)?.unwrap();
         let mut state_roots = HashMap::new();
         for item in store.iter_prefix(DBCol::Misc, FORKED_ROOTS_KEY_PREFIX) {
             let (key, value) = item?;
@@ -616,6 +680,11 @@ impl ForkNetworkCommand {
             EpochConfigStore::for_chain_id(near_primitives::chains::MAINNET, None)
                 .expect("Could not load the EpochConfigStore for mainnet.");
         let mut new_epoch_configs = BTreeMap::new();
+
+        let deprecated_shard_layout = ShardLayout::get_simple_nightshade_layout_v3();
+        let accounts = deprecated_shard_layout.boundary_accounts().to_vec();
+        let shard_ids = deprecated_shard_layout.shard_ids().collect::<Vec<_>>();
+
         for version in first_version..=PROTOCOL_VERSION {
             let mut config = base_epoch_config_store.get_config(version).as_ref().clone();
             if let Some(num_seats) = num_seats {
@@ -623,6 +692,15 @@ impl ForkNetworkCommand {
                 config.num_chunk_producer_seats = *num_seats;
                 config.num_chunk_validator_seats = *num_seats;
             }
+
+            config.shard_layout = ShardLayout::v2(accounts.clone(), shard_ids.clone(), None);
+            config.num_block_producer_seats_per_shard = vec![100; shard_ids.len()];
+            config.avg_hidden_validator_seats_per_shard = vec![100; shard_ids.len()];
+            config.protocol_upgrade_stake_threshold = Rational32::from_integer(1);
+            config.block_producer_kickout_threshold = 0;
+            config.chunk_producer_kickout_threshold = 0;
+            config.chunk_validator_only_kickout_threshold = 0;
+
             new_epoch_configs.insert(version, Arc::new(config));
         }
         let first_config = new_epoch_configs.get(&first_version).unwrap().as_ref().clone();
@@ -796,7 +874,9 @@ impl ForkNetworkCommand {
                     if shard_id != shard_uid.shard_id() {
                         tracing::warn!(
                             "Account {} belongs to shard {} but was found in flat storage for shard {}",
-                            &account_id, shard_id, shard_uid.shard_id(),
+                            &account_id,
+                            shard_id,
+                            shard_uid.shard_id(),
                         );
                     }
                     let shard_idx = source_shard_layout.get_shard_index(shard_id).unwrap();
@@ -1057,7 +1137,7 @@ impl ForkNetworkCommand {
             dynamic_resharding: false,
             protocol_version: genesis_protocol_version,
             validators: new_validator_accounts,
-            gas_price_adjustment_rate: original_config.gas_price_adjustment_rate,
+            gas_price_adjustment_rate: Rational32::from_integer(0),
             gas_limit: original_config.gas_limit,
             max_gas_price: original_config.max_gas_price,
             max_inflation_rate: original_config.max_inflation_rate,
