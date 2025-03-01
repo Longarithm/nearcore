@@ -94,7 +94,7 @@ impl OptimisticBlockStats {
         }
 
         if let Some(processed_timestamp) = self.processed_timestamp {
-            let delay = (processed_timestamp.signed_duration_since(full_block_received_timestamp))
+            let delay = (full_block_received_timestamp.signed_duration_since(processed_timestamp))
                 .as_seconds_f64();
             metrics::OPTIMISTIC_BLOCK_SPEEDUP.observe(delay);
             self.processed_timestamp = None;
