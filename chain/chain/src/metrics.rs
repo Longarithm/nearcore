@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use near_o11y::metrics::{
     Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, exponential_buckets,
     processing_time_buckets, try_create_histogram, try_create_histogram_vec,
@@ -5,6 +6,15 @@ use near_o11y::metrics::{
     try_create_int_gauge, try_create_int_gauge_vec,
 };
 use std::sync::LazyLock;
+
+fn two_sided_exponential_buckets(start: f64, factor: f64, count: usize) -> Vec<f64> {
+    let positive_buckets = exponential_buckets(start, factor, count).unwrap();
+    let negative_buckets = positive_buckets.clone().into_iter().map(|x| -x).rev().collect_vec();
+    let mut buckets = negative_buckets;
+    buckets.push(0.0);
+    buckets.extend(positive_buckets);
+    buckets
+}
 
 pub static BLOCK_PROCESSING_ATTEMPTS_TOTAL: LazyLock<IntCounter> = LazyLock::new(|| {
     try_create_int_counter(
@@ -88,11 +98,19 @@ pub static BLOCK_ORPHANED_DELAY: LazyLock<Histogram> = LazyLock::new(|| {
     try_create_histogram("near_block_orphaned_delay", "How long blocks stay in the orphan pool")
         .unwrap()
 });
-pub static BLOCK_OPTIMISTIC_DELAY: LazyLock<Histogram> = LazyLock::new(|| {
+pub static OPTIMISTIC_BLOCK_READINESS_SPEEDUP: LazyLock<Histogram> = LazyLock::new(|| {
     try_create_histogram_with_buckets(
-        "near_block_optimistic_delay",
-        "Delay between optimistic block completion and receiving the full block",
-        exponential_buckets(0.001, 1.6, 20).unwrap(),
+        "near_optimistic_block_readiness_speedup",
+        "Speedup of optimistic block readiness relative to the receiving full block",
+        two_sided_exponential_buckets(0.001, 1.6, 20),
+    )
+    .unwrap()
+});
+pub static OPTIMISTIC_BLOCK_SPEEDUP: LazyLock<Histogram> = LazyLock::new(|| {
+    try_create_histogram_with_buckets(
+        "near_optimistic_block_speedup",
+        "Speedup of optimistic block processing relative to the receiving full block",
+        two_sided_exponential_buckets(0.001, 1.6, 20),
     )
     .unwrap()
 });
@@ -178,6 +196,16 @@ pub(crate) static SHARD_LAYOUT_NUM_SHARDS: LazyLock<IntGauge> = LazyLock::new(||
     try_create_int_gauge(
         "near_shard_layout_num_shards",
         "The number of shards in the shard layout of the current head.",
+    )
+    .unwrap()
+});
+
+pub(crate) static APPLY_ALL_CHUNKS_DELAY: LazyLock<HistogramVec> = LazyLock::new(|| {
+    try_create_histogram_vec(
+        "near_apply_all_chunks_delay",
+        "Delay of applying all chunks in a block",
+        &["block_type"],
+        Some(exponential_buckets(0.001, 1.6, 20).unwrap()),
     )
     .unwrap()
 });
