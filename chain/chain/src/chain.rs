@@ -2397,7 +2397,7 @@ impl Chain {
     pub fn check_optimistic_block(
         &self,
         block: &OptimisticBlock,
-        peer_id: &PeerId,
+        _peer_id: &PeerId,
     ) -> Result<(), Error> {
         // Refuse blocks from the too distant future.
         let ob_timestamp =
@@ -2405,6 +2405,7 @@ impl Chain {
                 .map_err(|e| Error::Other(e.to_string()))?;
         let future_threshold = self.clock.now_utc() + Duration::seconds(ACCEPTABLE_TIME_DIFFERENCE);
         if ob_timestamp > future_threshold {
+            error!(target: "chain", ?ob_timestamp, ?future_threshold, "Refusing optimistic block from the future");
             return Err(Error::InvalidBlockFutureTime(ob_timestamp));
         };
 
@@ -2416,9 +2417,6 @@ impl Chain {
         // Check source of the optimistic block.
         let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(&block.prev_block_hash())?;
         let validator = self.epoch_manager.get_block_producer_info(&epoch_id, block.height())?;
-        if peer_id.public_key() != validator.public_key() {
-            return Err(Error::InvalidBlockProposer);
-        }
 
         let prev = self.get_block_header(&block.prev_block_hash())?;
         let prev_random_value = *prev.random_value();
