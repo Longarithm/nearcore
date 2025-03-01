@@ -263,12 +263,13 @@ impl ProtocolFeature {
             | ProtocolFeature::CurrentEpochStateSync => 74,
             ProtocolFeature::SimpleNightshadeV4 => 75,
             ProtocolFeature::SimpleNightshadeV5 => 76,
-            ProtocolFeature::BlockHeightForReceiptId | ProtocolFeature::ProduceOptimisticBlock => 77,
-
+            ProtocolFeature::GlobalContracts
+            | ProtocolFeature::BlockHeightForReceiptId
+            | ProtocolFeature::ProduceOptimisticBlock => 77,
+            
             // Nightly features:
             #[cfg(feature = "protocol_feature_fix_contract_loading_cost")]
             ProtocolFeature::FixContractLoadingCost => 129,
-            ProtocolFeature::GlobalContracts => 129,
             // TODO(#11201): When stabilizing this feature in mainnet, also remove the temporary code
             // that always enables this for mocknet (see config_mocknet function).
             ProtocolFeature::ShuffleShardAssignments => 143,
@@ -297,7 +298,8 @@ pub const PROTOCOL_VERSION: ProtocolVersion = if cfg!(feature = "nightly_protoco
 
 /// Both, outgoing and incoming tcp connections to peers, will be rejected if `peer's`
 /// protocol version is lower than this.
-pub const PEER_MIN_ALLOWED_PROTOCOL_VERSION: ProtocolVersion = STABLE_PROTOCOL_VERSION - 3;
+/// TODO(pugachag): revert back to `- 3` after mainnet is upgraded
+pub const PEER_MIN_ALLOWED_PROTOCOL_VERSION: ProtocolVersion = STABLE_PROTOCOL_VERSION - 4;
 
 #[macro_export]
 macro_rules! checked_feature {
