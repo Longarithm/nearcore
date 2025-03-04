@@ -68,7 +68,6 @@ use near_primitives::epoch_block_info::BlockInfo;
 use near_primitives::errors::EpochError;
 use near_primitives::hash::{CryptoHash, hash};
 use near_primitives::merkle::PartialMerkleTree;
-use near_primitives::network::PeerId;
 use near_primitives::optimistic_block::{
     BlockToApply, CachedShardUpdateKey, OptimisticBlock, OptimisticBlockKeySource,
 };
@@ -2047,7 +2046,7 @@ impl Chain {
             let res = do_apply_chunks(block.clone(), block_height, work);
             // If we encounter error here, that means the receiver is deallocated and the client
             // thread is already shut down. The node is already crashed, so we can unwrap here
-            metrics::APPLY_ALL_CHUNKS_DELAY.with_label_values(&[block.as_ref()]).observe(
+            metrics::APPLY_ALL_CHUNKS_TIME.with_label_values(&[block.as_ref()]).observe(
                 (clock.now().signed_duration_since(apply_all_chunks_start_time)).as_seconds_f64(),
             );
             sc.send((block, res)).unwrap();
@@ -2394,16 +2393,13 @@ impl Chain {
     }
 
     /// Check if optimistic block is valid and relevant to the current chain.
-    pub fn check_optimistic_block(
-        &self,
-        block: &OptimisticBlock,
-        _peer_id: &PeerId,
-    ) -> Result<(), Error> {
+    pub fn check_optimistic_block(&self, block: &OptimisticBlock) -> Result<(), Error> {
         // Refuse blocks from the too distant future.
         let ob_timestamp =
             OffsetDateTime::from_unix_timestamp_nanos(block.block_timestamp().into())
                 .map_err(|e| Error::Other(e.to_string()))?;
-        let future_threshold = self.clock.now_utc() + Duration::seconds(ACCEPTABLE_TIME_DIFFERENCE);
+        let future_threshold: OffsetDateTime =
+            self.clock.now_utc() + Duration::seconds(ACCEPTABLE_TIME_DIFFERENCE);
         if ob_timestamp > future_threshold {
             error!(target: "chain", ?ob_timestamp, ?future_threshold, "Refusing optimistic block from the future");
             return Err(Error::InvalidBlockFutureTime(ob_timestamp));
@@ -2414,9 +2410,20 @@ impl Chain {
             return Err(Error::InvalidBlockHeight(block.height()));
         }
 
+        // A heuristic to prevent block height to jump too fast towards BlockHeight::max and cause
+        // overflow-related problems
+        if block.height() > head.height + self.epoch_length * 20 {
+            return Err(Error::InvalidBlockHeight(block.height()));
+        }
+
         // Check source of the optimistic block.
         let epoch_id = self.epoch_manager.get_epoch_id_from_prev_block(&block.prev_block_hash())?;
         let validator = self.epoch_manager.get_block_producer_info(&epoch_id, block.height())?;
+
+        // Check the signature.
+        if !block.signature.verify(block.hash().as_bytes(), validator.public_key()) {
+            return Err(Error::InvalidSignature);
+        }
 
         let prev = self.get_block_header(&block.prev_block_hash())?;
         let prev_random_value = *prev.random_value();
@@ -2430,11 +2437,6 @@ impl Chain {
         // time progression.
         if ob_timestamp <= prev.timestamp() {
             return Err(Error::InvalidBlockPastTime(prev.timestamp(), ob_timestamp));
-        }
-
-        // Check the signature.
-        if !block.signature.verify(block.hash().as_bytes(), validator.public_key()) {
-            return Err(Error::InvalidSignature);
         }
 
         verify_block_vrf(
@@ -3518,16 +3520,18 @@ impl Chain {
         let chunk_header = chunk_headers.get(shard_index).ok_or(Error::InvalidShardId(shard_id))?;
         let is_new_chunk = chunk_header.is_new_chunk(block_height);
 
-        if let Some(result) =
-            self.apply_chunk_results_cache.peek(&cached_shard_update_key, shard_id)
-        {
-            debug!(target: "chain", ?shard_id, ?cached_shard_update_key, "Using cached ShardUpdate result");
-            let result = result.clone();
-            return Ok(Some((
-                shard_id,
-                cached_shard_update_key,
-                Box::new(move |_| -> Result<ShardUpdateResult, Error> { Ok(result) }),
-            )));
+        if !cfg!(feature = "sandbox") {
+            if let Some(result) =
+                self.apply_chunk_results_cache.peek(&cached_shard_update_key, shard_id)
+            {
+                debug!(target: "chain", ?shard_id, ?cached_shard_update_key, "Using cached ShardUpdate result");
+                let result = result.clone();
+                return Ok(Some((
+                    shard_id,
+                    cached_shard_update_key,
+                    Box::new(move |_| -> Result<ShardUpdateResult, Error> { Ok(result) }),
+                )));
+            }
         }
         debug!(target: "chain", ?shard_id, ?cached_shard_update_key, "Creating ShardUpdate job");
 

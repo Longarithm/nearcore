@@ -37,8 +37,7 @@ pub struct BlocksDelayTracker {
     // Theoretically, each block height should only have one block, if our block processing code
     // works correctly. We are storing a vector here just in case.
     blocks_height_map: BTreeMap<BlockHeight, Vec<CryptoHash>>,
-    // Maps block height to the timestamp when the optimistic block became
-    // ready for processing.
+    // Maps block height to the optimistic block stats.
     optimistic_blocks: LruCache<BlockHeight, OptimisticBlockStats>,
     // Chunks that belong to the blocks in the tracker
     chunks: HashMap<ChunkHash, ChunkTrackingStats>,
@@ -73,8 +72,11 @@ pub struct BlockTrackingStats {
 
 #[derive(Debug, Clone, Default)]
 pub struct OptimisticBlockStats {
+    /// Timestamp when the optimistic block became ready for processing.
     pub ready_timestamp: Option<Instant>,
+    /// Timestamp when the optimistic block was processed.
     pub processed_timestamp: Option<Instant>,
+    /// Timestamp when the full block was received.
     pub full_block_received_timestamp: Option<Instant>,
 }
 
@@ -89,14 +91,14 @@ impl OptimisticBlockStats {
         if let Some(ready_timestamp) = self.ready_timestamp {
             let delay = (full_block_received_timestamp.signed_duration_since(ready_timestamp))
                 .as_seconds_f64();
-            metrics::OPTIMISTIC_BLOCK_READINESS_SPEEDUP.observe(delay);
+            metrics::OPTIMISTIC_BLOCK_READINESS_GAP.observe(delay);
             self.ready_timestamp = None;
         }
 
         if let Some(processed_timestamp) = self.processed_timestamp {
             let delay = (full_block_received_timestamp.signed_duration_since(processed_timestamp))
                 .as_seconds_f64();
-            metrics::OPTIMISTIC_BLOCK_SPEEDUP.observe(delay);
+            metrics::OPTIMISTIC_BLOCK_PROCESSED_GAP.observe(delay);
             self.processed_timestamp = None;
         }
     }

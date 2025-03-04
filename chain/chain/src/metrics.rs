@@ -98,18 +98,18 @@ pub static BLOCK_ORPHANED_DELAY: LazyLock<Histogram> = LazyLock::new(|| {
     try_create_histogram("near_block_orphaned_delay", "How long blocks stay in the orphan pool")
         .unwrap()
 });
-pub static OPTIMISTIC_BLOCK_READINESS_SPEEDUP: LazyLock<Histogram> = LazyLock::new(|| {
+pub static OPTIMISTIC_BLOCK_READINESS_GAP: LazyLock<Histogram> = LazyLock::new(|| {
     try_create_histogram_with_buckets(
-        "near_optimistic_block_readiness_speedup",
-        "Speedup of optimistic block readiness relative to the receiving full block",
+        "near_optimistic_block_readiness_gap",
+        "Gap between the optimistic block readiness and receiving full block",
         two_sided_exponential_buckets(0.001, 1.6, 20),
     )
     .unwrap()
 });
-pub static OPTIMISTIC_BLOCK_SPEEDUP: LazyLock<Histogram> = LazyLock::new(|| {
+pub static OPTIMISTIC_BLOCK_PROCESSED_GAP: LazyLock<Histogram> = LazyLock::new(|| {
     try_create_histogram_with_buckets(
-        "near_optimistic_block_speedup",
-        "Speedup of optimistic block processing relative to the receiving full block",
+        "near_optimistic_block_processed_gap",
+        "Gap between the end of optimistic block processing and receiving full block",
         two_sided_exponential_buckets(0.001, 1.6, 20),
     )
     .unwrap()
@@ -200,10 +200,10 @@ pub(crate) static SHARD_LAYOUT_NUM_SHARDS: LazyLock<IntGauge> = LazyLock::new(||
     .unwrap()
 });
 
-pub(crate) static APPLY_ALL_CHUNKS_DELAY: LazyLock<HistogramVec> = LazyLock::new(|| {
+pub(crate) static APPLY_ALL_CHUNKS_TIME: LazyLock<HistogramVec> = LazyLock::new(|| {
     try_create_histogram_vec(
-        "near_apply_all_chunks_delay",
-        "Delay of applying all chunks in a block",
+        "near_apply_all_chunks_time",
+        "Time taken to apply all chunks in a block",
         &["block_type"],
         Some(exponential_buckets(0.001, 1.6, 20).unwrap()),
     )
