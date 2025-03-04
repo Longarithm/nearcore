@@ -1,10 +1,11 @@
 use near_async::messaging::AsyncSendError;
 use serde_json::Value;
 
-use near_client_primitives::types::GetValidatorInfoError;
+use near_client_primitives::types::{GetShardTrackersError, GetValidatorInfoError};
 use near_jsonrpc_primitives::errors::RpcParseError;
 use near_jsonrpc_primitives::types::validator::{
-    RpcValidatorError, RpcValidatorRequest, RpcValidatorsOrderedRequest,
+    RpcShardTrackersError, RpcShardTrackersRequest, RpcValidatorError, RpcValidatorRequest,
+    RpcValidatorsOrderedRequest,
 };
 use near_primitives::types::EpochReference;
 
@@ -19,6 +20,30 @@ impl RpcRequest for RpcValidatorRequest {
             })
             .unwrap_or_parse()?;
         Ok(Self { epoch_reference: epoch_reference })
+    }
+}
+
+impl RpcRequest for RpcShardTrackersRequest {
+    fn parse(value: Value) -> Result<Self, RpcParseError> {
+        Params::parse(value)
+    }
+}
+
+impl RpcFrom<AsyncSendError> for RpcShardTrackersError {
+    fn rpc_from(error: AsyncSendError) -> Self {
+        Self::InternalError { error_message: error.to_string() }
+    }
+}
+
+impl RpcFrom<GetShardTrackersError> for RpcShardTrackersError {
+    fn rpc_from(error: GetShardTrackersError) -> Self {
+        match error {
+            GetShardTrackersError::IOError(error_message) => Self::InternalError { error_message },
+            GetShardTrackersError::Unreachable(ref error_message) => {
+                tracing::warn!(target: "jsonrpc", "Unreachable error occurred: {}", error_message);
+                Self::InternalError { error_message: error.to_string() }
+            }
+        }
     }
 }
 

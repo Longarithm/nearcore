@@ -291,7 +291,6 @@ pub enum QueryResponseKind {
     CallResult(CallResult),
     AccessKey(AccessKeyView),
     AccessKeyList(AccessKeyList),
-    ViewShardLayout(ShardLayoutView),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -323,7 +322,6 @@ pub enum QueryRequest {
         #[serde(rename = "args_base64")]
         args: FunctionArgs,
     },
-    ViewShardLayout {},
 }
 
 fn is_false(v: &bool) -> bool {
@@ -558,7 +556,7 @@ impl From<Tip> for BlockStatusView {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct PartElapsedTimeView {
     pub part_id: u64,
     pub elapsed_ms: u128,
@@ -2579,8 +2577,9 @@ mod tests {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct ShardLayoutView {
-    pub shard_layout: ShardLayout,
+pub struct ShardTrackersView {
+    pub shard_ids: Vec<ShardId>,
+    pub boundary_accounts: Vec<AccountId>,
     pub tracking_shards: HashMap<ShardId, Vec<NodeInfo>>,
     pub epoch_id: EpochId,
     pub epoch_height: EpochHeight,

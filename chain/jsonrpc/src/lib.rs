@@ -17,7 +17,7 @@ use near_client::{
     ProcessTxRequest, ProcessTxResponse, Query, Status, TxStatus,
 };
 use near_client_primitives::debug::{DebugBlockStatusQuery, DebugBlocksStartingMode};
-use near_client_primitives::types::GetSplitStorageInfo;
+use near_client_primitives::types::{GetShardTrackers, GetSplitStorageInfo};
 pub use near_jsonrpc_client_internal as client;
 pub use near_jsonrpc_primitives as primitives;
 use near_jsonrpc_primitives::errors::{RpcError, RpcErrorKind};
@@ -227,6 +227,7 @@ pub struct ClientSenderForRpc(
     AsyncSender<DebugStatus, ActixResult<DebugStatus>>,
     AsyncSender<GetClientConfig, ActixResult<GetClientConfig>>,
     AsyncSender<GetNetworkInfo, ActixResult<GetNetworkInfo>>,
+    AsyncSender<GetShardTrackers, ActixResult<GetShardTrackers>>,
     AsyncSender<ProcessTxRequest, ActixResult<ProcessTxRequest>>,
     AsyncSender<Status, ActixResult<Status>>,
     Sender<ProcessTxRequest>,
@@ -446,6 +447,9 @@ impl JsonRpcHandler {
             }
             "EXPERIMENTAL_split_storage_info" => {
                 process_method_call(request, |params| self.split_storage_info(params)).await
+            }
+            "EXPERIMENTAL_shard_trackers" => {
+                process_method_call(request, |params| self.shard_trackers(params)).await
             }
             #[cfg(feature = "sandbox")]
             "sandbox_patch_state" => {
@@ -1201,6 +1205,19 @@ impl JsonRpcHandler {
     > {
         let split_storage = self.view_client_send(GetSplitStorageInfo {}).await?;
         Ok(RpcSplitStorageInfoResponse { result: split_storage })
+    }
+
+    pub async fn shard_trackers(
+        &self,
+        _request_data: near_jsonrpc_primitives::types::validator::RpcShardTrackersRequest,
+    ) -> Result<
+        near_jsonrpc_primitives::types::validator::RpcShardTrackersResponse,
+        near_jsonrpc_primitives::types::validator::RpcShardTrackersError,
+    > {
+        let shard_trackers = self.client_send(GetShardTrackers {}).await?;
+        Ok(near_jsonrpc_primitives::types::validator::RpcShardTrackersResponse {
+            result: shard_trackers,
+        })
     }
 }
 

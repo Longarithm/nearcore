@@ -1,3 +1,4 @@
+use near_primitives::views::ShardTrackersView;
 use serde_json::Value;
 
 pub type RpcValidatorsOrderedResponse =
@@ -47,6 +48,42 @@ impl From<RpcValidatorError> for crate::errors::RpcError {
                 return Self::new_internal_error(
                     None,
                     format!("Failed to serialize RpcValidatorError: {:?}", err),
+                );
+            }
+        };
+
+        Self::new_internal_or_handler_error(error_data, error_data_value)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct RpcShardTrackersRequest {}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct RpcShardTrackersResponse {
+    #[serde(flatten)]
+    pub result: ShardTrackersView,
+}
+
+#[derive(thiserror::Error, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "name", content = "info", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RpcShardTrackersError {
+    #[error("The node reached its limits. Try again later. More details: {error_message}")]
+    InternalError { error_message: String },
+}
+
+impl From<RpcShardTrackersError> for crate::errors::RpcError {
+    fn from(error: RpcShardTrackersError) -> Self {
+        let error_data = match &error {
+            RpcShardTrackersError::InternalError { .. } => Some(Value::String(error.to_string())),
+        };
+
+        let error_data_value = match serde_json::to_value(error) {
+            Ok(value) => value,
+            Err(err) => {
+                return Self::new_internal_error(
+                    None,
+                    format!("Failed to serialize RpcShardTrackersError: {:?}", err),
                 );
             }
         };

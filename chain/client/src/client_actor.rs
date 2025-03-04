@@ -46,8 +46,9 @@ use near_chain_primitives::error::EpochErrorResultToChainError;
 use near_chunks::adapter::ShardsManagerRequestFromClient;
 use near_chunks::client::ShardsManagerResponse;
 use near_client_primitives::types::{
-    Error, GetClientConfig, GetClientConfigError, GetNetworkInfo, NetworkInfoResponse,
-    StateSyncStatus, Status, StatusError, StatusSyncInfo, SyncStatus,
+    Error, GetClientConfig, GetClientConfigError, GetNetworkInfo, GetShardTrackers,
+    GetShardTrackersError, NetworkInfoResponse, StateSyncStatus, Status, StatusError,
+    StatusSyncInfo, SyncStatus,
 };
 use near_epoch_manager::EpochManagerAdapter;
 use near_epoch_manager::shard_tracker::ShardTracker;
@@ -67,17 +68,18 @@ use near_primitives::block_header::ApprovalType;
 use near_primitives::epoch_info::RngSeed;
 use near_primitives::hash::CryptoHash;
 use near_primitives::network::{AnnounceAccount, PeerId};
-use near_primitives::types::{AccountId, BlockHeight};
+use near_primitives::types::{AccountId, BlockHeight, ShardId};
 use near_primitives::unwrap_or_return;
 use near_primitives::utils::MaybeValidated;
 use near_primitives::validator_signer::ValidatorSigner;
 use near_primitives::version::{PROTOCOL_UPGRADE_SCHEDULE, PROTOCOL_VERSION, ProtocolFeature};
-use near_primitives::views::{DetailedDebugStatus, ValidatorInfo};
+use near_primitives::views::{DetailedDebugStatus, NodeInfo, ShardTrackersView, ValidatorInfo};
 #[cfg(feature = "test_features")]
 use near_store::DBCol;
 use near_telemetry::TelemetryEvent;
 use rand::seq::SliceRandom;
 use rand::{Rng, thread_rng};
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -1357,7 +1359,7 @@ impl ClientActorInner {
         self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(
             NetworkRequests::Block { block: block.clone() },
         ));
-        // We’ve produced the block so that counts as validated block.
+        // We've produced the block so that counts as validated block.
         let block = MaybeValidated::from_validated(block);
         let res = self.client.start_process_block(
             block,
@@ -1403,7 +1405,7 @@ impl ClientActorInner {
             NetworkRequests::OptimisticBlock { optimistic_block: optimistic_block.clone() },
         ));
 
-        // We’ve produced the optimistic block, mark it as done so we don't produce it again.
+        // We've produced the optimistic block, mark it as done so we don't produce it again.
         self.client.save_optimistic_block(&optimistic_block);
         self.client.chain.optimistic_block_chunks.add_block(optimistic_block);
         self.client.maybe_process_optimistic_block();
@@ -1945,6 +1947,15 @@ impl Handler<GetClientConfig> for ClientActorInner {
     }
 }
 
+impl Handler<GetShardTrackers> for ClientActorInner {
+    fn handle(
+        &mut self,
+        msg: GetShardTrackers,
+    ) -> Result<ShardTrackersView, GetShardTrackersError> {
+        Ok(self.handle_view_shard_layout_query()?)
+    }
+}
+
 impl Handler<ChunkStateWitnessMessage> for ClientActorInner {
     #[perf]
     fn handle(&mut self, msg: ChunkStateWitnessMessage) {
@@ -1982,5 +1993,70 @@ impl Handler<ChainFinalizationRequest> for ClientActorInner {
     #[perf]
     fn handle(&mut self, msg: ChainFinalizationRequest) -> Result<(), near_chain::Error> {
         self.client.chain.set_state_finalize(msg.shard_id, msg.sync_hash)
+    }
+}
+
+impl ClientActorInner {
+    // Add this method to handle the ViewShardLayout query
+    pub fn handle_view_shard_layout_query(
+        &self,
+    ) -> Result<ShardTrackersView, near_chain_primitives::Error> {
+        let chain = &self.client.chain;
+
+        // Get the current head
+        let head = chain.head()?;
+
+        // Get epoch manager
+        let epoch_manager = chain.epoch_manager.clone();
+
+        // Get current epoch information
+        let epoch_id = epoch_manager.get_epoch_id_from_prev_block(&head.last_block_hash)?;
+        let epoch_height = epoch_manager.get_epoch_height_from_prev_block(&head.last_block_hash)?;
+        let shard_layout = epoch_manager.get_shard_layout(&epoch_id)?;
+        let epoch_start_height = epoch_manager.get_epoch_start_from_epoch_id(&epoch_id)?;
+
+        // Get block info for estimating next epoch start
+        let block_info = epoch_manager.get_block_info(&head.last_block_hash)?;
+        let epoch_end_height = epoch_manager.get_estimated_next_epoch_start(&block_info).ok();
+
+        // Create a mapping of shard_id -> Vec<NodeInfo>
+        let mut tracking_shards: HashMap<ShardId, Vec<NodeInfo>> = HashMap::new();
+
+        // Use the network_info to get information about connected peers
+        for peer in &self.network_info.connected_peers {
+            let peer_info = &peer.full_peer_info.peer_info;
+            let peer_chain_info = &peer.full_peer_info.chain_info;
+            let Some(addr) = peer_info.addr else {
+                continue;
+            };
+
+            // For each shard that this peer tracks
+            for shard_id in &peer_chain_info.tracked_shards {
+                let node_info = NodeInfo {
+                    url: addr.to_string(),
+                    account_id: peer_info.account_id.clone(),
+                    is_validator: peer_info.account_id.is_some(),
+                    is_archival: peer_chain_info.archival,
+                };
+
+                tracking_shards.entry(*shard_id).or_default().push(node_info);
+            }
+        }
+
+        let shard_ids = shard_layout.shard_ids().collect::<Vec<_>>();
+        let boundary_accounts = shard_layout.boundary_accounts().clone();
+
+        // Create the ShardLayoutView
+        let shard_layout_view = ShardTrackersView {
+            shard_ids,
+            boundary_accounts,
+            tracking_shards,
+            epoch_id,
+            epoch_height,
+            epoch_start_height,
+            epoch_end_height,
+        };
+
+        Ok(shard_layout_view)
     }
 }

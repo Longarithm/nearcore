@@ -1,13 +1,20 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, RwLock},
     time::Duration,
     time::Instant,
 };
 
 use near_jsonrpc_client::JsonRpcClient;
-use near_primitives::{hash::CryptoHash, views::BlockView};
-use rand;
+use near_jsonrpc_primitives::types::transactions::{
+    RpcSendTransactionRequest, RpcTransactionResponse,
+};
+use near_primitives::hash::CryptoHash;
+use near_primitives::transaction::SignedTransaction;
+use near_primitives::types::{AccountId, BlockHeight, EpochHeight, EpochId, ShardId};
+use near_primitives::views::{BlockView, TxExecutionStatus};
+use rand::Rng;
+use serde_json;
 use tokio::time;
 
 use crate::rpc::get_latest_block;
@@ -71,11 +78,50 @@ pub struct ShardAwareRpcClient {
     shard_layout_cache: Option<ShardLayoutCache>,
     // Block service for getting latest block info
     block_service: Arc<BlockService>,
+    // Cache of JsonRpcClients for different nodes
+    client_cache: HashMap<String, JsonRpcClient>,
 }
 
+#[derive(Clone)]
 struct ShardLayoutCache {
-    shard_layout_view: ShardLayoutView,
+    shard_layout_view: ShardTrackersView,
     timestamp: Instant,
+}
+
+// NodeInfo structure
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct NodeInfo {
+    pub url: String,
+    pub account_id: Option<AccountId>,
+    pub is_validator: bool,
+    pub is_archival: bool,
+}
+
+// ShardTrackersView structure
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ShardTrackersView {
+    pub shard_ids: Vec<ShardId>,
+    pub boundary_accounts: Vec<AccountId>,
+    pub tracking_shards: HashMap<ShardId, Vec<NodeInfo>>,
+    pub epoch_id: EpochId,
+    pub epoch_height: EpochHeight,
+    pub epoch_start_height: BlockHeight,
+    pub epoch_end_height: Option<BlockHeight>,
+}
+
+pub fn account_id_to_shard_id(
+    shard_ids: &Vec<ShardId>,
+    boundary_accounts: &Vec<AccountId>,
+    account_id: &AccountId,
+) -> ShardId {
+    let mut shard_id_index = 0;
+    for boundary_account in boundary_accounts {
+        if account_id < boundary_account {
+            break;
+        }
+        shard_id_index += 1;
+    }
+    shard_ids[shard_id_index]
 }
 
 impl ShardAwareRpcClient {
@@ -86,7 +132,12 @@ impl ShardAwareRpcClient {
         // Start the block service
         block_service.clone().start().await;
 
-        let mut client = Self { primary_client, shard_layout_cache: None, block_service };
+        let mut client = Self {
+            primary_client,
+            shard_layout_cache: None,
+            block_service,
+            client_cache: HashMap::new(),
+        };
 
         // Initialize the cache
         client.refresh_shard_layout().await?;
@@ -95,29 +146,59 @@ impl ShardAwareRpcClient {
     }
 
     async fn refresh_shard_layout(&mut self) -> Result<(), String> {
-        let request = QueryRequest::ViewShardLayout {};
+        // Define the RPC endpoint URL (using the same URL as the primary client)
+        let rpc_url = self.primary_client.server_addr().to_string();
 
-        // Create RPC query request
-        let rpc_query_request =
-            RpcQueryRequest { block_reference: BlockReference::latest(), request };
+        // Create the JSON-RPC request payload
+        let request_payload = r#"{
+            "jsonrpc": "2.0",
+            "id": "dontcare",
+            "method": "EXPERIMENTAL_shard_trackers",
+            "params": {}
+        }"#;
 
-        // Send the query
-        let response = self
-            .primary_client
-            .query(rpc_query_request)
+        // Execute the curl command using tokio::process::Command for async execution
+        let output = tokio::process::Command::new("curl")
+            .arg("-s")
+            .arg("-X")
+            .arg("POST")
+            .arg("-H")
+            .arg("Content-Type: application/json")
+            .arg("-d")
+            .arg(request_payload)
+            .arg(rpc_url)
+            .output()
             .await
-            .map_err(|e| format!("Failed to query shard layout: {}", e))?;
+            .map_err(|e| format!("curl command failed: {}", e))?;
 
-        if let QueryResponseKind::ViewShardLayout(layout_view) = response.kind {
-            self.shard_layout_cache = Some(ShardLayoutCache {
-                shard_layout_view: layout_view,
-                timestamp: Instant::now(),
-            });
-
-            Ok(())
-        } else {
-            Err("Unexpected response type".to_string())
+        if !output.status.success() {
+            return Err(format!(
+                "curl command failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
         }
+
+        // Get the response as a string
+        let response_str = String::from_utf8(output.stdout)
+            .map_err(|e| format!("Failed to parse curl output: {}", e))?;
+
+        // Define a simple struct to deserialize the JSON-RPC response
+        #[derive(serde::Deserialize)]
+        struct JsonRpcResponse {
+            result: ShardTrackersView,
+        }
+
+        // Deserialize the JSON response
+        let response: JsonRpcResponse = serde_json::from_str(&response_str)
+            .map_err(|e| format!("Failed to deserialize response: {}", e))?;
+
+        // Update the cache with the deserialized ShardTrackersView
+        self.shard_layout_cache = Some(ShardLayoutCache {
+            shard_layout_view: response.result,
+            timestamp: std::time::Instant::now(),
+        });
+
+        Ok(())
     }
 
     async fn check_and_refresh_cache(&mut self) -> Result<(), String> {
@@ -129,13 +210,28 @@ impl ShardAwareRpcClient {
         let needs_refresh = match &self.shard_layout_cache {
             None => true,
             Some(cache) => {
-                // Refresh if we've reached the epoch end height
+                // Check if all shards are covered by validators
+                let all_shards_covered =
+                    self.are_all_shards_covered_by_validators(&cache.shard_layout_view);
+
+                // Refresh if we've reached the estimated epoch end height
                 if let Some(end_height) = cache.shard_layout_view.epoch_end_height {
-                    if current_height >= end_height { true } else { false }
+                    if current_height >= end_height {
+                        true
+                    } else if !all_shards_covered {
+                        // If not all shards are covered by validators, refresh more frequently
+                        cache.timestamp.elapsed() > Duration::from_secs(30)
+                    } else {
+                        false
+                    }
                 } else {
-                    // If we don't know the epoch end height, refresh after a certain time
-                    // This is a fallback mechanism
-                    cache.timestamp.elapsed() > Duration::from_secs(600)
+                    // If we don't have an estimated end height, refresh after a certain time
+                    // or more frequently if not all shards are covered
+                    if !all_shards_covered {
+                        cache.timestamp.elapsed() > Duration::from_secs(30)
+                    } else {
+                        cache.timestamp.elapsed() > Duration::from_secs(600)
+                    }
                 }
             }
         };
@@ -147,6 +243,34 @@ impl ShardAwareRpcClient {
         Ok(())
     }
 
+    // New method to check if all shards are covered by validators
+    fn are_all_shards_covered_by_validators(&self, shard_layout_view: &ShardTrackersView) -> bool {
+        // Get the total number of shards from the shard layout
+        let num_shards = shard_layout_view.shard_ids.len();
+
+        // Create a set to track which shards are covered by validators
+        let mut covered_shards = HashSet::new();
+
+        // Check each shard in the tracking_shards map
+        for (shard_id, node_infos) in &shard_layout_view.tracking_shards {
+            // Check if any of the nodes tracking this shard is a validator
+            let has_validator = node_infos.iter().any(|node_info| {
+                // A node is considered a validator if it has an account_id
+                // This is a simplification - in a real implementation, you might want to check
+                // if the account is actually in the current validator set
+                node_info.account_id.is_some()
+            });
+
+            if has_validator {
+                covered_shards.insert(*shard_id);
+            }
+        }
+
+        // Check if all shards are covered
+        covered_shards.len() == num_shards
+    }
+
+    // Modify get_client_for_account to prefer validators and use client cache
     async fn get_client_for_account(
         &mut self,
         account_id: &AccountId,
@@ -160,14 +284,46 @@ impl ShardAwareRpcClient {
             .ok_or_else(|| "Shard layout cache not initialized".to_string())?;
 
         // Determine which shard this account belongs to using the ShardLayout's method
-        let shard_id = cache.shard_layout_view.shard_layout.account_id_to_shard_id(account_id);
+        let shard_id = account_id_to_shard_id(
+            &cache.shard_layout_view.shard_ids,
+            &cache.shard_layout_view.boundary_accounts,
+            account_id,
+        );
 
         // Find a node that tracks this shard
         if let Some(node_infos) = cache.shard_layout_view.tracking_shards.get(&shard_id) {
             if !node_infos.is_empty() {
-                // Pick a random node from the list for load balancing
+                // First, try to find validators tracking this shard
+                let validators: Vec<&NodeInfo> =
+                    node_infos.iter().filter(|node_info| node_info.account_id.is_some()).collect();
+
+                if !validators.is_empty() {
+                    // Pick a random validator from the list for load balancing
+                    let validator = &validators[rand::thread_rng().gen_range(0..validators.len())];
+
+                    // Check if we already have a client for this URL in the cache
+                    if let Some(client) = self.client_cache.get(&validator.url) {
+                        return Ok(client.clone());
+                    }
+
+                    // Create a new client and add it to the cache
+                    let client = JsonRpcClient::connect(&validator.url);
+                    self.client_cache.insert(validator.url.clone(), client.clone());
+                    return Ok(client);
+                }
+
+                // If no validators found, fall back to any node
                 let node_info = &node_infos[rand::thread_rng().gen_range(0..node_infos.len())];
-                return Ok(JsonRpcClient::connect(&node_info.url));
+
+                // Check if we already have a client for this URL in the cache
+                if let Some(client) = self.client_cache.get(&node_info.url) {
+                    return Ok(client.clone());
+                }
+
+                // Create a new client and add it to the cache
+                let client = JsonRpcClient::connect(&node_info.url);
+                self.client_cache.insert(node_info.url.clone(), client.clone());
+                return Ok(client);
             }
         }
 
@@ -175,12 +331,50 @@ impl ShardAwareRpcClient {
         Ok(self.primary_client.clone())
     }
 
+    // Add a method to check if all shards are covered
+    pub fn are_all_shards_covered(&self) -> bool {
+        match &self.shard_layout_cache {
+            None => false,
+            Some(cache) => self.are_all_shards_covered_by_validators(&cache.shard_layout_view),
+        }
+    }
+
+    // Add a method to get uncovered shards
+    pub fn get_uncovered_shards(&self) -> Vec<ShardId> {
+        match &self.shard_layout_cache {
+            None => vec![],
+            Some(cache) => {
+                let view = &cache.shard_layout_view;
+                let num_shards = view.shard_ids.len();
+
+                let mut uncovered_shards = Vec::new();
+
+                for shard_id in 0..num_shards {
+                    if let Some(node_infos) = view.tracking_shards.get(&(shard_id as u64)) {
+                        // Check if any of the nodes tracking this shard is a validator
+                        let has_validator =
+                            node_infos.iter().any(|node_info| node_info.account_id.is_some());
+
+                        if !has_validator {
+                            uncovered_shards.push(shard_id as u64);
+                        }
+                    } else {
+                        // If no nodes are tracking this shard at all
+                        uncovered_shards.push(shard_id as u64);
+                    }
+                }
+
+                uncovered_shards
+            }
+        }
+    }
+
     // Example method to send a transaction with automatic routing
     pub async fn send_transaction(
         &mut self,
         tx: SignedTransaction,
     ) -> Result<RpcTransactionResponse, String> {
-        let signer_account_id = tx.transaction.signer_id.clone();
+        let signer_account_id = tx.transaction.signer_id().clone();
         let client = self.get_client_for_account(&signer_account_id).await?;
 
         let request = RpcSendTransactionRequest {
@@ -188,45 +382,56 @@ impl ShardAwareRpcClient {
             wait_until: TxExecutionStatus::None,
         };
 
-        client.tx(request).await.map_err(|e| e.to_string())
+        client.call(request).await.map_err(|e| e.to_string())
     }
 
-    // Get transaction status with automatic routing
-    pub async fn get_transaction_status(
-        &mut self,
-        tx_hash: CryptoHash,
-        signer_account_id: &AccountId,
-    ) -> Result<RpcTransactionResponse, String> {
-        let client = self.get_client_for_account(signer_account_id).await?;
+    // Add a method to proactively create clients for all validators
+    pub async fn preload_validator_clients(&mut self) -> Result<(), String> {
+        // Check and refresh cache if needed
+        self.check_and_refresh_cache().await?;
 
-        let request = RpcTransactionStatusRequest {
-            transaction_info: TransactionInfo::TransactionId {
-                hash: tx_hash,
-                account_id: signer_account_id.clone(),
-            },
-            wait_until: TxExecutionStatus::None,
-        };
+        let cache = self
+            .shard_layout_cache
+            .as_ref()
+            .ok_or_else(|| "Shard layout cache not initialized".to_string())?;
 
-        client.tx(request).await.map_err(|e| e.to_string())
+        // Iterate through all shards and their tracking nodes
+        for (_, node_infos) in &cache.shard_layout_view.tracking_shards {
+            for node_info in node_infos {
+                // Only preload clients for validators
+                if node_info.account_id.is_some() && !self.client_cache.contains_key(&node_info.url)
+                {
+                    let client = JsonRpcClient::connect(&node_info.url);
+                    self.client_cache.insert(node_info.url.clone(), client);
+                }
+            }
+        }
+
+        Ok(())
     }
 
-    // Get current shard layout information
-    pub fn get_current_shard_layout(&self) -> Option<&ShardLayout> {
-        self.shard_layout_cache.as_ref().map(|cache| &cache.shard_layout_view.shard_layout)
-    }
+    // Add a method to clear stale clients from the cache
+    pub fn clear_stale_clients(&mut self) -> Result<(), String> {
+        if let Some(cache) = &self.shard_layout_cache {
+            // Collect all current valid URLs
+            let mut valid_urls = HashSet::new();
 
-    // Get current epoch information
-    pub fn get_current_epoch_info(
-        &self,
-    ) -> Option<(EpochId, u64, BlockHeight, Option<BlockHeight>)> {
-        self.shard_layout_cache.as_ref().map(|cache| {
-            let view = &cache.shard_layout_view;
-            (
-                view.epoch_id.clone(),
-                view.epoch_height,
-                view.epoch_start_height,
-                view.epoch_end_height,
-            )
-        })
+            // Add primary client URL
+            valid_urls.insert(self.primary_client.server_addr().to_string());
+
+            // Add all URLs from the current shard layout
+            for (_, node_infos) in &cache.shard_layout_view.tracking_shards {
+                for node_info in node_infos {
+                    valid_urls.insert(node_info.url.clone());
+                }
+            }
+
+            // Remove clients that are no longer in the valid set
+            self.client_cache.retain(|url, _| valid_urls.contains(url));
+
+            Ok(())
+        } else {
+            Err("Shard layout cache not initialized".to_string())
+        }
     }
 }

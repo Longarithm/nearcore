@@ -12,7 +12,7 @@ use near_primitives::views::validator_stake_view::ValidatorStakeView;
 use near_primitives::views::{
     BlockView, ChunkView, EpochValidatorInfo, ExecutionOutcomeWithIdView, GasPriceView,
     LightClientBlockLiteView, LightClientBlockView, MaintenanceWindowsView, QueryRequest,
-    QueryResponse, ReceiptView, SplitStorageInfoView, StateChangesKindsView,
+    QueryResponse, ReceiptView, ShardTrackersView, SplitStorageInfoView, StateChangesKindsView,
     StateChangesRequestView, StateChangesView, StateSyncStatusView, SyncStatusView, TxStatusView,
 };
 pub use near_primitives::views::{StatusResponse, StatusSyncInfo};
@@ -1045,6 +1045,42 @@ impl From<near_chain_primitives::Error> for GetSplitStorageInfoError {
 }
 
 impl From<std::io::Error> for GetSplitStorageInfoError {
+    fn from(error: std::io::Error) -> Self {
+        Self::IOError(error.to_string())
+    }
+}
+
+#[derive(Debug)]
+pub struct GetShardTrackers {}
+
+impl Message for GetShardTrackers {
+    type Result = Result<ShardTrackersView, GetShardTrackersError>;
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum GetShardTrackersError {
+    #[error("IO Error: {0}")]
+    IOError(String),
+    // NOTE: Currently, the underlying errors are too broad, and while we tried to handle
+    // expected cases, we cannot statically guarantee that no other errors will be returned
+    // in the future.
+    // TODO #3851: Remove this variant once we can exhaustively match all the underlying errors
+    #[error(
+        "It is a bug if you receive this error type, please, report this incident: https://github.com/near/nearcore/issues/new/choose. Details: {0}"
+    )]
+    Unreachable(String),
+}
+
+impl From<near_chain_primitives::Error> for GetShardTrackersError {
+    fn from(error: near_chain_primitives::Error) -> Self {
+        match error {
+            near_chain_primitives::Error::IOErr(error) => Self::IOError(error.to_string()),
+            _ => Self::Unreachable(error.to_string()),
+        }
+    }
+}
+
+impl From<std::io::Error> for GetShardTrackersError {
     fn from(error: std::io::Error) -> Self {
         Self::IOError(error.to_string())
     }

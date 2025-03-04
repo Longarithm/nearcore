@@ -3,12 +3,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::account::{accounts_from_dir, update_account_nonces};
-use crate::block_service::BlockService;
+use crate::block_service::{BlockService, ShardAwareRpcClient};
 use crate::metrics::TransactionStatisticsService;
 use crate::rpc::{ResponseCheckSeverity, RpcResponseHandler};
 use clap::Args;
-use near_jsonrpc_client::methods::send_tx::RpcSendTransactionRequest;
 use near_jsonrpc_client::JsonRpcClient;
+use near_jsonrpc_client::methods::send_tx::RpcSendTransactionRequest;
 use near_primitives::transaction::SignedTransaction;
 use near_primitives::views::TxExecutionStatus;
 use rand::distributions::{Distribution, Uniform};
@@ -55,7 +55,13 @@ pub async fn benchmark(args: &BenchmarkArgs) -> anyhow::Result<()> {
     let between = Uniform::from(0..accounts.len());
     let mut rng = rand::thread_rng();
 
+    // Create a regular JsonRpcClient for operations that don't need shard awareness
     let client = JsonRpcClient::connect(&args.rpc_url);
+
+    // Create a ShardAwareRpcClient for sending transactions to the proper shard
+    let shard_aware_client = Arc::new(tokio::sync::Mutex::new(
+        ShardAwareRpcClient::new(&args.rpc_url).await.map_err(|e| anyhow::anyhow!(e))?,
+    ));
 
     let block_service = Arc::new(BlockService::new(client.clone()).await);
 
@@ -124,17 +130,27 @@ pub async fn benchmark(args: &BenchmarkArgs) -> anyhow::Result<()> {
             block_service.get_block_hash(),
         );
         let request = RpcSendTransactionRequest {
-            signed_transaction: transaction,
+            signed_transaction: transaction.clone(),
             wait_until: wait_until.clone(),
         };
 
         interval.tick().await;
-        let client = client.clone();
         // Await permit before sending the request to make channel buffer size a limit for the
         // number of outstanding requests.
         let permit = channel_tx.clone().reserve_owned().await.unwrap();
+        let shard_aware_client_clone = shard_aware_client.clone();
         tokio::spawn(async move {
-            let res = client.call(request).await;
+            let res =
+                match shard_aware_client_clone.lock().await.send_transaction(transaction).await {
+                    Ok(response) => Ok(response),
+                    Err(e) => Err(near_jsonrpc_client::errors::JsonRpcError::ServerError(
+                        near_jsonrpc_client::errors::JsonRpcServerError::HandlerError(
+                            near_jsonrpc_client::methods::tx::RpcTransactionError::InternalError {
+                                debug_info: e,
+                            },
+                        ),
+                    )),
+                };
             permit.send(res);
         });
         if i > 0 && i % 10000 == 0 {
