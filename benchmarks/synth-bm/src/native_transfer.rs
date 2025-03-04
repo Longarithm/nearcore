@@ -59,9 +59,8 @@ pub async fn benchmark(args: &BenchmarkArgs) -> anyhow::Result<()> {
     let client = JsonRpcClient::connect(&args.rpc_url);
 
     // Create a ShardAwareRpcClient for sending transactions to the proper shard
-    let shard_aware_client = Arc::new(tokio::sync::Mutex::new(
-        ShardAwareRpcClient::new(&args.rpc_url).await.map_err(|e| anyhow::anyhow!(e))?,
-    ));
+    let shard_aware_client =
+        Arc::new(ShardAwareRpcClient::new(&args.rpc_url).await.map_err(|e| anyhow::anyhow!(e))?);
 
     let block_service = Arc::new(BlockService::new(client.clone()).await);
 
@@ -129,7 +128,9 @@ pub async fn benchmark(args: &BenchmarkArgs) -> anyhow::Result<()> {
             args.amount,
             block_service.get_block_hash(),
         );
-        let request = RpcSendTransactionRequest {
+
+        // We don't need this request anymore since we're using send_transaction directly
+        let _request = RpcSendTransactionRequest {
             signed_transaction: transaction.clone(),
             wait_until: wait_until.clone(),
         };
@@ -139,18 +140,22 @@ pub async fn benchmark(args: &BenchmarkArgs) -> anyhow::Result<()> {
         // number of outstanding requests.
         let permit = channel_tx.clone().reserve_owned().await.unwrap();
         let shard_aware_client_clone = shard_aware_client.clone();
+        // Clone wait_until for each task to avoid the move issue
+        let wait_until_clone = wait_until.clone();
         tokio::spawn(async move {
-            let res =
-                match shard_aware_client_clone.lock().await.send_transaction(transaction).await {
-                    Ok(response) => Ok(response),
-                    Err(e) => Err(near_jsonrpc_client::errors::JsonRpcError::ServerError(
-                        near_jsonrpc_client::errors::JsonRpcServerError::HandlerError(
-                            near_jsonrpc_client::methods::tx::RpcTransactionError::InternalError {
-                                debug_info: e,
-                            },
-                        ),
-                    )),
-                };
+            let res = match shard_aware_client_clone
+                .send_transaction(transaction, wait_until_clone)
+                .await
+            {
+                Ok(response) => Ok(response),
+                Err(e) => Err(near_jsonrpc_client::errors::JsonRpcError::ServerError(
+                    near_jsonrpc_client::errors::JsonRpcServerError::HandlerError(
+                        near_jsonrpc_client::methods::tx::RpcTransactionError::InternalError {
+                            debug_info: e,
+                        },
+                    ),
+                )),
+            };
             permit.send(res);
         });
         if i > 0 && i % 10000 == 0 {
