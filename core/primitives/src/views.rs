@@ -223,7 +223,7 @@ pub struct ViewStateResult {
     pub proof: Vec<Arc<[u8]>>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct CallResult {
     pub result: Vec<u8>,
     pub logs: Vec<String>,
@@ -291,6 +291,7 @@ pub enum QueryResponseKind {
     CallResult(CallResult),
     AccessKey(AccessKeyView),
     AccessKeyList(AccessKeyList),
+    ViewShardLayout(ShardLayoutView),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -322,6 +323,7 @@ pub enum QueryRequest {
         #[serde(rename = "args_base64")]
         args: FunctionArgs,
     },
+    ViewShardLayout {},
 }
 
 fn is_false(v: &bool) -> bool {
@@ -358,7 +360,7 @@ pub struct ValidatorInfo {
     pub is_slashed: bool,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct PeerInfoView {
     pub addr: String,
     pub account_id: Option<AccountId>,
@@ -507,7 +509,7 @@ pub struct NetworkRoutesView {
     pub my_distances: HashMap<PeerId, u32>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct ShardSyncDownloadView {
     pub downloads: Vec<DownloadStatusView>,
     pub status: String,
@@ -556,7 +558,7 @@ impl From<Tip> for BlockStatusView {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
 pub struct PartElapsedTimeView {
     pub part_id: u64,
     pub elapsed_ms: u128,
@@ -709,7 +711,7 @@ pub struct StatusResponse {
     pub protocol_version: u32,
     /// Latest protocol version that this client supports.
     pub latest_protocol_version: u32,
-    /// Address for RPC server.  None if node doesn’t have RPC endpoint enabled.
+    /// Address for RPC server.  None if node doesn't have RPC endpoint enabled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_addr: Option<String>,
     /// Current epoch validators.
@@ -2574,4 +2576,22 @@ mod tests {
         let view: FinalExecutionOutcomeViewEnum = serde_json::from_str(json).unwrap();
         assert!(matches!(view, FinalExecutionOutcomeViewEnum::FinalExecutionOutcome(_)));
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct ShardLayoutView {
+    pub shard_layout: ShardLayout,
+    pub tracking_shards: HashMap<ShardId, Vec<NodeInfo>>,
+    pub epoch_id: EpochId,
+    pub epoch_height: EpochHeight,
+    pub epoch_start_height: BlockHeight,
+    pub epoch_end_height: Option<BlockHeight>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct NodeInfo {
+    pub url: String,
+    pub account_id: Option<AccountId>,
+    pub is_validator: bool,
+    pub is_archival: bool,
 }
