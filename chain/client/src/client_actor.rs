@@ -2015,6 +2015,16 @@ impl ClientActorInner {
         let shard_layout = epoch_manager.get_shard_layout(&epoch_id)?;
         let epoch_start_height = epoch_manager.get_epoch_start_from_epoch_id(&epoch_id)?;
 
+        let mut chunk_producers_to_shard: HashMap<AccountId, Vec<ShardId>> = HashMap::new();
+        for shard_id in shard_layout.shard_ids() {
+            let chunk_producers =
+                epoch_manager.get_epoch_chunk_producers_for_shard(&epoch_id, shard_id)?;
+            warn!(target: "client", "Chunk producers for shard {}: {:?}", shard_id, chunk_producers);
+            for producer in chunk_producers {
+                chunk_producers_to_shard.entry(producer).or_insert(Vec::new()).push(shard_id);
+            }
+        }
+
         // Get block info for estimating next epoch start
         let block_info = epoch_manager.get_block_info(&head.last_block_hash)?;
         let epoch_end_height = epoch_manager.get_estimated_next_epoch_start(&block_info).ok();
@@ -2034,8 +2044,10 @@ impl ClientActorInner {
                 continue;
             };
 
+            let shard_ids = chunk_producers_to_shard.get(&peer_info.account_id).unwrap_or_default();
+
             // For each shard that this peer tracks
-            for shard_id in &peer_chain_info.tracked_shards {
+            for shard_id in shard_ids {
                 let node_info = NodeInfo {
                     url: addr.to_string(),
                     account_id: peer_info.account_id.clone(),
