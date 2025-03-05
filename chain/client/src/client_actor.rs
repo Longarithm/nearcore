@@ -2043,8 +2043,10 @@ impl ClientActorInner {
             let Some(addr) = peer_info.addr else {
                 continue;
             };
-
-            let Some(shard_ids) = chunk_producers_to_shard.get(&peer_info.account_id) else {
+            let Some(account_id) = peer_info.account_id else {
+                continue;
+            };
+            let Some(shard_ids) = chunk_producers_to_shard.get(&account_id) else {
                 continue;
             };
 
