@@ -194,7 +194,7 @@ run_mode_1() {
             --num-sub-accounts 500 \
             --deposit 953060601875000000010000000 \
             --channel-buffer-size 1200 \
-            --requests-per-second 1250 \
+            --requests-per-second 3000 \
             --user-data-dir user-data && \
             echo 'Mode 1 preparation complete'" "$log_file" "mode1"
     else
@@ -266,7 +266,7 @@ run_mode_2() {
             --oracle-data-dir /home/ubuntu/oracles/ \
             --user-data-dir /home/ubuntu/users/ \
             --batch-size 750 \
-            --requests-per-second 2 \
+            --requests-per-second 10 \
             --total-batches 2000000" "$log_file" "mode2"
     fi
 }
