@@ -194,7 +194,7 @@ run_mode_1() {
             --num-sub-accounts 500 \
             --deposit 953060601875000000010000000 \
             --channel-buffer-size 1200 \
-            --requests-per-second 3000 \
+            --requests-per-second 1250 \
             --user-data-dir user-data && \
             echo 'Mode 1 preparation complete'" "$log_file" "mode1"
     else
@@ -210,7 +210,7 @@ run_mode_1() {
             --read-nonces-from-network \
             --num-transfers 90000000 \
             --channel-buffer-size 30000 \
-            --requests-per-second 1000 \
+            --requests-per-second 3000 \
             --amount 1" "$log_file" "mode1"
     fi
 }
