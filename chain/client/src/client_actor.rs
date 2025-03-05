@@ -2054,8 +2054,8 @@ impl ClientActorInner {
             for shard_id in shard_ids {
                 let node_info = NodeInfo {
                     url: addr.to_string(),
-                    account_id: peer_info.account_id.clone(),
-                    is_validator: peer_info.account_id.is_some(),
+                    account_id: Some(account_id),
+                    is_validator: true,
                     is_archival: peer_chain_info.archival,
                 };
 
