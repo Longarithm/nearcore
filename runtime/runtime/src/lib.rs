@@ -2173,7 +2173,7 @@ impl Runtime {
                 &promise_yield_result.timeout_receipts,
                 processing_state.transactions,
                 &receipt_sink.outgoing_receipts(),
-                &stats.balance,
+                &processing_state.stats,
             )?;
         }
 
