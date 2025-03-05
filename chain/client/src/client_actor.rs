@@ -2022,8 +2022,12 @@ impl ClientActorInner {
         // Create a mapping of shard_id -> Vec<NodeInfo>
         let mut tracking_shards: HashMap<ShardId, Vec<NodeInfo>> = HashMap::new();
 
+        warn!(target: "client", "Found {} connected peers", self.network_info.connected_peers.len());
+
         // Use the network_info to get information about connected peers
         for peer in &self.network_info.connected_peers {
+            warn!(target: "client", "Full peer info: {:?}", peer.full_peer_info);
+
             let peer_info = &peer.full_peer_info.peer_info;
             let peer_chain_info = &peer.full_peer_info.chain_info;
             let Some(addr) = peer_info.addr else {
