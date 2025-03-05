@@ -2044,7 +2044,9 @@ impl ClientActorInner {
                 continue;
             };
 
-            let shard_ids = chunk_producers_to_shard.get(&peer_info.account_id).unwrap_or_default();
+            let Some(shard_ids) = chunk_producers_to_shard.get(&peer_info.account_id) else {
+                continue;
+            };
 
             // For each shard that this peer tracks
             for shard_id in shard_ids {
