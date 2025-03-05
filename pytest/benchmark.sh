@@ -179,11 +179,11 @@ run_mode_1() {
     fi
     
     # Prepare RPC URLs for random validators if needed
-    local rpc_urls_file=""
-    if [ "$operation" == "run" ] && [ "$USE_RANDOM_VALIDATORS" == true ]; then
-        rpc_urls_file=$(prepare_rpc_urls)
-        echo "Using RPC URLs from file: $rpc_urls_file"
-    fi
+    # local rpc_urls_file=""
+    # if [ "$operation" == "run" ] && [ "$USE_RANDOM_VALIDATORS" == true ]; then
+    #     rpc_urls_file=$(prepare_rpc_urls)
+    #     echo "Using RPC URLs from file: $rpc_urls_file"
+    # fi
     
     if [ "$operation" == "prepare" ]; then
         run_background "RUST_LOG=debug /home/ubuntu/near-synth-bm create-sub-accounts \
@@ -199,8 +199,8 @@ run_mode_1() {
             echo 'Mode 1 preparation complete'" "$log_file" "mode1"
     else
         local random_validators_arg=""
-        if [ -n "$rpc_urls_file" ]; then
-            random_validators_arg="--rpc-urls-file $rpc_urls_file"
+        if [ -n "/tmp/validator_ips" ]; then
+            random_validators_arg="--rpc-urls-file /tmp/validator_ips"
         fi
         
         run_background "RUST_LOG=info /home/ubuntu/near-synth-bm benchmark-native-transfers \
@@ -229,11 +229,11 @@ run_mode_2() {
     fi
     
     # Prepare RPC URLs for random validators if needed
-    local rpc_urls_file=""
-    if [ "$operation" == "run" ] && [ "$USE_RANDOM_VALIDATORS" == true ]; then
-        rpc_urls_file=$(prepare_rpc_urls)
-        echo "Using RPC URLs from file: $rpc_urls_file"
-    fi
+    # local rpc_urls_file=""
+    # if [ "$operation" == "run" ] && [ "$USE_RANDOM_VALIDATORS" == true ]; then
+    #     rpc_urls_file=$(prepare_rpc_urls)
+    #     echo "Using RPC URLs from file: $rpc_urls_file"
+    # fi
     
     if [ "$operation" == "prepare" ]; then
         run_background "RUST_LOG=info /home/ubuntu/near-synth-bm \
@@ -255,8 +255,8 @@ run_mode_2() {
             echo 'Mode 2 preparation complete'" "$log_file" "mode2"
     else
         local random_validators_arg=""
-        if [ -n "$rpc_urls_file" ]; then
-            random_validators_arg="--rpc-urls-file $rpc_urls_file"
+        if [ -n "/tmp/validator_ips" ]; then
+            random_validators_arg="--rpc-urls-file /tmp/validator_ips"
         fi
         
         run_background "RUST_LOG=info /home/ubuntu/near-synth-bm \
