@@ -65,6 +65,9 @@ pub enum Error {
     /// Orphan block.
     #[error("Orphan")]
     Orphan,
+    /// Block is in the pending pool waiting for optimistic block to be processed.
+    #[error("Pending")]
+    Pending,
     /// Chunk is missing.
     #[error("Chunk Missing (unavailable on the node): {0:?}")]
     ChunkMissing(ChunkHash),
@@ -277,6 +280,7 @@ impl Error {
             Error::BlockKnown(_)
             | Error::TooManyProcessingBlocks
             | Error::Orphan
+            | Error::Pending
             | Error::ChunkMissing(_)
             | Error::ChunksMissing(_)
             | Error::InvalidChunkHeight
@@ -340,6 +344,7 @@ impl Error {
             | Error::NotAValidator(_)
             | Error::NotAChunkValidator
             | Error::InvalidChallengeRoot
+            | Error::ReshardingError(_)
             | Error::BadHeaderForProtocolVersion(_) => true,
         }
     }
@@ -361,6 +366,7 @@ impl Error {
             Error::BlockKnown(_) => "block_known",
             Error::TooManyProcessingBlocks => "too_many_processing_blocks",
             Error::Orphan => "orphan",
+            Error::Pending => "pending",
             Error::ChunkMissing(_) => "chunk_missing",
             Error::ChunksMissing(_) => "chunks_missing",
             Error::InvalidChunkHeight => "invalid_chunk_height",

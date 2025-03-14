@@ -1298,6 +1298,12 @@ impl ClientActorInner {
             error!(target: "client", ?errors, "try_process_unfinished_blocks got errors");
         }
         self.process_accepted_blocks(accepted_blocks, signer);
+
+        // Also check if any pending blocks are ready to be processed
+        self.client.process_pending_blocks(
+            Some(self.client.myself_sender.apply_chunks_done.clone()),
+            signer,
+        );
     }
 
     fn try_handle_block_production(&mut self) {
@@ -1357,7 +1363,7 @@ impl ClientActorInner {
         self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(
             NetworkRequests::Block { block: block.clone() },
         ));
-        // We’ve produced the block so that counts as validated block.
+        // We've produced the block so that counts as validated block.
         let block = MaybeValidated::from_validated(block);
         let res = self.client.start_process_block(
             block,
@@ -1403,7 +1409,7 @@ impl ClientActorInner {
             NetworkRequests::OptimisticBlock { optimistic_block: optimistic_block.clone() },
         ));
 
-        // We’ve produced the optimistic block, mark it as done so we don't produce it again.
+        // We've produced the optimistic block, mark it as done so we don't produce it again.
         self.client.save_optimistic_block(&optimistic_block);
         self.client.chain.optimistic_block_chunks.add_block(optimistic_block);
 

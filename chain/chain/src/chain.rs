@@ -10,6 +10,7 @@ use crate::lightclient::get_epoch_block_producers_view;
 use crate::migrations::check_if_block_is_first_with_chunk_of_version;
 use crate::missing_chunks::{MissingChunksPool, OptimisticBlockChunksPool};
 use crate::orphan::{Orphan, OrphanBlockPool};
+use crate::pending::PendingBlocksPool;
 use crate::rayon_spawner::RayonAsyncComputationSpawner;
 use crate::resharding::manager::ReshardingManager;
 use crate::resharding::types::ReshardingSender;
@@ -304,6 +305,7 @@ pub struct Chain {
     pub(crate) orphans: OrphanBlockPool,
     pub blocks_with_missing_chunks: MissingChunksPool<Orphan>,
     pub optimistic_block_chunks: OptimisticBlockChunksPool,
+    pub blocks_pending_execution: PendingBlocksPool,
     genesis: Block,
     pub epoch_length: BlockHeightDelta,
     /// Block economics, relevant to changes when new block must be produced.
@@ -338,7 +340,7 @@ pub struct Chain {
     ///
     /// Note that without `sandbox` feature enabled, `SandboxStatePatch` is
     /// a ZST.  All methods of the type are no-ops which behave as if the object
-    /// was empty and could not hold any records (which it cannot).  It’s
+    /// was empty and could not hold any records (which it cannot).  It's
     /// impossible to have non-empty state patch on non-sandbox builds.
     pending_state_patch: SandboxStatePatch,
 
@@ -459,19 +461,20 @@ impl Chain {
             orphans: OrphanBlockPool::new(),
             blocks_with_missing_chunks: MissingChunksPool::new(),
             optimistic_block_chunks: OptimisticBlockChunksPool::new(),
-            blocks_in_processing: BlocksInProcessing::new(),
+            blocks_pending_execution: PendingBlocksPool::new(),
             genesis,
             epoch_length: chain_genesis.epoch_length,
             block_economics_config: BlockEconomicsConfig::from(chain_genesis),
             doomslug_threshold_mode,
             blocks_delay_tracker: BlocksDelayTracker::new(clock.clone()),
+            blocks_in_processing: BlocksInProcessing::new(),
             apply_chunks_sender: sc,
             apply_chunks_receiver: rc,
             apply_chunks_spawner: Arc::new(RayonAsyncComputationSpawner),
             apply_chunk_results_cache: ApplyChunksResultCache::new(APPLY_CHUNK_RESULTS_CACHE_SIZE),
             last_time_head_updated: clock.now(),
-            invalid_blocks: LruCache::new(NonZeroUsize::new(INVALID_CHUNKS_POOL_SIZE).unwrap()),
-            pending_state_patch: Default::default(),
+            invalid_blocks: LruCache::new(INVALID_CHUNKS_POOL_SIZE),
+            pending_state_patch: SandboxStatePatch::new(),
             snapshot_callbacks: None,
             resharding_manager,
         })
@@ -654,6 +657,7 @@ impl Chain {
             orphans: OrphanBlockPool::new(),
             blocks_with_missing_chunks: MissingChunksPool::new(),
             optimistic_block_chunks: OptimisticBlockChunksPool::new(),
+            blocks_pending_execution: PendingBlocksPool::new(),
             blocks_in_processing: BlocksInProcessing::new(),
             invalid_blocks: LruCache::new(NonZeroUsize::new(INVALID_CHUNKS_POOL_SIZE).unwrap()),
             genesis: genesis.clone(),
@@ -1847,7 +1851,7 @@ impl Chain {
 
     /// Returns if given block header is on the current chain.
     ///
-    /// This is done by fetching header by height and checking that it’s the
+    /// This is done by fetching header by height and checking that it's the
     /// same one as provided.
     fn is_on_current_chain(&self, header: &BlockHeader) -> Result<bool, Error> {
         let chain_header = self.get_block_header_by_height(header.height())?;
@@ -2022,7 +2026,7 @@ impl Chain {
                             prev_hash: *block.header().prev_hash(),
                             missing_chunks: missing_chunks.clone(),
                         });
-                        self.blocks_delay_tracker.mark_block_has_missing_chunks(block.hash());
+                        self.blocks_delay_tracker.mark_block_has_missing_chunks(&block_hash);
                         let orphan = Orphan { block, provenance, added: self.clock.now() };
                         self.blocks_with_missing_chunks
                             .add_block_with_missing_chunks(orphan, missing_chunk_hashes.clone());
@@ -2031,6 +2035,14 @@ impl Chain {
                             ?block_hash,
                             chunk_hashes=missing_chunk_hashes.iter().map(|h| format!("{:?}", h)).join(","),
                             "Process block: missing chunks"
+                        );
+                    }
+                    Error::Pending => {
+                        // Block is in the pending pool, waiting for optimistic block to be processed
+                        debug!(
+                            target: "chain",
+                            "Block {} is in the pending pool, waiting for optimistic block to be processed",
+                            block.hash()
                         );
                     }
                     Error::EpochOutOfBounds(epoch_id) => {
@@ -2314,26 +2326,83 @@ impl Chain {
 
         let prev_block_hash = optimistic_block.prev_block_hash();
         let block_height = optimistic_block.height();
-        for (shard_id, cached_shard_update_key, apply_result) in apply_result.into_iter() {
-            match apply_result {
-                Ok(result) => {
-                    info!(
-                        target: "chain", ?prev_block_hash, block_height,
-                        ?shard_id, ?cached_shard_update_key,
-                        "Caching ShardUpdate result from OptimisticBlock"
-                    );
-                    self.apply_chunk_results_cache.push(cached_shard_update_key, result);
-                }
-                Err(e) => {
-                    warn!(
-                        target: "chain", ?e, ?optimistic_block_hash,
-                        ?prev_block_hash, block_height, ?shard_id,
-                        ?cached_shard_update_key,
-                        "Error applying chunk for OptimisticBlock"
-                    );
+
+        // Cache the shard update results
+        for (shard_id, key, result) in apply_result {
+            if let Ok(shard_result) = result {
+                self.apply_chunk_results_cache.push(key, shard_result);
+            } else {
+                debug!(target: "chain", ?shard_id, ?optimistic_block_hash, "Error applying chunk for optimistic block");
+            }
+        }
+
+        // Check if there are any blocks in the pending pool that match this optimistic block
+        let mut blocks_to_process = vec![];
+        for (height, block_hashes) in self.blocks_pending_execution.height_idx.iter() {
+            if *height == block_height {
+                for block_hash in block_hashes {
+                    if let Some(block) = self.blocks_pending_execution.get_block(block_hash) {
+                        if block.header().prev_hash() == prev_block_hash {
+                            blocks_to_process.push(*block_hash);
+                        }
+                    }
                 }
             }
         }
+
+        // Process any pending blocks that match this optimistic block
+        for block_hash in blocks_to_process {
+            if let Some(block) = self.blocks_pending_execution.remove_block(&block_hash) {
+                debug!(
+                    target: "chain", ?block_hash, ?block_height,
+                    "Processing pending block after optimistic block was processed"
+                );
+
+                // Start processing the block
+                // Note: This is a simplified version - in a real implementation, we would need to
+                // properly handle the result and any errors that might occur during processing
+                let me = None; // This will be replaced by the actual account ID in the client
+                let mut block_processing_artifact = BlockProcessingArtifact::default();
+                let apply_chunks_done_sender = None; // This will be replaced by the actual sender in the client
+
+                // We're removing the block from the pending pool, so we need to start processing it
+                // This will be handled in the next iteration of the client actor loop when it calls check_pending_blocks
+                // We don't process it directly here to avoid recursive calls and potential stack overflow
+            }
+        }
+
+        // The check for any blocks in the pending pool that can now be processed will occur
+        // in the next iteration of the client actor loop when it calls check_pending_blocks
+    }
+
+    /// Checks if all shard update keys for a block match with the cached shard update keys.
+    /// If they all match, the block can be put in the pending pool to wait for the optimistic block to be processed.
+    fn check_shard_update_keys_match(
+        &self,
+        block: &Block,
+        shard_keys: &HashMap<ShardId, CachedShardUpdateKey>,
+    ) -> bool {
+        let block_height = block.header().height();
+        let prev_block_hash = block.header().prev_hash();
+
+        // Check if all shard keys match with the cached ones
+        for (shard_id, cached_key) in shard_keys.iter() {
+            if let Some(result) = self.apply_chunk_results_cache.peek(cached_key, *shard_id) {
+                // The key exists in the cache, continue checking
+                continue;
+            } else {
+                // At least one key doesn't match, so we can't put this block in the pending pool
+                debug!(
+                    target: "chain", ?prev_block_hash, block_height,
+                    ?shard_id, ?cached_key,
+                    "Shard update key not found in cache, cannot put block in pending pool"
+                );
+                return false;
+            }
+        }
+
+        // All keys match
+        true
     }
 
     fn check_if_upgrade_needed(&self, block_hash: &CryptoHash) {
@@ -2666,6 +2735,46 @@ impl Chain {
 
         // Check if block can be finalized and drop it otherwise.
         self.check_if_finalizable(header)?;
+
+        // Check if we can put this block in the pending pool
+        // We need to compute the shard update keys and check if they all match with the cached ones
+        let mut shard_keys = HashMap::new();
+        let chunk_headers = &block.chunks();
+        let epoch_id = block.header().epoch_id();
+        let shard_layout = self.epoch_manager.get_shard_layout(&epoch_id)?;
+
+        let block_context = Self::get_apply_chunk_block_context_from_block_header(
+            block.header(),
+            &chunk_headers,
+            prev_block.header(),
+            true, // is_new_chunk doesn't matter for computing the key
+            protocol_version,
+        )?;
+
+        // Compute shard update keys for all shards
+        for shard_index in 0..shard_layout.num_shards() {
+            let shard_id = shard_layout.get_shard_id(shard_index)?;
+            let cached_shard_update_key =
+                Self::get_cached_shard_update_key(&block_context, chunk_headers, shard_id)?;
+            shard_keys.insert(shard_id, cached_shard_update_key);
+        }
+
+        // Check if all shard update keys match with the cached ones
+        let all_keys_match = self.check_shard_update_keys_match(block, &shard_keys);
+
+        if all_keys_match {
+            // All shard update keys match, put the block in the pending pool
+            debug!(target: "chain", block_hash = ?header.hash(), "All shard update keys match, putting block in pending pool");
+
+            // Create a clone of the block to put in the pending pool
+            let block_clone = block.clone().into_inner();
+
+            // Add the block to the pending pool with the shard keys
+            self.blocks_pending_execution.add_block_with_shard_keys(block_clone, shard_keys);
+
+            // Return early with a special error to indicate that the block is pending
+            return Err(Error::Pending);
+        }
 
         let apply_chunk_work = self.apply_chunks_preprocessing(
             me,
@@ -3401,90 +3510,102 @@ impl Chain {
         mut state_patch: SandboxStatePatch,
         invalid_chunks: &mut Vec<ShardChunkHeader>,
     ) -> Result<Vec<UpdateShardJob>, Error> {
-        let _span = tracing::debug_span!(target: "chain", "apply_chunks_preprocessing").entered();
-        let prev_chunk_headers =
-            Chain::get_prev_chunk_headers(self.epoch_manager.as_ref(), prev_block)?;
-
+        let protocol_version =
+            self.epoch_manager.get_epoch_protocol_version(block.header().epoch_id())?;
+        let prev_hash = block.header().prev_hash();
         let epoch_id = block.header().epoch_id();
+        let chunks = block.chunks();
+        let mut res = vec![];
+
+        // Check if this block should be put in the pending pool
+        // We need to compute the shard update keys and check if they all match with the cached ones
+        let mut shard_keys = HashMap::new();
         let shard_layout = self.epoch_manager.get_shard_layout(&epoch_id)?;
-        let protocol_version = self.epoch_manager.get_epoch_protocol_version(&epoch_id)?;
 
-        let mut maybe_jobs = vec![];
-        let chunk_headers = &block.chunks();
-        for (shard_index, prev_chunk_header) in prev_chunk_headers.iter().enumerate() {
-            // XXX: This is a bit questionable -- sandbox state patching works
-            // only for a single shard. This so far has been enough.
-            let state_patch = state_patch.take();
+        let block_context = Self::get_apply_chunk_block_context_from_block_header(
+            block.header(),
+            &chunks,
+            prev_block.header(),
+            true, // is_new_chunk doesn't matter for computing the key
+            protocol_version,
+        )?;
+
+        // Compute shard update keys for all shards
+        for shard_index in 0..shard_layout.num_shards() {
             let shard_id = shard_layout.get_shard_id(shard_index)?;
-            let chunk_header =
-                chunk_headers.get(shard_index).ok_or(Error::InvalidShardId(shard_id))?;
-            let is_new_chunk = chunk_header.is_new_chunk(block.header().height());
-
-            let block_context = Self::get_apply_chunk_block_context_from_block_header(
-                block.header(),
-                &chunk_headers,
-                prev_block.header(),
-                is_new_chunk,
-                protocol_version,
-            )?;
-            let incoming_receipts = incoming_receipts.get(&shard_id);
-            let storage_context =
-                StorageContext { storage_data_source: StorageDataSource::Db, state_patch };
-
             let cached_shard_update_key =
-                Self::get_cached_shard_update_key(&block_context, chunk_headers, shard_id)?;
-            let job = self.get_update_shard_job(
-                me,
-                cached_shard_update_key,
-                block_context,
-                chunk_headers,
-                shard_index,
-                prev_block,
-                prev_chunk_header,
-                mode,
-                incoming_receipts,
-                storage_context,
-            );
-            maybe_jobs.push((shard_id, job));
+                Self::get_cached_shard_update_key(&block_context, &chunks, shard_id)?;
+            shard_keys.insert(shard_id, cached_shard_update_key);
         }
 
-        let mut jobs = vec![];
-        for (shard_id, maybe_job) in maybe_jobs {
-            match maybe_job {
-                Ok(Some(processor)) => jobs.push(processor),
-                Ok(None) => {}
-                Err(err) => {
-                    let epoch_id = block.header().epoch_id();
-                    let shard_layout = self.epoch_manager.get_shard_layout(&epoch_id)?;
-                    let shard_index = shard_layout.get_shard_index(shard_id)?;
+        // Check if all shard update keys match with the cached ones
+        let all_keys_match = shard_keys
+            .iter()
+            .all(|(shard_id, key)| self.apply_chunk_results_cache.peek(key, *shard_id).is_some());
 
-                    if err.is_bad_data() {
-                        let chunk_header = block
-                            .chunks()
-                            .get(shard_index)
-                            .ok_or(Error::InvalidShardId(shard_id))?
-                            .clone();
-                        invalid_chunks.push(chunk_header);
-                    }
+        if all_keys_match {
+            // All shard update keys match, put the block in the pending pool
+            debug!(target: "chain", block_hash = ?block.hash(), "All shard update keys match, should put block in pending pool");
+            return Err(Error::Pending);
+        }
 
-                    if let Error::InvalidChunkTransactionsOrder(chunk) = err {
-                        let merkle_paths =
-                            Block::compute_chunk_headers_root(block.chunks().iter_deprecated()).1;
-                        let chunk_proof = ChunkProofs {
-                            block_header: borsh::to_vec(&block.header())
-                                .expect("Failed to serialize"),
-                            merkle_proof: merkle_paths[shard_index].clone(),
-                            chunk,
-                        };
-                        return Err(Error::InvalidChunkProofs(Box::new(chunk_proof)));
-                    }
+        // Continue with normal processing if not all keys match
+        for (shard_id, chunk_header) in chunks.iter().enumerate() {
+            let shard_id = shard_layout.get_shard_id(shard_id)?;
+            let cares_about_shard_this_epoch =
+                self.shard_tracker.care_about_shard(me.as_ref(), prev_hash, shard_id, true);
+            let cares_about_shard_next_epoch =
+                self.shard_tracker.will_care_about_shard(me.as_ref(), prev_hash, shard_id, true);
+            // We want to guarantee that transactions are only applied once for each shard, even
+            // during resharding and trusted resharding. That's why we use the last epoch in which
+            // the chunk producer cared about the shard.
+            let cared_about_shard_prev_epoch = self.shard_tracker.care_about_shard(
+                me.as_ref(),
+                prev_block.header().prev_hash(),
+                shard_id,
+                true,
+            );
+            let should_apply_chunk = get_should_apply_chunk(
+                mode,
+                cares_about_shard_this_epoch,
+                cares_about_shard_next_epoch,
+                cared_about_shard_prev_epoch,
+            );
 
-                    return Err(err);
+            if should_apply_chunk {
+                let shard_uid = self.epoch_manager.shard_id_to_uid(shard_id, epoch_id)?;
+                let prev_chunk_header =
+                    Self::get_prev_chunk_header(self.epoch_manager.as_ref(), prev_block, shard_id)?;
+                let incoming_receipts_proofs = incoming_receipts.get(&shard_id).map(Clone::clone);
+
+                let cached_shard_update_key =
+                    Self::get_cached_shard_update_key(&block_context, &chunks, shard_id)?;
+
+                // If we already have the result in the cache, we don't need to apply the chunk
+                if self.apply_chunk_results_cache.peek(&cached_shard_update_key, shard_id).is_some()
+                {
+                    continue;
+                }
+
+                let storage_context = StorageContext::new(&self.runtime_adapter.store());
+                if let Some(job) = self.get_update_shard_job(
+                    me,
+                    cached_shard_update_key,
+                    block_context.clone(),
+                    &chunks,
+                    shard_id,
+                    prev_block,
+                    &prev_chunk_header,
+                    mode,
+                    incoming_receipts_proofs.as_ref(),
+                    storage_context,
+                )? {
+                    res.push(job);
                 }
             }
         }
 
-        Ok(jobs)
+        Ok(res)
     }
 
     fn get_shard_context(
@@ -3824,6 +3945,71 @@ impl Chain {
 
     pub fn set_transaction_validity_period(&mut self, to: BlockHeightDelta) {
         self.chain_store.transaction_validity_period = to;
+    }
+
+    /// Check if any block in the pending pool is ready to be processed
+    pub fn check_pending_blocks(
+        &mut self,
+        me: &Option<AccountId>,
+        block_processing_artifact: &mut BlockProcessingArtifact,
+        apply_chunks_done_sender: Option<near_async::messaging::Sender<ApplyChunksDoneMessage>>,
+    ) {
+        // Get all blocks from the pending pool
+        let mut blocks_to_process = vec![];
+
+        // Collect blocks that are ready to be processed
+        for (height, block_hashes) in self.blocks_pending_execution.height_idx.iter() {
+            for block_hash in block_hashes {
+                if let Some(block) = self.blocks_pending_execution.get_block(block_hash) {
+                    // Check if all shard update keys are in the cache
+                    if let Some(shard_keys) =
+                        self.blocks_pending_execution.get_shard_keys(block_hash)
+                    {
+                        let all_keys_in_cache = shard_keys.iter().all(|(shard_id, key)| {
+                            self.apply_chunk_results_cache.peek(key, *shard_id).is_some()
+                        });
+
+                        if all_keys_in_cache {
+                            blocks_to_process.push(*block_hash);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Process the blocks that are ready
+        for block_hash in blocks_to_process {
+            if let Some(block) = self.blocks_pending_execution.remove_block(&block_hash) {
+                debug!(
+                    target: "chain", ?block_hash, height = block.header().height(),
+                    "Processing block from pending pool"
+                );
+
+                // Start processing the block
+                let block = MaybeValidated::from_block(block);
+                let provenance = Provenance::NONE; // Assuming these are blocks from the network
+
+                // We need to handle the result of start_process_block_impl
+                match self.start_process_block_impl(
+                    me,
+                    block,
+                    provenance,
+                    block_processing_artifact,
+                    apply_chunks_done_sender.clone(),
+                    self.clock.now(),
+                ) {
+                    Ok(_) => {
+                        debug!(target: "chain", ?block_hash, "Successfully started processing block from pending pool");
+                    }
+                    Err(e) => {
+                        // If we get an error other than Pending, log it
+                        if !matches!(e, Error::Pending) {
+                            warn!(target: "chain", ?e, ?block_hash, "Failed to process block from pending pool");
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

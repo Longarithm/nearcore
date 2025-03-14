@@ -32,6 +32,7 @@ pub mod metrics;
 pub mod migrations;
 pub mod missing_chunks;
 pub mod orphan;
+mod pending;
 pub mod resharding;
 pub mod runtime;
 pub mod signature_verification;
