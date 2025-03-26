@@ -246,7 +246,7 @@ run_mode_2() {
             --wasm-file /home/ubuntu/sweat.wasm \
             --sub-account-prefixes '2,c,f,h,m,x' \
             $nonce_arg && \
-        RUST_LOG=debug /home/ubuntu/near-synth-bm \
+        RUST_LOG='near_jsonrpc_client=info,debug' /home/ubuntu/near-synth-bm \
             benchmark-sweat create-users \
             --rpc-url $rpc_url \
             --oracle-data-dir /home/ubuntu/oracles/ \
