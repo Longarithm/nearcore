@@ -190,7 +190,7 @@ run_mode_1() {
             --rpc-url $rpc_url \
             --signer-key-path /home/ubuntu/.near/validator_key.json \
             $nonce_arg \
-            --sub-account-prefix '2,c,h,m,x' \
+            --sub-account-prefix '2,c,f,h,m,x' \
             --num-sub-accounts 500 \
             --deposit 953060601875000000010000000 \
             --channel-buffer-size 1200 \
@@ -239,11 +239,12 @@ run_mode_2() {
         run_background "RUST_LOG=debug /home/ubuntu/near-synth-bm \
             benchmark-sweat create-contracts \
             --rpc-url $rpc_url \
-            --num-oracles 5 \
+            --num-oracles 6 \
             --oracle-deposit 1000000000000000000000000000000 \
             --user-data-dir /home/ubuntu/oracles/ \
             --signer-key-path /home/ubuntu/.near/validator_key.json \
             --wasm-file /home/ubuntu/sweat.wasm \
+            --sub-account-prefixes 2,c,f,h,m,x \
             $nonce_arg && \
         RUST_LOG=debug /home/ubuntu/near-synth-bm \
             benchmark-sweat create-users \
