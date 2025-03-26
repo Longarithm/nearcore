@@ -244,7 +244,7 @@ run_mode_2() {
             --user-data-dir /home/ubuntu/oracles/ \
             --signer-key-path /home/ubuntu/.near/validator_key.json \
             --wasm-file /home/ubuntu/sweat.wasm \
-            --sub-account-prefixes 2,c,f,h,m,x \
+            --sub-account-prefixes '2,c,f,h,m,x' \
             $nonce_arg && \
         RUST_LOG=debug /home/ubuntu/near-synth-bm \
             benchmark-sweat create-users \
