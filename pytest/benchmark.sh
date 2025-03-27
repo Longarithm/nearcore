@@ -203,12 +203,12 @@ run_mode_1() {
             random_validators_arg="--rpc-urls-file /tmp/validator_ips"
         fi
         
+        # --num-transfers 90000000
         run_background "RUST_LOG=info /home/ubuntu/near-synth-bm benchmark-native-transfers \
             --rpc-url $rpc_url \
             $random_validators_arg \
             --user-data-dir /home/ubuntu/user-data/ \
             --read-nonces-from-network \
-            --num-transfers 90000000 \
             --channel-buffer-size 30000 \
             --requests-per-second 4000 \
             --amount 1" "$log_file" "mode1"
@@ -260,6 +260,7 @@ run_mode_2() {
             random_validators_arg="--rpc-urls-file /tmp/validator_ips"
         fi
         
+        # --total-batches 20000000
         run_background "RUST_LOG=info /home/ubuntu/near-synth-bm \
             benchmark-sweat run-benchmark \
             --rpc-url $rpc_url \
@@ -267,8 +268,7 @@ run_mode_2() {
             --oracle-data-dir /home/ubuntu/oracles/ \
             --user-data-dir /home/ubuntu/users/ \
             --batch-size 750 \
-            --requests-per-second 15 \
-            --total-batches 20000000" "$log_file" "mode2"
+            --requests-per-second 15" "$log_file" "mode2"
     fi
 }
 
