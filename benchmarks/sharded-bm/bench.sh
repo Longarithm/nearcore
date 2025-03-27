@@ -181,10 +181,13 @@ fetch_forknet_details() {
     # Get all instances for this forknet
     local instances=$(gcloud compute instances list \
         --project=nearone-mocknet \
-        --filter="name~'${FORKNET_NAME}' AND -name~'traffic'" \
+        --filter="name~'${FORKNET_NAME}' AND -name~'traffic' AND -name~'tracing'" \
         --format="get(name,networkInterfaces[0].networkIP)")    
+    echo "instances: ${instances}"
     local total_lines=$(echo "$instances" | wc -l | tr -d ' ')
+    echo "total_lines: ${total_lines}"
     local num_cp_instances=$((total_lines - 1))
+    echo "num_cp_instances: ${num_cp_instances}"
     # Get the last instance (RPC node)
     FORKNET_RPC_NODE_ID=$(echo "$instances" | tail -n1 | awk '{print $1}')
     FORKNET_RPC_INTERNAL_IP=$(echo "$instances" | tail -n1 | awk '{print $2}')
@@ -212,13 +215,16 @@ fetch_forknet_details() {
 
 init_forknet() {
     cd ${PYTEST_PATH}
-    $MIRROR init-neard-runner --neard-binary-url ${NODE_BINARY_URL} --neard-upgrade-binary-url ""
+    echo "NODE_BINARY_URL: ${NODE_BINARY_URL}"
+    # $MIRROR init-neard-runner --neard-binary-url ${NODE_BINARY_URL} --neard-upgrade-binary-url ""
+    echo "UPDATE_BINARIES: ${UPDATE_BINARIES}"
     if [ "${UPDATE_BINARIES}" = true ]; then
+        echo "Updating binaries"
         $MIRROR --host-type nodes update-binaries || true
     fi
-    $MIRROR --host-type nodes run-cmd --cmd "mkdir -p ${BENCHNET_DIR}"
-    $MIRROR --host-type nodes upload-file --src ${SYNTH_BM_BIN} --dst ${BENCHNET_DIR}
-    $MIRROR --host-type nodes run-cmd --cmd "chmod +x ${BENCHNET_DIR}/near-synth-bm"
+    # $MIRROR --host-type nodes run-cmd --cmd "mkdir -p ${BENCHNET_DIR}"
+    # $MIRROR --host-type nodes upload-file --src ${SYNTH_BM_BIN} --dst ${BENCHNET_DIR}
+    # $MIRROR --host-type nodes run-cmd --cmd "chmod +x ${BENCHNET_DIR}/near-synth-bm"
     cd -
 }
 
@@ -462,6 +468,15 @@ native_transfers_forknet() {
     cd -
 }
 
+stop_native_transfers() {
+    fetch_forknet_details
+    cd ${PYTEST_PATH}
+    $MIRROR --host-filter ".*${FORKNET_RPC_NODE_ID}" run-cmd --cmd \
+        "cd ${BENCHNET_DIR}; \
+        ${FORKNET_ENV} killall --wait near-synth-bm || true"
+    cd -
+}
+
 native_transfers_local() {
     local cmd
     if [ "${RUN_ON_FORKNET}" = true ]; then
@@ -600,6 +615,10 @@ create-accounts)
 
 native-transfers)
     native_transfers
+    ;;
+
+stop-native-transfers)
+    stop_native_transfers
     ;;
 
 monitor)
