@@ -103,7 +103,7 @@ start_nodes_forknet() {
 }
 
 start_neard0() {
-    nohup ${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run &> ${FORKNET_NEARD_LOG} &
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://10.138.0.40:3030/ nohup ${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run &> ${FORKNET_NEARD_LOG} &
 }
 
 start_nodes_local() {
@@ -253,9 +253,9 @@ init_forknet() {
         $MIRROR --host-type nodes update-binaries || true
     fi
     #
-    $MIRROR --host-type nodes run-cmd --cmd "mkdir -p ${BENCHNET_DIR}"
-    $MIRROR --host-type nodes upload-file --src ${SYNTH_BM_BIN} --dst ${BENCHNET_DIR}
-    $MIRROR --host-type nodes run-cmd --cmd "chmod +x ${BENCHNET_DIR}/near-synth-bm"
+    # $MIRROR --host-type nodes run-cmd --cmd "mkdir -p ${BENCHNET_DIR}"
+    # $MIRROR --host-type nodes upload-file --src ${SYNTH_BM_BIN} --dst ${BENCHNET_DIR}
+    # $MIRROR --host-type nodes run-cmd --cmd "chmod +x ${BENCHNET_DIR}/near-synth-bm"
     cd -
 }
 
