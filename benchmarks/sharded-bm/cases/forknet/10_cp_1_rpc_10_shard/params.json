@@ -6,10 +6,10 @@
     "num_accounts": 100,
     "tx_generator": {
         "enabled": true,
-        "tps": 3900,
+        "tps": 3100,
         "volume": 0
     },
     "forknet": {
-        "binary_url": "https://storage.googleapis.com/logunov-s/neard-0327"
+        "binary_url": "https://storage.googleapis.com/logunov-s/neard-0402"
     }
 }
