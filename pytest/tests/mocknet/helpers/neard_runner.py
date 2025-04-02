@@ -812,10 +812,21 @@ class NeardRunner:
 
     def get_env(self):
         home_path = os.path.expanduser('~')
+        process_env = os.environ  # Process environment variables
+        logging.info(f"Process environment variables: {process_env}")
+
+        secrets_env = dotenv.dotenv_values(os.path.join(
+            home_path, '.secrets'))  # Sensitive variables
+        logging.info(f"Secrets environment variables: {secrets_env}")
+
+        neard_env = dotenv.dotenv_values(
+            self.home_path('.env'))  # Neard variables
+        logging.info(f"Neard environment variables: {neard_env}")
+
         return {
-            **os.environ,  # override loaded values with environment variables
-            **dotenv.dotenv_values(os.path.join(home_path, '.secrets')),  # load sensitive variables
-            **dotenv.dotenv_values(self.home_path('.env')),  # load neard variables
+            **process_env,  # override loaded values with environment variables
+            **secrets_env,  # load sensitive variables
+            **neard_env,  # load neard variables
         }
 
     """
