@@ -1173,6 +1173,7 @@ impl Chain {
         prev_block_hash: &CryptoHash,
         shuffle_salt: &CryptoHash,
     ) -> Result<HashMap<ShardId, Vec<ReceiptProof>>, Error> {
+        let _span = debug_span!(target: "chain", "collect_incoming_receipts_from_chunks").entered();
         if !self.cares_about_any_shard_or_part(me, *prev_block_hash)? {
             return Ok(HashMap::new());
         }
@@ -2193,6 +2194,7 @@ impl Chain {
         block_received_time: Instant,
         state_patch: SandboxStatePatch,
     ) -> Result<PreprocessBlockResult, Error> {
+        let split_span = debug_span!(target: "chain", "split_span_1").entered();
         let header = block.header();
 
         // see if the block is already in processing or if there are too many blocks being processed
@@ -2255,6 +2257,8 @@ impl Chain {
             );
         }
 
+        drop(split_span);
+        let split_span = debug_span!(target: "chain", "split_span_2").entered();
         // First real I/O expense.
         let prev = self.get_previous_header(header)?;
         let prev_hash = *prev.hash();
@@ -2317,6 +2321,9 @@ impl Chain {
 
         let prev_block = self.get_block(&prev_hash)?;
 
+        drop(split_span);
+        let split_span = debug_span!(target: "chain", "split_span_3").entered();
+
         self.validate_chunk_headers(&block, &prev_block)?;
 
         validate_chunk_endorsements_in_block(self.epoch_manager.as_ref(), &block)?;
@@ -2334,6 +2341,7 @@ impl Chain {
         // Check if block can be finalized and drop it otherwise.
         self.check_if_finalizable(header)?;
 
+        drop(split_span);
         let apply_chunk_work = self.apply_chunks_preprocessing(
             me,
             block,

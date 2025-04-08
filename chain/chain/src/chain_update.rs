@@ -234,6 +234,7 @@ impl<'a> ChainUpdate<'a> {
         }).collect::<Result<Vec<_>, Error>>()?;
         self.apply_chunk_postprocessing(block, results, should_save_state_transition_data)?;
 
+        let split_span = debug_span!(target: "chain", "split_span_1").entered();
         let BlockPreprocessInfo { is_caught_up, state_sync_info, incoming_receipts, .. } =
             block_preprocess_info;
 
@@ -256,6 +257,9 @@ impl<'a> ChainUpdate<'a> {
         self.chain_store_update.save_block_header(block.header().clone())?;
         self.update_header_head_if_not_challenged(block.header())?;
 
+        drop(split_span);
+        let split_span = debug_span!(target: "chain", "split_span_2").entered();
+
         // If block checks out, record validator proposals for given block.
         let last_final_block = block.header().last_final_block();
         let last_finalized_height = if last_final_block == &CryptoHash::default() {
@@ -274,6 +278,7 @@ impl<'a> ChainUpdate<'a> {
         self.chain_store_update.save_block(block.clone());
         self.chain_store_update.inc_block_refcount(prev_hash)?;
 
+        drop(split_span);
         // Update the chain head if it's the new tip
         let res = self.update_head(block.header())?;
 

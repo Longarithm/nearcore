@@ -21,6 +21,7 @@ pub fn validate_chunk_endorsements_in_block(
     epoch_manager: &dyn EpochManagerAdapter,
     block: &Block,
 ) -> Result<(), Error> {
+    let _span = debug_span!(target: "chain", "validate_chunk_endorsements_in_block", height = block.header().height()).entered();
     // Number of chunks and chunk endorsements must match and must be equal to number of shards
     if block.chunks().len() != block.chunk_endorsements().len() {
         tracing::error!(

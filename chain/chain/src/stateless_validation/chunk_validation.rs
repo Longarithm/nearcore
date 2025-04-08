@@ -522,7 +522,18 @@ pub fn validate_chunk_state_witness(
     let _timer = crate::stateless_validation::metrics::CHUNK_STATE_WITNESS_VALIDATION_TIME
         .with_label_values(&[&state_witness.chunk_header.shard_id().to_string()])
         .start_timer();
-    let span = tracing::debug_span!(target: "client", "validate_chunk_state_witness").entered();
+    let main_chunk_hash = match &pre_validation_output.main_transition_params {
+        MainTransition::NewChunk(new_chunk_data) => new_chunk_data.chunk_header.chunk_hash(),
+        MainTransition::Genesis { .. } => CryptoHash::default(),
+    };
+    let span = tracing::debug_span!(
+        target: "chain", "validate_chunk_state_witness",
+        prev_hash = ?state_witness.chunk_header.prev_hash(),
+        new_chunk_hash = ?state_witness.chunk_header.chunk_hash(),
+        main_chunk_hash = ?main_chunk_hash,
+        height = state_witness.chunk_header.height_created()
+    )
+    .entered();
     let witness_shard_layout = epoch_manager.get_shard_layout(&state_witness.epoch_id)?;
     let witness_chunk_shard_id = state_witness.chunk_header.shard_id();
     let witness_chunk_shard_uid =
