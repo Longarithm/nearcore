@@ -695,6 +695,10 @@ create-accounts-on-tracked-shard)
     create_accounts_on_tracked_shard ${3}
     ;;
 
+fetch-forknet-details)
+    fetch_forknet_details
+    ;;
+
 *)
     echo "Usage: ${0} {reset|init|tweak-config|create-accounts|native-transfers|monitor|start-nodes|stop-nodes|stop-injection|mirror}"
     ;;
