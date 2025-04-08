@@ -189,7 +189,7 @@ fetch_forknet_details() {
     # Get all instances for this forknet
     local instances=$(gcloud compute instances list \
         --project=nearone-mocknet \
-        --filter="name~'-${FORKNET_NAME}-' AND -name~'traffic' AND -name~'tracing'" \
+        --filter="name~'-${FORKNET_NAME}-' AND -name~'traffic'" \
         --format="get(name,networkInterfaces[0].networkIP)")    
     echo "instances: ${instances}"
     local total_lines=$(echo "$instances" | wc -l | tr -d ' ')
@@ -219,6 +219,16 @@ fetch_forknet_details() {
     echo "Forknet RPC address: ${FORKNET_RPC_ADDR}"
     echo "Forknet RPC node: ${FORKNET_RPC_NODE_ID}"
     echo "Forknet CP nodes: ${FORKNET_CP_NODES}"
+
+    # Try to get tracing server IP if it exists
+    local tracing_instances=$(gcloud compute instances list \
+        --project=nearone-mocknet \
+        --filter="name~'-${FORKNET_NAME}-' AND name~'tracing'" \
+        --format="get(networkInterfaces[0].networkIP)")
+    if [ ! -z "$tracing_instances" ]; then
+        TRACING_SERVER_INTERNAL_IP=$(echo "$tracing_instances" | head -n1)
+        echo "Tracing server IP: ${TRACING_SERVER_INTERNAL_IP}"
+    fi
 }
 
 gen_localnet_for_forknet() {
