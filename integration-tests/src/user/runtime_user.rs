@@ -13,7 +13,6 @@ use near_primitives::congestion_info::{BlockCongestionInfo, ExtendedCongestionIn
 use near_primitives::errors::{RuntimeError, TxExecutionError};
 use near_primitives::hash::CryptoHash;
 use near_primitives::receipt::Receipt;
-use near_primitives::runtime::migration_data::{MigrationData, MigrationFlags};
 use near_primitives::test_utils::MockEpochInfoProvider;
 use near_primitives::transaction::SignedTransaction;
 use near_primitives::types::{AccountId, BlockHeightDelta, MerkleHash, ShardId};
@@ -108,6 +107,7 @@ impl RuntimeUser {
                 trie.set_charge_gas_for_trie_node_access(true);
                 trie
             };
+            let validity_check_results = vec![true; txs.len()];
             let apply_result = client
                 .runtime
                 .apply(
@@ -115,7 +115,7 @@ impl RuntimeUser {
                     &None,
                     &apply_state,
                     &receipts,
-                    SignedValidPeriodTransactions::new(&txs, &vec![true; txs.len()]),
+                    SignedValidPeriodTransactions::new(txs, validity_check_results),
                     &self.epoch_info_provider,
                     Default::default(),
                 )
@@ -205,8 +205,6 @@ impl RuntimeUser {
             config: self.runtime_config.clone(),
             cache: None,
             is_new_chunk: true,
-            migration_data: Arc::new(MigrationData::default()),
-            migration_flags: MigrationFlags::default(),
             congestion_info,
             bandwidth_requests: BlockBandwidthRequests::empty(),
         }
