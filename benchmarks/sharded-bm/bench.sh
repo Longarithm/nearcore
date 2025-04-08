@@ -63,7 +63,7 @@ if [ "${NUM_NODES}" -eq "1" ]; then
 else
     NEAR_HOMES=()
     for i in $(seq 0 $((NUM_NODES - 1))); do
-        NEAR_HOMES+=("${BENCHNET_DIR}/node$(printf "%02d" ${i})")
+        NEAR_HOMES+=("${BENCHNET_DIR}/node${i}")
     done
     NUM_SHARDS=$(jq '.shard_layout.V2.shard_ids | length' ${NEAR_HOMES[0]}/genesis.json 2>/dev/null) || true
     VALIDATOR_KEY=${NEAR_HOMES[0]}/validator_key.json
@@ -253,7 +253,7 @@ gen_localnet_for_forknet() {
     BENCHNET_DIR=${GEN_NODES_DIR}
     NEAR_HOMES=()
     for i in $(seq 0 $((NUM_NODES - 1))); do
-        NEAR_HOMES+=("${BENCHNET_DIR}/node$(printf "%02d" ${i})")
+        NEAR_HOMES+=("${BENCHNET_DIR}/node${i}")
     done
     init
     RUN_ON_FORKNET=true
@@ -359,7 +359,7 @@ tweak_config_forknet() {
     cd -
     local node_index=0
     for node in ${FORKNET_CP_NODES}; do
-        local cmd="cp -r ${BENCHNET_DIR}/nodes/node$(printf "%02d" ${node_index})/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
+        local cmd="cp -r ${BENCHNET_DIR}/nodes/node${node_index}/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
         cmd="${cmd} ${FORKNET_ENV} ./bench.sh tweak-config-forknet-node ${CASE} ${FORKNET_BOOT_NODES}"
         cd ${PYTEST_PATH}
         $MIRROR --host-filter ".*${node}" run-cmd --cmd "${cmd}"
@@ -368,7 +368,7 @@ tweak_config_forknet() {
     done
 
     cd ${PYTEST_PATH}
-    local cmd="cp -r ${BENCHNET_DIR}/nodes/node$(printf "%02d" ${NUM_CHUNK_PRODUCERS})/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
+    local cmd="cp -r ${BENCHNET_DIR}/nodes/node${NUM_CHUNK_PRODUCERS}/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
     cmd="${cmd} ${FORKNET_ENV} ./bench.sh tweak-config-forknet-node ${CASE}"
     $MIRROR --host-filter ".*${FORKNET_RPC_NODE_ID}" run-cmd --cmd "${cmd}"
     cd -
