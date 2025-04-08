@@ -61,8 +61,9 @@ if [ "${NUM_NODES}" -eq "1" ]; then
     NUM_SHARDS=$(jq '.shard_layout.V2.shard_ids | length' ${GENESIS} 2>/dev/null) || true
     VALIDATOR_KEY=${NEAR_HOME}/validator_key.json
 else
+    NEAR_HOMES=()
     for i in $(seq 0 $((NUM_NODES - 1))); do
-        NEAR_HOMES+=("${BENCHNET_DIR}/node${i}")
+        NEAR_HOMES+=("${BENCHNET_DIR}/node$(printf "%02d" ${i})")
     done
     NUM_SHARDS=$(jq '.shard_layout.V2.shard_ids | length' ${NEAR_HOMES[0]}/genesis.json 2>/dev/null) || true
     VALIDATOR_KEY=${NEAR_HOMES[0]}/validator_key.json
@@ -162,8 +163,10 @@ stop_nodes() {
 
 reset_forknet() {
     cd ${PYTEST_PATH}
+    # $MIRROR --host-type nodes run-cmd --cmd \
+    #     "find ${NEAR_HOME}/data -mindepth 1 -delete ; rm -rf ${BENCHNET_DIR}/${USERS_DATA_DIR}"
     $MIRROR --host-type nodes run-cmd --cmd \
-        "find ${NEAR_HOME}/data -mindepth 1 -delete ; rm -rf ${BENCHNET_DIR}/${USERS_DATA_DIR}"
+        "find ${NEAR_HOME}/data -mindepth 1 -delete ; rm -rf ${BENCHNET_DIR}"
     if [ "${TX_GENERATOR}" = true ]; then
         $MIRROR --host-type nodes run-cmd --cmd \
             "jq 'del(.tx_generator)' ${CONFIG} > tmp.$$.json && \
@@ -250,7 +253,7 @@ gen_localnet_for_forknet() {
     BENCHNET_DIR=${GEN_NODES_DIR}
     NEAR_HOMES=()
     for i in $(seq 0 $((NUM_NODES - 1))); do
-        NEAR_HOMES+=("${BENCHNET_DIR}/node${i}")
+        NEAR_HOMES+=("${BENCHNET_DIR}/node$(printf "%02d" ${i})")
     done
     init
     RUN_ON_FORKNET=true
@@ -271,8 +274,16 @@ init_forknet() {
     fi
     #
     $MIRROR --host-type nodes run-cmd --cmd "mkdir -p ${BENCHNET_DIR}"
-    $MIRROR --host-type nodes upload-file --src ${SYNTH_BM_BIN} --dst ${BENCHNET_DIR}
-    $MIRROR --host-type nodes run-cmd --cmd "chmod +x ${BENCHNET_DIR}/${SYNTH_BM_BASENAME}"
+    
+    # Check if SYNTH_BM_BIN is a URL or a filepath
+    if [[ "${SYNTH_BM_BIN}" =~ ^https?:// ]]; then
+        # It's a URL, download it on remote machines
+        $MIRROR --host-type nodes run-cmd --cmd "cd ${BENCHNET_DIR} && curl -L -o ${SYNTH_BM_BASENAME} ${SYNTH_BM_BIN} && chmod +x ${SYNTH_BM_BASENAME}"
+    else
+        # It's a filepath, upload it from local machine
+        $MIRROR --host-type nodes upload-file --src ${SYNTH_BM_BIN} --dst ${BENCHNET_DIR}
+        $MIRROR --host-type nodes run-cmd --cmd "chmod +x ${BENCHNET_DIR}/${SYNTH_BM_BASENAME}"
+    fi
     cd -
 }
 
@@ -348,7 +359,7 @@ tweak_config_forknet() {
     cd -
     local node_index=0
     for node in ${FORKNET_CP_NODES}; do
-        local cmd="cp -r ${BENCHNET_DIR}/nodes/node${node_index}/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
+        local cmd="cp -r ${BENCHNET_DIR}/nodes/node$(printf "%02d" ${node_index})/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
         cmd="${cmd} ${FORKNET_ENV} ./bench.sh tweak-config-forknet-node ${CASE} ${FORKNET_BOOT_NODES}"
         cd ${PYTEST_PATH}
         $MIRROR --host-filter ".*${node}" run-cmd --cmd "${cmd}"
@@ -357,7 +368,7 @@ tweak_config_forknet() {
     done
 
     cd ${PYTEST_PATH}
-    local cmd="cp -r ${BENCHNET_DIR}/nodes/node${NUM_CHUNK_PRODUCERS}/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
+    local cmd="cp -r ${BENCHNET_DIR}/nodes/node$(printf "%02d" ${NUM_CHUNK_PRODUCERS})/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
     cmd="${cmd} ${FORKNET_ENV} ./bench.sh tweak-config-forknet-node ${CASE}"
     $MIRROR --host-filter ".*${FORKNET_RPC_NODE_ID}" run-cmd --cmd "${cmd}"
     cd -
