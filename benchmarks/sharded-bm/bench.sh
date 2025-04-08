@@ -234,10 +234,12 @@ fetch_forknet_details() {
     local tracing_instances=$(gcloud compute instances list \
         --project=nearone-mocknet \
         --filter="name~'-${FORKNET_NAME}-' AND name~'tracing'" \
-        --format="get(networkInterfaces[0].networkIP)")
+        --format="get(networkInterfaces[0].networkIP,networkInterfaces[0].accessConfigs[0].natIP)")
     if [ ! -z "$tracing_instances" ]; then
-        TRACING_SERVER_INTERNAL_IP=$(echo "$tracing_instances" | head -n1)
-        echo "Tracing server IP: ${TRACING_SERVER_INTERNAL_IP}"
+        TRACING_SERVER_INTERNAL_IP=$(echo "$tracing_instances" | awk '{print $1}')
+        TRACING_SERVER_EXTERNAL_IP=$(echo "$tracing_instances" | awk '{print $2}')
+        echo "Tracing server internal IP: ${TRACING_SERVER_INTERNAL_IP}"
+        echo "Tracing server external IP: ${TRACING_SERVER_EXTERNAL_IP}"
     fi
 }
 
@@ -658,6 +660,40 @@ monitor() {
     done
 }
 
+get_traces() {
+    fetch_forknet_details
+    echo "=> Fetching latest traces"
+    if [ -z "${TRACING_SERVER_EXTERNAL_IP}" ]; then
+        echo "Error: TRACING_SERVER_EXTERNAL_IP is not set."
+        return 1
+    fi
+    
+    local CUR_TIME="$(date +%s)"
+    local LAG_SECS=${LAG_SECS:-10}
+    local LEN_SECS=${LEN_SECS:-10}
+    
+    local START_TIME=$(bc <<< "$CUR_TIME - $LAG_SECS - $LEN_SECS")
+    START_TIME="$START_TIME""000"
+    local END_TIME=$(bc <<< "$CUR_TIME - $LAG_SECS")
+    END_TIME="$END_TIME""000"
+    
+    echo "Current time: $CUR_TIME"
+    echo "Start time: $START_TIME"
+    echo "End time: $END_TIME"
+    
+    curl -X POST http://${TRACING_SERVER_EXTERNAL_IP}:8080/raw_trace \
+        -H 'Content-Type: application/json' \
+        -d "{\"start_timestamp_unix_ms\": $START_TIME, \"end_timestamp_unix_ms\": $END_TIME, \"filter\": {\"nodes\": [],\"threads\": []}}" \
+        -o trace.json
+    
+    curl -X POST http://${TRACING_SERVER_EXTERNAL_IP}:8080/profile \
+        -H 'Content-Type: application/json' \
+        -d "{\"start_timestamp_unix_ms\": $START_TIME, \"end_timestamp_unix_ms\": $END_TIME, \"filter\": {\"nodes\": [],\"threads\": []}}" \
+        -o profile.json
+        
+    echo "=> Traces saved to trace.json and profile.json"
+}
+
 case "${1}" in
 reset)
     reset
@@ -699,6 +735,10 @@ stop-injection)
     stop_injection
     ;;
 
+get-traces)
+    get_traces
+    ;;
+
 mirror)
     mirror_cmd "$@"
     ;;
@@ -729,6 +769,6 @@ fetch-forknet-details)
     ;;
 
 *)
-    echo "Usage: ${0} {reset|init|tweak-config|create-accounts|native-transfers|monitor|start-nodes|stop-nodes|stop-injection|mirror}"
+    echo "Usage: ${0} {reset|init|tweak-config|create-accounts|native-transfers|monitor|start-nodes|stop-nodes|stop-injection|get-traces|mirror}"
     ;;
 esac
