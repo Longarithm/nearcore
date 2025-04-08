@@ -551,6 +551,12 @@ impl RuntimeAdapter for NightshadeRuntime {
         chain_validate: &dyn Fn(&SignedTransaction) -> bool,
         time_limit: Option<Duration>,
     ) -> Result<PreparedTransactions, Error> {
+        let _span = debug_span!(
+            target: "chain", "prepare_transactions",
+            prev_hash = ?prev_block.block_hash,
+            shard_id = ?chunk.shard_id
+        )
+        .entered();
         let start_time = std::time::Instant::now();
         let PrepareTransactionsChunkContext { shard_id, gas_limit, .. } = chunk;
 

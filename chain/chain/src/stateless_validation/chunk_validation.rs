@@ -524,11 +524,11 @@ pub fn validate_chunk_state_witness(
         .start_timer();
     let main_chunk_hash = match &pre_validation_output.main_transition_params {
         MainTransition::NewChunk(new_chunk_data) => new_chunk_data.chunk_header.chunk_hash(),
-        MainTransition::Genesis { .. } => CryptoHash::default(),
+        MainTransition::Genesis { .. } => ChunkHash(CryptoHash::default()),
     };
     let span = tracing::debug_span!(
         target: "chain", "validate_chunk_state_witness",
-        prev_hash = ?state_witness.chunk_header.prev_hash(),
+        prev_hash = ?state_witness.chunk_header.prev_block_hash(),
         new_chunk_hash = ?state_witness.chunk_header.chunk_hash(),
         main_chunk_hash = ?main_chunk_hash,
         height = state_witness.chunk_header.height_created()

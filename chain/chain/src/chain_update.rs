@@ -234,7 +234,7 @@ impl<'a> ChainUpdate<'a> {
         }).collect::<Result<Vec<_>, Error>>()?;
         self.apply_chunk_postprocessing(block, results, should_save_state_transition_data)?;
 
-        let split_span = debug_span!(target: "chain", "split_span_1").entered();
+        let split_span = tracing::debug_span!(target: "chain", "split_span_1").entered();
         let BlockPreprocessInfo { is_caught_up, state_sync_info, incoming_receipts, .. } =
             block_preprocess_info;
 
@@ -258,7 +258,7 @@ impl<'a> ChainUpdate<'a> {
         self.update_header_head_if_not_challenged(block.header())?;
 
         drop(split_span);
-        let split_span = debug_span!(target: "chain", "split_span_2").entered();
+        let split_span = tracing::debug_span!(target: "chain", "split_span_2").entered();
 
         // If block checks out, record validator proposals for given block.
         let last_final_block = block.header().last_final_block();
