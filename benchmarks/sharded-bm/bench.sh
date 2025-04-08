@@ -103,7 +103,12 @@ start_nodes_forknet() {
 }
 
 start_neard0() {
-    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://10.138.0.40:3030/ nohup ${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run &> ${FORKNET_NEARD_LOG} &
+    local cmd_suffix="nohup ${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run &> ${FORKNET_NEARD_LOG} &"
+    if [ ! -z "${TRACING_SERVER_INTERNAL_IP}" ]; then
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://${TRACING_SERVER_INTERNAL_IP}:4317/ ${cmd_suffix}
+    else
+        ${cmd_suffix}
+    fi
 }
 
 start_nodes_local() {
@@ -189,7 +194,7 @@ fetch_forknet_details() {
     # Get all instances for this forknet
     local instances=$(gcloud compute instances list \
         --project=nearone-mocknet \
-        --filter="name~'-${FORKNET_NAME}-' AND -name~'traffic'" \
+        --filter="name~'-${FORKNET_NAME}-' AND -name~'traffic' AND -name~'tracing'" \
         --format="get(name,networkInterfaces[0].networkIP)")    
     echo "instances: ${instances}"
     local total_lines=$(echo "$instances" | wc -l | tr -d ' ')
