@@ -101,18 +101,24 @@ mirror_cmd() {
 
 start_nodes_forknet() {
     cd ${PYTEST_PATH}
-    $MIRROR --host-type nodes run-cmd --cmd "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh start-neard0 ${CASE}"
+    fetch_forknet_details
+    local tracing_param=""
+    if [ ! -z "${TRACING_SERVER_INTERNAL_IP}" ]; then
+        tracing_param="${TRACING_SERVER_INTERNAL_IP}"
+    fi
+    $MIRROR --host-type nodes run-cmd --cmd "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh start-neard0 ${CASE} ${tracing_param}"
     cd -
 }
 
 start_neard0() {
-    local cmd_suffix="nohup ${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run &> ${FORKNET_NEARD_LOG} &"
-    if [ ! -z "${TRACING_SERVER_INTERNAL_IP}" ]; then
-        echo "Tracing server internal IP: ${TRACING_SERVER_INTERNAL_IP}"
-        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://${TRACING_SERVER_INTERNAL_IP}:4317/ ${cmd_suffix}
+    local cmd_suffix=""
+    local tracing_ip=${2:-$TRACING_SERVER_INTERNAL_IP}
+    if [ ! -z "${tracing_ip}" ]; then
+        echo "Tracing server internal IP: ${tracing_ip}"
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://${tracing_ip}:4317/ nohup ${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run &> ${FORKNET_NEARD_LOG} &
     else
         echo "Tracing server internal IP is not set."
-        ${cmd_suffix}
+        nohup ${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run &> ${FORKNET_NEARD_LOG} &
     fi
 }
 
@@ -593,9 +599,13 @@ native_transfers_injection() {
         \"accounts_path\": \"${accounts_path}\", \"thread_count\": 2}' ${CONFIG} > tmp.$$.json && \
         mv tmp.$$.json ${CONFIG} || rm tmp.$$.json"
     # Restart neard on all chunk producer nodes
+    local tracing_param=""
+    if [ ! -z "${TRACING_SERVER_INTERNAL_IP}" ]; then
+        tracing_param="${TRACING_SERVER_INTERNAL_IP}"
+    fi
     $MIRROR --host-filter ".*(${host_filter})" run-cmd --cmd \
         "cd ${BENCHNET_DIR}; \
-        ${FORKNET_ENV} ./bench.sh start-neard0 ${CASE}"
+        ${FORKNET_ENV} ./bench.sh start-neard0 ${CASE} ${tracing_param}"
     cd -
 }
 
@@ -751,7 +761,7 @@ tweak-config-forknet-node)
     ;;
 
 start-neard0)
-    start_neard0
+    start_neard0 ${2}
     ;;
 
 create-accounts-local)
