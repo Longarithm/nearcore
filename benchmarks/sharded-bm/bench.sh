@@ -101,10 +101,14 @@ mirror_cmd() {
 
 start_nodes_forknet() {
     cd ${PYTEST_PATH}
+    echo "Starting forknet nodes for network: ${FORKNET_NAME}"
     fetch_forknet_details
     local tracing_param=""
     if [ ! -z "${TRACING_SERVER_INTERNAL_IP}" ]; then
         tracing_param="${TRACING_SERVER_INTERNAL_IP}"
+        echo "Will start nodes with tracing enabled to: ${tracing_param}"
+    else
+        echo "No tracing server found, will start nodes without tracing"
     fi
     $MIRROR --host-type nodes run-cmd --cmd "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh start-neard0 ${CASE} ${tracing_param}"
     cd -
@@ -457,8 +461,9 @@ create_accounts_forknet() {
     else
         for node in ${FORKNET_CP_NODES}; do
             $MIRROR --host-filter ".*${node}" run-cmd --cmd \
-                "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh create-accounts-on-tracked-shard ${CASE} ${RPC_URL}"
+                "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh create-accounts-on-tracked-shard ${CASE} ${RPC_URL}" &
         done
+        wait
     fi
     cd -
 }
@@ -602,6 +607,9 @@ native_transfers_injection() {
     local tracing_param=""
     if [ ! -z "${TRACING_SERVER_INTERNAL_IP}" ]; then
         tracing_param="${TRACING_SERVER_INTERNAL_IP}"
+        echo "Will start nodes with tracing enabled to: ${tracing_param}"
+    else
+        echo "No tracing server found, will start nodes without tracing"
     fi
     $MIRROR --host-filter ".*(${host_filter})" run-cmd --cmd \
         "cd ${BENCHNET_DIR}; \
@@ -761,7 +769,7 @@ tweak-config-forknet-node)
     ;;
 
 start-neard0)
-    start_neard0 ${2}
+    start_neard0 ${2} ${3}
     ;;
 
 create-accounts-local)
