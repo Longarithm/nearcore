@@ -117,12 +117,14 @@ start_nodes_forknet() {
 start_neard0() {
     local cmd_suffix=""
     local tracing_ip=${2:-$TRACING_SERVER_INTERNAL_IP}
+    local neard_cmd="nohup ${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run &> ${FORKNET_NEARD_LOG} &"
+    
     if [ ! -z "${tracing_ip}" ]; then
         echo "Tracing server internal IP: ${tracing_ip}"
-        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://${tracing_ip}:4317/ nohup ${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run &> ${FORKNET_NEARD_LOG} &
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://${tracing_ip}:4317/ ${neard_cmd}
     else
         echo "Tracing server internal IP is not set."
-        nohup ${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run &> ${FORKNET_NEARD_LOG} &
+        ${neard_cmd}
     fi
 }
 
