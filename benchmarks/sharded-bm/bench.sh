@@ -493,7 +493,8 @@ create_sub_accounts() {
     echo "Creating ${num_accounts} accounts for shard: ${shard_index}, account prefix: ${prefix}, use data dir: ${data_dir}, nonce: ${nonce}"
     RUST_LOG=info \
         ${cmd} create-sub-accounts \
-        --rpc-url ${url} \
+        # --rpc-url ${url} \
+        --rpc-url "http://127.0.0.1:3030"
         --signer-key-path ${VALIDATOR_KEY} \
         --nonce ${nonce} \
         --sub-account-prefixes ${prefix} \
