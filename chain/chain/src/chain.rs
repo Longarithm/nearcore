@@ -83,7 +83,7 @@ use near_primitives::types::{
     AccountId, Balance, BlockHeight, BlockHeightDelta, EpochId, NumBlocks, ShardId, ShardIndex,
 };
 use near_primitives::utils::MaybeValidated;
-use near_primitives::version::{PROTOCOL_VERSION, ProtocolFeature};
+use near_primitives::version::PROTOCOL_VERSION;
 use near_primitives::views::{
     BlockStatusView, DroppedReason, ExecutionOutcomeWithIdView, ExecutionStatusView,
     FinalExecutionOutcomeView, FinalExecutionOutcomeWithReceiptView, FinalExecutionStatus,
@@ -486,7 +486,7 @@ impl Chain {
                 if chain_store.get_block_header(&header_head.last_block_hash).is_err() {
                     // Reset header head and "sync" head to be consistent with current block head.
                     let mut store_update = chain_store.store_update();
-                    store_update.save_header_head_if_not_challenged(&block_head)?;
+                    store_update.save_header_head(&block_head)?;
                     store_update.commit()?;
                     header_head = block_head.clone();
                 }
@@ -815,17 +815,13 @@ impl Chain {
         if let Ok(epoch_protocol_version) =
             self.epoch_manager.get_epoch_protocol_version(header.epoch_id())
         {
-            if ProtocolFeature::RejectBlocksWithOutdatedProtocolVersions
-                .enabled(epoch_protocol_version)
-            {
-                if header.latest_protocol_version() < epoch_protocol_version {
-                    error!(
-                        "header protocol version {} smaller than epoch protocol version {}",
-                        header.latest_protocol_version(),
-                        epoch_protocol_version
-                    );
-                    return Err(Error::InvalidProtocolVersion);
-                }
+            if header.latest_protocol_version() < epoch_protocol_version {
+                error!(
+                    "header protocol version {} smaller than epoch protocol version {}",
+                    header.latest_protocol_version(),
+                    epoch_protocol_version
+                );
+                return Err(Error::InvalidProtocolVersion);
             }
         }
 
@@ -1043,31 +1039,6 @@ impl Chain {
         }
 
         Ok(())
-    }
-
-    /// Check if the chain leading to the given block has challenged blocks on it. Returns Ok if the chain
-    /// does not have challenged blocks, otherwise error ChallengedBlockOnChain.
-    fn check_if_challenged_block_on_chain(&self, block_header: &BlockHeader) -> Result<(), Error> {
-        let mut hash = *block_header.hash();
-        let mut height = block_header.height();
-        let mut prev_hash = *block_header.prev_hash();
-        loop {
-            match self.get_block_hash_by_height(height) {
-                Ok(cur_hash) if cur_hash == hash => {
-                    // Found common ancestor.
-                    return Ok(());
-                }
-                _ => {
-                    if self.chain_store.is_block_challenged(&hash)? {
-                        return Err(Error::ChallengedBlockOnChain);
-                    }
-                    let prev_header = self.get_block_header(&prev_hash)?;
-                    hash = *prev_header.hash();
-                    height = prev_header.height();
-                    prev_hash = *prev_header.prev_hash();
-                }
-            };
-        }
     }
 
     pub fn ping_missing_chunks(
@@ -1530,7 +1501,7 @@ impl Chain {
         let mut chain_update = self.chain_update();
         if let Some(header) = headers.last() {
             // Update header_head if it's the new tip
-            chain_update.update_header_head_if_not_challenged(header)?;
+            chain_update.update_header_head(header)?;
         }
         chain_update.commit()
     }
@@ -2274,8 +2245,6 @@ impl Chain {
             prev_prev_hash,
             me,
         )?;
-
-        self.check_if_challenged_block_on_chain(header)?;
 
         debug!(target: "chain", block_hash = ?header.hash(), me=?me, is_caught_up=is_caught_up, "Process block");
 
