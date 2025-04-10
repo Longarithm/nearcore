@@ -117,38 +117,17 @@ start_nodes_forknet() {
 start_neard0() {
     local cmd_suffix=""
     local tracing_ip=${2:-$TRACING_SERVER_INTERNAL_IP}
-    local neard_cmd="nohup ${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run &> ${FORKNET_NEARD_LOG} &"
+    local neard_cmd="${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run"
+    local tracing_address=""
     
     if [ ! -z "${tracing_ip}" ]; then
         echo "Tracing server internal IP: ${tracing_ip}"
-        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://${tracing_ip}:4317/ ${neard_cmd}
+        tracing_address="http://${tracing_ip}:4317/"
     else
         echo "Tracing server internal IP is not set."
-        ${neard_cmd}
     fi
-}
-
-check_all_nodes_ready() {
-    local all_ready=true
-    for node in ${FORKNET_CP_NODES} ${FORKNET_RPC_NODE_ID}; do
-        local output=$(gcloud compute ssh ubuntu@"$node" --zone="us-central1-a" --command="tail -n 5 /tmp/err" 2>/dev/null)
-        if ! echo "$output" | grep -q "accounts to disk"; then
-            all_ready=false
-            break
-        fi
-    done
-    echo $all_ready
-}
-
-monitor_nodes_ready() {
-    echo "Waiting for all nodes to be ready..."
-    while true; do
-        if [ "$(check_all_nodes_ready)" = "true" ]; then
-            echo "All nodes are ready!"
-            break
-        fi
-        sleep 10
-    done
+    
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${tracing_address} nohup ${neard_cmd} > ${FORKNET_NEARD_LOG} 2>&1 &
 }
 
 start_nodes_local() {
@@ -393,7 +372,10 @@ tweak_config_forknet() {
     local cwd=$(pwd)
     cd ${PYTEST_PATH}
     $MIRROR --host-type nodes upload-file --src ${cwd}/bench.sh --dst ${BENCHNET_DIR}
+    # exit 0
     $MIRROR --host-type nodes upload-file --src ${cwd}/cases --dst ${BENCHNET_DIR}
+    # $MIRROR --host-type nodes run-cmd --cmd \
+    #     "find ${NEAR_HOME}/data -mindepth 1 -delete ; rm -rf ${BENCHNET_DIR}/${USERS_DATA_DIR}"
     $MIRROR --host-type nodes upload-file --src ${GEN_NODES_DIR} --dst ${BENCHNET_DIR}/nodes
     cd -
     local node_index=0
@@ -478,20 +460,23 @@ tweak_config() {
 
 check_all_accounts_created() {
     local all_created=true
-    for node in ${FORKNET_CP_NODES} ${FORKNET_RPC_NODE_ID}; do
-        local output=$(gcloud compute ssh ubuntu@"$node" --zone="us-central1-a" --command="tail -n 5 /tmp/err" 2>/dev/null)
-        if ! echo "$output" | grep -q "accounts to disk"; then
-            all_created=false
-            break
-        fi
-    done
+    echo "Checking account creation status on all nodes:" >&2
+    local host_filter=$(echo ${FORKNET_CP_NODES} | sed 's/ /|/g')
+    echo "Host filter: ${host_filter}" >&2
+    local output=$($MIRROR --host-filter ".*(${host_filter})" run-cmd --cmd "tail -n 5 /tmp/err 2>/dev/null; grep -q 'accounts to disk' /tmp/err 2>/dev/null && echo 'true' || echo 'false'")
+    echo "Command output: ${output}" >&2
+    if ! echo "$output" | grep -q "true"; then
+        all_created=false
+    fi
     echo $all_created
 }
 
 monitor_accounts_created() {
     echo "Waiting for accounts to be created..."
     while true; do
-        if [ "$(check_all_accounts_created)" = "true" ]; then
+        local status=$(check_all_accounts_created)
+        echo "Status check result: ${status}" >&2
+        if [ "$status" = "true" ]; then
             echo "All accounts have been created!"
             break
         fi
@@ -507,10 +492,10 @@ create_accounts_forknet() {
             "cd ${BENCHNET_DIR}; \
             ${FORKNET_ENV} ./bench.sh create-accounts-local ${CASE} ${RPC_URL}"
     else
-        for node in ${FORKNET_CP_NODES}; do
-            $MIRROR --host-filter ".*${node}" run-cmd --cmd \
-                "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh create-accounts-on-tracked-shard ${CASE} ${RPC_URL} > /tmp/err 2>&1"
-        done
+        # Create a regex pattern for all chunk producer nodes
+        local host_filter=$(echo ${FORKNET_CP_NODES} | sed 's/ /|/g')
+        # $MIRROR --host-filter ".*(${host_filter})" run-cmd --cmd \
+        #     "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh create-accounts-on-tracked-shard ${CASE} ${RPC_URL} > /tmp/err 2>&1"
         monitor_accounts_created
     fi
     cd -
@@ -537,16 +522,18 @@ create_sub_accounts() {
     local data_dir=${3}
     local nonce=$((1 + shard_index * num_accounts))
     echo "Creating ${num_accounts} accounts for shard: ${shard_index}, account prefix: ${prefix}, use data dir: ${data_dir}, nonce: ${nonce}"
+    # --rpc-url "http://127.0.0.1:3030" \
+    # --channel-buffer-size 1200 \
+
     RUST_LOG=info \
         ${cmd} create-sub-accounts \
-        # --rpc-url ${url} \
-        --rpc-url "http://127.0.0.1:3030"
+        --rpc-url ${url} \
         --signer-key-path ${VALIDATOR_KEY} \
         --nonce ${nonce} \
         --sub-account-prefixes ${prefix} \
         --num-sub-accounts ${num_accounts} \
         --deposit 9530606018750000000100000000 \
-        --channel-buffer-size 1200 \
+        --channel-buffer-size 400 \
         --requests-per-second ${CREATE_ACCOUNTS_RPS} \
         --user-data-dir ${data_dir} \
         --ignore-failures
