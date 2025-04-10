@@ -128,6 +128,29 @@ start_neard0() {
     fi
 }
 
+check_all_nodes_ready() {
+    local all_ready=true
+    for node in ${FORKNET_CP_NODES} ${FORKNET_RPC_NODE_ID}; do
+        local output=$(gcloud compute ssh ubuntu@"$node" --zone="us-central1-a" --command="tail -n 5 /tmp/err" 2>/dev/null)
+        if ! echo "$output" | grep -q "accounts to disk"; then
+            all_ready=false
+            break
+        fi
+    done
+    echo $all_ready
+}
+
+monitor_nodes_ready() {
+    echo "Waiting for all nodes to be ready..."
+    while true; do
+        if [ "$(check_all_nodes_ready)" = "true" ]; then
+            echo "All nodes are ready!"
+            break
+        fi
+        sleep 10
+    done
+}
+
 start_nodes_local() {
     if [ "${NUM_NODES}" -eq "1" ]; then
         sudo systemctl start neard
@@ -460,6 +483,29 @@ tweak_config() {
     echo "===> Done"
 }
 
+check_all_accounts_created() {
+    local all_created=true
+    for node in ${FORKNET_CP_NODES} ${FORKNET_RPC_NODE_ID}; do
+        local output=$(gcloud compute ssh ubuntu@"$node" --zone="us-central1-a" --command="tail -n 5 /tmp/err" 2>/dev/null)
+        if ! echo "$output" | grep -q "accounts to disk"; then
+            all_created=false
+            break
+        fi
+    done
+    echo $all_created
+}
+
+monitor_accounts_created() {
+    echo "Waiting for accounts to be created..."
+    while true; do
+        if [ "$(check_all_accounts_created)" = "true" ]; then
+            echo "All accounts have been created!"
+            break
+        fi
+        sleep 10
+    done
+}
+
 create_accounts_forknet() {
     fetch_forknet_details
     cd ${PYTEST_PATH}
@@ -470,9 +516,9 @@ create_accounts_forknet() {
     else
         for node in ${FORKNET_CP_NODES}; do
             $MIRROR --host-filter ".*${node}" run-cmd --cmd \
-                "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh create-accounts-on-tracked-shard ${CASE} ${RPC_URL}" &
+                "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh create-accounts-on-tracked-shard ${CASE} ${RPC_URL} > /tmp/err 2>&1"
         done
-        wait
+        monitor_accounts_created
     fi
     cd -
 }
