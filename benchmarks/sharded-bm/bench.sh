@@ -494,8 +494,8 @@ create_accounts_forknet() {
     else
         # Create a regex pattern for all chunk producer nodes
         local host_filter=$(echo ${FORKNET_CP_NODES} | sed 's/ /|/g')
-        # $MIRROR --host-filter ".*(${host_filter})" run-cmd --cmd \
-        #     "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh create-accounts-on-tracked-shard ${CASE} ${RPC_URL} > /tmp/err 2>&1"
+        $MIRROR --host-filter ".*(${host_filter})" run-cmd --cmd \
+            "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh create-accounts-on-tracked-shard ${CASE} ${RPC_URL} > /tmp/err 2>&1"
         monitor_accounts_created
     fi
     cd -
