@@ -388,7 +388,6 @@ edit_log_config() {
 }
 
 tweak_config_forknet() {
-    gen_localnet_for_forknet
     fetch_forknet_details
     local cwd=$(pwd)
     cd ${PYTEST_PATH}
@@ -397,25 +396,18 @@ tweak_config_forknet() {
     $MIRROR --host-type nodes upload-file --src ${GEN_NODES_DIR} --dst ${BENCHNET_DIR}/nodes
     cd -
     local node_index=0
-    local pids=()
     for node in ${FORKNET_CP_NODES}; do
-        local cmd="cp -r ${BENCHNET_DIR}/nodes/node${node_index}/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
-        cmd="${cmd} ${FORKNET_ENV} ./bench.sh tweak-config-forknet-node ${CASE} ${FORKNET_BOOT_NODES}"
+        local cmd="cp ${BENCHNET_DIR}/nodes/node${node_index}/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
+        cmd="${cmd} ./bench.sh tweak-config-forknet-node ${CASE} ${FORKNET_BOOT_NODES}"
         cd ${PYTEST_PATH}
-        $MIRROR --host-filter ".*${node}" run-cmd --cmd "${cmd}" &
-        pids+=($!)
+        $MIRROR --host-filter ".*${node}" run-cmd --cmd "${cmd}"
         cd -
         node_index=$((node_index + 1))
     done
 
-    # Wait for all background processes to complete
-    for pid in "${pids[@]}"; do
-        wait $pid
-    done
-
     cd ${PYTEST_PATH}
-    local cmd="cp -r ${BENCHNET_DIR}/nodes/node${NUM_CHUNK_PRODUCERS}/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
-    cmd="${cmd} ${FORKNET_ENV} ./bench.sh tweak-config-forknet-node ${CASE}"
+    local cmd="cp ${BENCHNET_DIR}/nodes/node${NUM_CHUNK_PRODUCERS}/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
+    cmd="${cmd} ./bench.sh tweak-config-forknet-node ${CASE}"
     $MIRROR --host-filter ".*${FORKNET_RPC_NODE_ID}" run-cmd --cmd "${cmd}"
     cd -
 }
