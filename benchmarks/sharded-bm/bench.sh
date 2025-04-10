@@ -465,7 +465,8 @@ check_all_accounts_created() {
     echo "Host filter: ${host_filter}" >&2
     local output=$($MIRROR --host-filter ".*(${host_filter})" run-cmd --cmd "tail -n 5 /tmp/err 2>/dev/null; grep -q 'accounts to disk' /tmp/err 2>/dev/null && echo 'true' || echo 'false'")
     echo "Command output: ${output}" >&2
-    if ! echo "$output" | grep -q "true"; then
+    # Check if any line contains 'false'
+    if echo "$output" | grep -q "false"; then
         all_created=false
     fi
     echo $all_created
@@ -495,7 +496,7 @@ create_accounts_forknet() {
         # Create a regex pattern for all chunk producer nodes
         local host_filter=$(echo ${FORKNET_CP_NODES} | sed 's/ /|/g')
         $MIRROR --host-filter ".*(${host_filter})" run-cmd --cmd \
-            "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh create-accounts-on-tracked-shard ${CASE} ${RPC_URL} > /tmp/err 2>&1"
+            "cd ${BENCHNET_DIR}; ${FORKNET_ENV} ./bench.sh create-accounts-on-tracked-shard ${CASE} ${RPC_URL} > /tmp/err 2>&1 &"
         monitor_accounts_created
     fi
     cd -
