@@ -374,13 +374,20 @@ tweak_config_forknet() {
     $MIRROR --host-type nodes upload-file --src ${GEN_NODES_DIR} --dst ${BENCHNET_DIR}/nodes
     cd -
     local node_index=0
+    local pids=()
     for node in ${FORKNET_CP_NODES}; do
         local cmd="cp -r ${BENCHNET_DIR}/nodes/node${node_index}/* ${NEAR_HOME}/ && cd ${BENCHNET_DIR};"
         cmd="${cmd} ${FORKNET_ENV} ./bench.sh tweak-config-forknet-node ${CASE} ${FORKNET_BOOT_NODES}"
         cd ${PYTEST_PATH}
-        $MIRROR --host-filter ".*${node}" run-cmd --cmd "${cmd}"
+        $MIRROR --host-filter ".*${node}" run-cmd --cmd "${cmd}" &
+        pids+=($!)
         cd -
         node_index=$((node_index + 1))
+    done
+
+    # Wait for all background processes to complete
+    for pid in "${pids[@]}"; do
+        wait $pid
     done
 
     cd ${PYTEST_PATH}
