@@ -101,7 +101,6 @@ mirror_cmd() {
 
 start_nodes_forknet() {
     cd ${PYTEST_PATH}
-    echo "Starting forknet nodes for network: ${FORKNET_NAME}"
     fetch_forknet_details
     local tracing_param=""
     if [ ! -z "${TRACING_SERVER_INTERNAL_IP}" ]; then
@@ -119,14 +118,14 @@ start_neard0() {
     local tracing_ip=${2:-$TRACING_SERVER_INTERNAL_IP}
     local neard_cmd="${FORKNET_NEARD_PATH} --home ${NEAR_HOME} run"
     local tracing_address=""
-    
+
     if [ ! -z "${tracing_ip}" ]; then
         echo "Tracing server internal IP: ${tracing_ip}"
         tracing_address="http://${tracing_ip}:4317/"
     else
         echo "Tracing server internal IP is not set."
     fi
-    
+
     OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${tracing_address} nohup ${neard_cmd} > ${FORKNET_NEARD_LOG} 2>&1 &
 }
 
@@ -292,7 +291,7 @@ init_forknet() {
     fi
     #
     $MIRROR --host-type nodes run-cmd --cmd "mkdir -p ${BENCHNET_DIR}"
-    
+
     # Check if SYNTH_BM_BIN is a URL or a filepath
     if [[ "${SYNTH_BM_BIN}" =~ ^https?:// ]]; then
         # It's a URL, download it on remote machines
@@ -302,6 +301,7 @@ init_forknet() {
         $MIRROR --host-type nodes upload-file --src ${SYNTH_BM_BIN} --dst ${BENCHNET_DIR}
         $MIRROR --host-type nodes run-cmd --cmd "chmod +x ${BENCHNET_DIR}/${SYNTH_BM_BASENAME}"
     fi
+    
     cd -
 }
 
