@@ -46,9 +46,12 @@ LOG_DIR="${LOG_DIR:-logs}"
 BENCHNET_DIR="${BENCHNET_DIR:-/home/ubuntu/bench}"
 
 RPC_ADDR="127.0.0.1:4040"
-SYNTH_BM_PATH="../synth-bm/Cargo.toml"
-SYNTH_BM_BIN="${SYNTH_BM_BIN:-/home/ubuntu/nearcore/benchmarks/synth-bm/target/release/near-synth-bm}"
-SYNTH_BM_BASENAME="${SYNTH_BM_BASENAME:-$(basename ${SYNTH_BM_BIN})}"
+ENABLE_SYNTH_BM="${ENABLE_SYNTH_BM:-false}"
+if [ "${ENABLE_SYNTH_BM}" = "true" ]; then
+    SYNTH_BM_PATH="${SYNTH_BM_PATH:-../synth-bm/Cargo.toml}"
+    SYNTH_BM_BIN="${SYNTH_BM_BIN:-/home/ubuntu/nearcore/benchmarks/synth-bm/target/release/near-synth-bm}"
+    SYNTH_BM_BASENAME="${SYNTH_BM_BASENAME:-$(basename ${SYNTH_BM_BIN})}"
+fi
 RUN_ON_FORKNET=$(jq 'has("forknet")' ${BM_PARAMS})
 PYTEST_PATH="../../pytest/"
 TX_GENERATOR=$(jq -r '.tx_generator.enabled // false' ${BM_PARAMS})
@@ -76,7 +79,10 @@ if [ "${RUN_ON_FORKNET}" = true ]; then
         echo "Please set: FORKNET_NAME, FORKNET_START_HEIGHT"
         exit 1
     fi
-    FORKNET_ENV="FORKNET_NAME=${FORKNET_NAME} FORKNET_START_HEIGHT=${FORKNET_START_HEIGHT} SYNTH_BM_BASENAME=${SYNTH_BM_BASENAME}"
+    FORKNET_ENV="FORKNET_NAME=${FORKNET_NAME} FORKNET_START_HEIGHT=${FORKNET_START_HEIGHT}"
+    if [ "${ENABLE_SYNTH_BM}" = "true" ]; then
+        FORKNET_ENV="${FORKNET_ENV} SYNTH_BM_BASENAME=${SYNTH_BM_BASENAME}"
+    fi
     FORKNET_NEARD_LOG="/home/ubuntu/neard-logs/logs.txt"
     FORKNET_NEARD_PATH="${NEAR_HOME}/neard-runner/binaries/neard0"
     NUM_SHARDS=$(jq '.shard_layout.V2.shard_ids | length' ${GENESIS} 2>/dev/null) || true
@@ -288,14 +294,17 @@ init_forknet() {
     # Create benchmark dir on nodes
     $MIRROR --host-type nodes run-cmd --cmd "mkdir -p ${BENCHNET_DIR}"
     
-    # Check if SYNTH_BM_BIN is a URL or a filepath and handle accordingly
-    if [[ "${SYNTH_BM_BIN}" =~ ^https?:// ]]; then
-        # It's a URL, download it on remote machines
-        $MIRROR --host-type nodes run-cmd --cmd "cd ${BENCHNET_DIR} && curl -L -o ${SYNTH_BM_BASENAME} ${SYNTH_BM_BIN} && chmod +x ${SYNTH_BM_BASENAME}"
-    else
-        # It's a filepath, upload it from local machine
-        $MIRROR --host-type nodes upload-file --src ${SYNTH_BM_BIN} --dst ${BENCHNET_DIR}
-        $MIRROR --host-type nodes run-cmd --cmd "chmod +x ${BENCHNET_DIR}/${SYNTH_BM_BASENAME}"
+    # Only upload or download synth-bm if it's enabled
+    if [ "${ENABLE_SYNTH_BM}" = "true" ]; then
+        # Check if SYNTH_BM_BIN is a URL or a filepath and handle accordingly
+        if [[ "${SYNTH_BM_BIN}" =~ ^https?:// ]]; then
+            # It's a URL, download it on remote machines
+            $MIRROR --host-type nodes run-cmd --cmd "cd ${BENCHNET_DIR} && curl -L -o ${SYNTH_BM_BASENAME} ${SYNTH_BM_BIN} && chmod +x ${SYNTH_BM_BASENAME}"
+        else
+            # It's a filepath, upload it from local machine
+            $MIRROR --host-type nodes upload-file --src ${SYNTH_BM_BIN} --dst ${BENCHNET_DIR}
+            $MIRROR --host-type nodes run-cmd --cmd "chmod +x ${BENCHNET_DIR}/${SYNTH_BM_BASENAME}"
+        fi
     fi
     cd -
     
@@ -465,6 +474,11 @@ create_accounts_forknet() {
 }
 
 set_create_accounts_vars() {
+    if [ "${ENABLE_SYNTH_BM}" != "true" ]; then
+        echo "=> Skipped (synthetic benchmark disabled)"
+        return 0
+    fi
+
     if [ "${RUN_ON_FORKNET}" = true ]; then
         cmd="./${SYNTH_BM_BASENAME}"
     else
@@ -500,7 +514,7 @@ create_sub_accounts() {
 }
 
 create_accounts_local() {
-    set_create_accounts_vars ${1}
+    set_create_accounts_vars ${1} || return 0
     for i in $(seq 0 $((NUM_SHARDS - 1))); do
         local prefix=$(printf "a%02d" ${i})
         local data_dir="${USERS_DATA_DIR}/shard${i}"
@@ -545,6 +559,11 @@ native_transfers_forknet() {
 }
 
 native_transfers_local() {
+    if [ "${ENABLE_SYNTH_BM}" != "true" ]; then
+        echo "=> Skipped (synthetic benchmark disabled)"
+        return 0
+    fi
+
     local cmd
     if [ "${RUN_ON_FORKNET}" = true ]; then
         cmd="./${SYNTH_BM_BASENAME}"
@@ -607,7 +626,11 @@ native_transfers() {
     else
         native_transfers_local ${RPC_URL}
     fi
-    echo "=> Done"
+    if [ $? -eq 0 ]; then
+        echo "=> Done"
+    else
+        echo "=> Skipped"
+    fi
 }
 
 stop_injection() {
