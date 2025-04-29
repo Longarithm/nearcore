@@ -474,8 +474,15 @@ create_accounts_forknet() {
 }
 
 set_create_accounts_vars() {
+    url=${1}
+    mkdir -p ${USERS_DATA_DIR}
+    num_accounts=$(jq '.num_accounts' ${BM_PARAMS})
+    echo "Number of shards: ${NUM_SHARDS}"
+    echo "Accounts per shard: ${num_accounts}"
+    echo "RPC: ${url}"
+
     if [ "${ENABLE_SYNTH_BM}" != "true" ]; then
-        echo "=> Skipped (synthetic benchmark disabled)"
+        echo "=> Synthetic benchmark command not set"
         return 0
     fi
 
@@ -484,13 +491,6 @@ set_create_accounts_vars() {
     else
         cmd="cargo run --manifest-path ${SYNTH_BM_PATH} --release --"
     fi
-    url=${1}
-
-    mkdir -p ${USERS_DATA_DIR}
-    num_accounts=$(jq '.num_accounts' ${BM_PARAMS})
-    echo "Number of shards: ${NUM_SHARDS}"
-    echo "Accounts per shard: ${num_accounts}"
-    echo "RPC: ${url}"
 }
 
 create_sub_accounts() {
@@ -514,7 +514,7 @@ create_sub_accounts() {
 }
 
 create_accounts_local() {
-    set_create_accounts_vars ${1} || return 0
+    set_create_accounts_vars ${1}
     for i in $(seq 0 $((NUM_SHARDS - 1))); do
         local prefix=$(printf "a%02d" ${i})
         local data_dir="${USERS_DATA_DIR}/shard${i}"
