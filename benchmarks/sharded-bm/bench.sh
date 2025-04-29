@@ -46,13 +46,13 @@ LOG_DIR="${LOG_DIR:-logs}"
 BENCHNET_DIR="${BENCHNET_DIR:-/home/ubuntu/bench}"
 
 RPC_ADDR="127.0.0.1:4040"
-ENABLE_SYNTH_BM="${ENABLE_SYNTH_BM:-false}"
+RUN_ON_FORKNET=$(jq 'has("forknet")' ${BM_PARAMS})
+ENABLE_SYNTH_BM=$([ "$RUN_ON_FORKNET" = "true" ] && echo "false" || echo "true")
 if [ "${ENABLE_SYNTH_BM}" = "true" ]; then
     SYNTH_BM_PATH="${SYNTH_BM_PATH:-../synth-bm/Cargo.toml}"
     SYNTH_BM_BIN="${SYNTH_BM_BIN:-/home/ubuntu/nearcore/benchmarks/synth-bm/target/release/near-synth-bm}"
     SYNTH_BM_BASENAME="${SYNTH_BM_BASENAME:-$(basename ${SYNTH_BM_BIN})}"
 fi
-RUN_ON_FORKNET=$(jq 'has("forknet")' ${BM_PARAMS})
 PYTEST_PATH="../../pytest/"
 TX_GENERATOR=$(jq -r '.tx_generator.enabled // false' ${BM_PARAMS})
 CREATE_ACCOUNTS_RPS=$(jq -r '.account_rps // 100' ${BM_PARAMS})
