@@ -38,7 +38,7 @@ use near_primitives::version::{ProtocolFeature, ProtocolVersion};
 use near_primitives::views::LightClientBlockView;
 use near_store::adapter::chain_store::ChainStoreAdapter;
 use near_store::adapter::{StoreAdapter, StoreUpdateAdapter};
-use near_store::db::{STATE_SYNC_DUMP_KEY, StoreStatistics};
+use near_store::db::{STATE_SYNC_DUMP_KEY, StoreStatistics, are_many_blocks_processed};
 use near_store::{
     CHUNK_TAIL_KEY, DBCol, FINAL_HEAD_KEY, FORK_TAIL_KEY, HEAD_KEY, HEADER_HEAD_KEY,
     KeyForStateChanges, LARGEST_TARGET_HEIGHT_KEY, LATEST_KNOWN_KEY, PartialStorage, Store,
@@ -1924,15 +1924,15 @@ impl<'a> ChainStoreUpdate<'a> {
         {
             let _span = tracing::debug_span!(target: "store", "write_outcomes").entered();
 
-            for ((outcome_id, block_hash), outcome_with_proof) in
-                &self.chain_store_cache_update.outcomes
-            {
-                store_update.insert_ser(
-                    DBCol::TransactionResultForBlock,
-                    &get_outcome_id_block_hash(outcome_id, block_hash),
-                    &outcome_with_proof,
-                )?;
-            }
+            // for ((outcome_id, block_hash), outcome_with_proof) in
+            //     &self.chain_store_cache_update.outcomes
+            // {
+            //     store_update.insert_ser(
+            //         DBCol::TransactionResultForBlock,
+            //         &get_outcome_id_block_hash(outcome_id, block_hash),
+            //         &outcome_with_proof,
+            //     )?;
+            // }
             for ((block_hash, shard_id), ids) in &self.chain_store_cache_update.outcome_ids {
                 store_update.set_ser(
                     DBCol::OutcomeIds,
@@ -1961,17 +1961,20 @@ impl<'a> ChainStoreUpdate<'a> {
         // from the store.
         {
             let _span = tracing::debug_span!(target: "store", "write_trie_changes").entered();
-            let mut deletions_store_update = self.store().trie_store().store_update();
-            for (block_hash, mut wrapped_trie_changes) in self.trie_changes.drain(..) {
-                wrapped_trie_changes.apply_mem_changes();
-                wrapped_trie_changes.insertions_into(&mut store_update.trie_store_update());
-                wrapped_trie_changes.deletions_into(&mut deletions_store_update);
-                wrapped_trie_changes
-                    .state_changes_into(&block_hash, &mut store_update.trie_store_update());
 
-                if self.chain_store.save_trie_changes {
+            if !are_many_blocks_processed() {
+                let mut deletions_store_update = self.store().trie_store().store_update();
+                for (block_hash, mut wrapped_trie_changes) in self.trie_changes.drain(..) {
+                    wrapped_trie_changes.apply_mem_changes();
+                    wrapped_trie_changes.insertions_into(&mut store_update.trie_store_update());
+                    wrapped_trie_changes.deletions_into(&mut deletions_store_update);
                     wrapped_trie_changes
-                        .trie_changes_into(&block_hash, &mut store_update.trie_store_update());
+                        .state_changes_into(&block_hash, &mut store_update.trie_store_update());
+
+                    if self.chain_store.save_trie_changes {
+                        wrapped_trie_changes
+                            .trie_changes_into(&block_hash, &mut store_update.trie_store_update());
+                    }
                 }
             }
 

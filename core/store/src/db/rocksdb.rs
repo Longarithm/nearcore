@@ -9,10 +9,25 @@ use itertools::Itertools;
 use std::io;
 use std::path::Path;
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use strum::IntoEnumIterator;
 use tracing::warn;
 
 use super::metadata;
+
+// Dirty hack: Global flag to indicate if the node has processed many blocks
+pub static NODE_PROCESSED_MANY_BLOCKS: LazyLock<AtomicBool> =
+    LazyLock::new(|| AtomicBool::new(false));
+
+/// Public function to set the flag when many blocks were processed
+pub fn mark_many_blocks_processed() {
+    NODE_PROCESSED_MANY_BLOCKS.store(true, Ordering::SeqCst);
+}
+
+/// Public function to check if the node has processed many blocks
+pub fn are_many_blocks_processed() -> bool {
+    NODE_PROCESSED_MANY_BLOCKS.load(Ordering::SeqCst)
+}
 
 mod instance_tracker;
 pub(crate) mod snapshot;
@@ -308,6 +323,7 @@ impl RocksDB {
     )]
     fn build_write_batch(&self, transaction: DBTransaction) -> io::Result<WriteBatch> {
         let mut batch = WriteBatch::default();
+
         for op in transaction.ops {
             match op {
                 DBOp::Set { col, key, value } => {
@@ -322,7 +338,12 @@ impl RocksDB {
                     batch.put_cf(self.cf_handle(col)?, key, value);
                 }
                 DBOp::UpdateRefcount { col, key, value } => {
-                    batch.merge_cf(self.cf_handle(col)?, key, value);
+                    // Apply the merge operation if either:
+                    // 1. The value is large (> 4000 bytes), or
+                    // 2. The node has never processed many blocks (is not in validator mode)
+                    if col != DBCol::State || !are_many_blocks_processed() || value.len() > 4000 {
+                        batch.merge_cf(self.cf_handle(col)?, key, value);
+                    }
                 }
                 DBOp::Delete { col, key } => {
                     batch.delete_cf(self.cf_handle(col)?, key);
@@ -392,7 +413,7 @@ impl Database for RocksDB {
         let write_batch_start = std::time::Instant::now();
         let batch = self.build_write_batch(transaction)?;
         let elapsed = write_batch_start.elapsed();
-        if elapsed.as_secs_f32() > 0.15 {
+        if elapsed.as_secs_f32() > 0.05 {
             tracing::warn!(
                 target = "store::db::rocksdb",
                 message = "making a write batch took a very long time, make smaller transactions!",
