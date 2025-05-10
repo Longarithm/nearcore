@@ -1204,7 +1204,7 @@ impl Chain {
         let block_height = block.header().height();
 
         // Mark that this node has processed many blocks, for our dirty hack
-        if block_height >= 200 {
+        if block_height >= 100 {
             near_store::db::mark_many_blocks_processed();
         }
 

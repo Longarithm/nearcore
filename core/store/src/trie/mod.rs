@@ -1,6 +1,7 @@
 use self::mem::flexible_data::value::ValueView;
 use self::trie_storage::TrieMemoryPartialStorage;
 use crate::StorageError;
+use crate::db::are_many_blocks_processed;
 use crate::flat::{FlatStateChanges, FlatStorageChunkView};
 pub use crate::trie::config::TrieConfig;
 pub(crate) use crate::trie::config::{
@@ -410,9 +411,13 @@ impl TrieRefcountDeltaMap {
         let mut deletions = Vec::with_capacity(self.map.len().saturating_sub(num_insertions));
         for (hash, (value, rc)) in self.map {
             if rc > 0 {
+                let value = value.expect("value must be present");
+                if value.len() <= 4000 && are_many_blocks_processed() {
+                    continue;
+                }
                 insertions.push(TrieRefcountAddition {
                     trie_node_or_value_hash: hash,
-                    trie_node_or_value: value.expect("value must be present"),
+                    trie_node_or_value: value,
                     rc: std::num::NonZeroU32::new(rc as u32).unwrap(),
                 });
             } else if rc < 0 {

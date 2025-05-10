@@ -1962,11 +1962,12 @@ impl<'a> ChainStoreUpdate<'a> {
         {
             let _span = tracing::debug_span!(target: "store", "write_trie_changes").entered();
 
-            if !are_many_blocks_processed() {
-                let mut deletions_store_update = self.store().trie_store().store_update();
-                for (block_hash, mut wrapped_trie_changes) in self.trie_changes.drain(..) {
-                    wrapped_trie_changes.apply_mem_changes();
-                    wrapped_trie_changes.insertions_into(&mut store_update.trie_store_update());
+            let mut deletions_store_update = self.store().trie_store().store_update();
+            for (block_hash, mut wrapped_trie_changes) in self.trie_changes.drain(..) {
+                wrapped_trie_changes.apply_mem_changes();
+                wrapped_trie_changes.insertions_into(&mut store_update.trie_store_update());
+
+                if !are_many_blocks_processed() {
                     wrapped_trie_changes.deletions_into(&mut deletions_store_update);
                     wrapped_trie_changes
                         .state_changes_into(&block_hash, &mut store_update.trie_store_update());
