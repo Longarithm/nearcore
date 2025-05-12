@@ -7,7 +7,7 @@
     "account_rps": 250,
     "tx_generator": {
         "enabled": true,
-        "tps": 3200,
+        "tps": 3000,
         "volume": 0
     },
     "forknet": {
