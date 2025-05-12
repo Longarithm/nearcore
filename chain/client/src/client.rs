@@ -985,9 +985,9 @@ impl Client {
         let _span =
             debug_span!(target: "chain", "receive_block_impl", was_requested, ?peer_id).entered();
         self.chain.blocks_delay_tracker.mark_block_received(&block);
-        // To protect ourselves from spamming, we do some pre-check on block height before we do any
-        // real processing.
-        if !self.check_block_height(&block, was_requested)? {
+        // To protect ourselves from spamming, we do a pre-check before doing
+        // any real processing.
+        if !self.should_process_block(&block, was_requested)? {
             self.chain
                 .blocks_delay_tracker
                 .mark_block_dropped(block.hash(), DroppedReason::HeightProcessed);
@@ -1053,9 +1053,10 @@ impl Client {
         );
     }
 
-    /// To protect ourselves from spamming, we do some pre-check on block height before we do any
-    /// processing. This function returns true if the block height is valid.
-    fn check_block_height(
+    /// To protect ourselves from spamming, we do some pre-check on block
+    /// height and hash before we do any processing. This function returns
+    /// true if the block should be processed.
+    fn should_process_block(
         &self,
         block: &Block,
         was_requested: bool,
@@ -1071,21 +1072,29 @@ impl Client {
             debug!(target: "client", tail_height = tail, "Dropping a block that is too far behind.");
             return Ok(false);
         }
-        // drop the block if a) it is not requested, b) we already processed this height,
-        // c) it is not building on top of current head
-        debug!(target: "client", was_requested, "check_block_height");
-        if !was_requested
-            && block.header().prev_hash()
-                != &self
-                    .chain
-                    .head()
-                    .map_or_else(|_| CryptoHash::default(), |tip| tip.last_block_hash)
-        {
-            if self.chain.is_height_processed(block.header().height())? {
-                debug!(target: "client", height = block.header().height(), "Dropping a block because we've seen this height before and we didn't request it");
-                return Ok(false);
-            }
+
+        // If we requested the block, we want to process it.
+        if was_requested {
+            return Ok(true);
         }
+
+        // If we already processed this hash, drop the block.
+        let hash = *block.hash();
+        let height = block.header().height();
+        if self.chain.is_hash_processed(&hash) {
+            debug!(target: "client", ?hash, height, "Dropping a block because we've seen this hash before");
+            return Ok(false);
+        }
+
+        // If the block is not on top of current head and we already processed
+        // the height, drop the block.
+        let is_on_head = block.header().prev_hash()
+            == &self.chain.head().map_or_else(|_| CryptoHash::default(), |tip| tip.last_block_hash);
+        if !is_on_head && self.chain.is_height_processed(height)? {
+            debug!(target: "client", ?hash, height, "Dropping a block because we've seen this height before and we didn't request it");
+            return Ok(false);
+        }
+
         Ok(true)
     }
 
