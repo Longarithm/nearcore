@@ -1336,6 +1336,7 @@ impl ClientActorInner {
         };
 
         // If we produced the block, send it out before we apply the block.
+        self.client.chain.blocks_delay_tracker.mark_block_received(&block);
         self.network_adapter.send(PeerManagerMessageRequest::NetworkRequests(
             NetworkRequests::Block { block: block.clone() },
         ));
@@ -1356,6 +1357,10 @@ impl ClientActorInner {
                 debug!(target: "client", "chunks missing");
                 // missing chunks were already handled in Client::process_block, we don't need to
                 // do anything here
+                Ok(())
+            }
+            near_chain::Error::BlockPendingOptimisticExecution => {
+                debug!(target: "client", "block pending optimistic execution");
                 Ok(())
             }
             _ => {
