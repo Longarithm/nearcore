@@ -84,14 +84,10 @@ def handle_init(args):
         logger.info(f"Using neard binary URL from CLI: {args.neard_binary_url}")
         neard_binary_url = args.neard_binary_url
     elif os.environ.get('NEARD_BINARY_URL') is not None:
-        logger.info(
-            f"Using neard binary URL from env: {os.environ['NEARD_BINARY_URL']}"
-        )
+        logger.info(f"Using neard binary URL from env: {os.environ['NEARD_BINARY_URL']}")
         neard_binary_url = os.environ['NEARD_BINARY_URL']
     else:
-        logger.info(
-            f"Using neard binary URL from benchmark params: {args.bm_params['forknet']['binary_url']}"
-        )
+        logger.info(f"Using neard binary URL from benchmark params: {args.bm_params['forknet']['binary_url']}")
         neard_binary_url = args.bm_params['forknet']['binary_url']
 
     neard_upgrade_binary_url = ""
@@ -262,20 +258,34 @@ def start_nodes(args, enable_tx_generator=False):
     if enable_tx_generator:
         logger.info("Setting tx generator parameters")
 
-        tps = int(args.bm_params['tx_generator']['tps'])
-        volume = int(args.bm_params['tx_generator']['volume'])
+        # tps = int(args.bm_params['tx_generator']['tps'])
+        # volume = int(args.bm_params['tx_generator']['volume'])
         accounts_path = f"{BENCHNET_DIR}/user-data/shard.json"
+        schedule_file = f"{BENCHNET_DIR}/{args.case}/load-schedule.json"
+
+        run_cmd_args = copy.deepcopy(args)
+        run_cmd_args.host_filter = f"({'|'.join(args.forknet_details['cp_instance_names'])})"
+        # run_cmd_args.cmd = f"\
+        #     jq --arg accounts_path {accounts_path} \
+        #     '.tx_generator = {{\"tps\": {tps}, \"volume\": {volume}, \
+        #     \"accounts_path\": $accounts_path, \"thread_count\": 2}}' \
+        #     {NEAR_HOME}/config.json > tmp.$$.json && \
+        #     mv tmp.$$.json {NEAR_HOME}/config.json || rm tmp.$$.json \
+        # "
+        run_cmd_args.cmd = f"\
+            jq --arg accounts_path {accounts_path} \
+            '.tx_generator = {{ \"accounts_path\": \"${accounts_path}\" }}' {CONFIG_PATH} > tmp.$$.json && \
+            mv tmp.$$.json {CONFIG_PATH} || rm tmp.$$.json \
+        "
+        run_remote_cmd(CommandContext(run_cmd_args))
 
         run_cmd_args = copy.deepcopy(args)
         run_cmd_args.host_filter = f"({'|'.join(args.forknet_details['cp_instance_names'])})"
         run_cmd_args.cmd = f"\
-            jq --arg accounts_path {accounts_path} \
-            '.tx_generator = {{\"tps\": {tps}, \"volume\": {volume}, \
-            \"accounts_path\": $accounts_path, \"thread_count\": 2}}' \
-            {NEAR_HOME}/config.json > tmp.$$.json && \
-            mv tmp.$$.json {NEAR_HOME}/config.json || rm tmp.$$.json \
+            jq --slurpfile patch {schedule_file} \
+            '. as \$orig | \$patch[0].schedule as \$sched | .[\"tx_generator\"] += {{\"schedule\": \$sched }}' \
+            {CONFIG_PATH} > tmp.$$.json && mv tmp.$$.json {CONFIG_PATH} || rm tmp.$$.json \
         "
-
         run_remote_cmd(CommandContext(run_cmd_args))
 
     logger.info("Starting nodes")
