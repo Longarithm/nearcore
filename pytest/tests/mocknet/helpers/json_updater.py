@@ -19,16 +19,23 @@ def deep_merge(original: dict, patch: dict) -> dict:
         The merged dictionary
     """
     result = original.copy()
+    print(f"\nDeep merging:")
 
     for key, value in patch.items():
         if key not in result:
+            print(f"Adding new key '{key}' with value: {json.dumps(value, indent=2)}")
             result[key] = value
             continue
 
         assert isinstance(result[key], dict) == isinstance(value, dict)
         if isinstance(result[key], dict):
+            print(f"Recursively merging key '{key}'")
             result[key] = deep_merge(result[key], value)
+        else:
+            print(f"Replacing value for key '{key}' with: {json.dumps(value, indent=2)}")
+            result[key] = value
 
+    print(f"Merged result: {json.dumps(result, indent=2)}")
     return result
 
 
@@ -50,11 +57,17 @@ def update_json(original_path: str, patch_paths: list[str]):
 
     with open(original_path) as f:
         original = json.load(f)
+        print(f"\nOriginal content from {original_path}:")
+        print(json.dumps(original, indent=2))
 
     for patch_path in patch_paths:
         with open(patch_path) as f:
             patch = json.load(f)
+            print(f"\nApplying patch from {patch_path}")
+            # print(json.dumps(patch, indent=2))
             original = deep_merge(original, patch)
+            # print(f"\nAfter applying {patch_path}, current content:")
+            # print(json.dumps(original, indent=2))
 
     # TODO: set "gas_limit" to int everywhere once bench.sh is deprecated.
     # Was needed as a workaround for jq 1.6 bigint bug.
@@ -63,6 +76,8 @@ def update_json(original_path: str, patch_paths: list[str]):
 
     with open(original_path, 'w') as f:
         json.dump(original, f, indent=4)
+        # print(f"\nFinal content written to {original_path}:")
+        # print(json.dumps(original, indent=2))
 
 
 def main():

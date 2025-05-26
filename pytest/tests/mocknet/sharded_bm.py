@@ -183,6 +183,11 @@ def handle_init(args):
 
 def handle_apply_json_patches(args):
     """Handle the apply-json-patches command."""
+    upload_file_args = copy.deepcopy(args)
+    upload_file_args.src = "tests/mocknet/helpers"
+    upload_file_args.dst = BENCHNET_DIR
+    run_remote_upload_file(CommandContext(upload_file_args))
+
     genesis = f"{NEAR_HOME}/genesis.json"
     base_genesis_patch = f"{BENCHNET_DIR}/{args.case}/{args.bm_params['base_genesis_patch']}"
 
@@ -274,18 +279,20 @@ def start_nodes(args, enable_tx_generator=False):
         # "
         run_cmd_args.cmd = f"\
             jq --arg accounts_path {accounts_path} \
-            '.tx_generator = {{ \"accounts_path\": \"${accounts_path}\" }}' {CONFIG_PATH} > tmp.$$.json && \
+            '.tx_generator = {{ \"accounts_path\": $accounts_path }}' {CONFIG_PATH} > tmp.$$.json && \
             mv tmp.$$.json {CONFIG_PATH} || rm tmp.$$.json \
         "
+
         run_remote_cmd(CommandContext(run_cmd_args))
 
         run_cmd_args = copy.deepcopy(args)
         run_cmd_args.host_filter = f"({'|'.join(args.forknet_details['cp_instance_names'])})"
         run_cmd_args.cmd = f"\
             jq --slurpfile patch {schedule_file} \
-            '. as \$orig | \$patch[0].schedule as \$sched | .[\"tx_generator\"] += {{\"schedule\": \$sched }}' \
+            '. as $orig | $patch[0].schedule as $sched | .[\"tx_generator\"] += {{\"schedule\": $sched }}' \
             {CONFIG_PATH} > tmp.$$.json && mv tmp.$$.json {CONFIG_PATH} || rm tmp.$$.json \
         "
+
         run_remote_cmd(CommandContext(run_cmd_args))
 
     logger.info("Starting nodes")
