@@ -246,6 +246,10 @@ impl<'a, 'b> MemtrieSizeCalculator<'a, 'b> {
         let read_guard = memtries.read();
         let root_ptr = read_guard.get_root(state_root)?;
 
+        let root_view = root_ptr.view();
+        let root_size = root_view.memory_usage();
+        println!("Root disk size: {root_size} bytes");
+
         let mut queue = VecDeque::new();
         queue.push_back(root_ptr);
         let mut total_size = 0;
