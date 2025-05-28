@@ -33,7 +33,7 @@ pub(crate) fn resume_resharding(
         config.genesis.config.transaction_validity_period,
     );
     let chain_head = chain_store.head()?;
-    init_flat_storage(&chain_head, epoch_manager.as_ref(), runtime_adapter.as_ref());
+    init_flat_storage(&chain_head, epoch_manager.as_ref(), runtime_adapter.as_ref())?;
     let flat_storage_resharder = FlatStorageResharder::new(
         epoch_manager,
         runtime_adapter.clone(),
