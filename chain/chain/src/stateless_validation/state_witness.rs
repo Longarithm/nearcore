@@ -68,6 +68,25 @@ impl ChainStore {
             prev_chunk_header,
         )?;
 
+        let (new_transactions, new_transactions_validation_state) =
+            if ProtocolFeature::RelaxedChunkValidation.enabled(protocol_version) {
+                (Vec::new(), PartialState::default())
+            } else {
+                let new_transactions = chunk.transactions().to_vec();
+                let new_transactions_validation_state = if new_transactions.is_empty() {
+                    PartialState::default()
+                } else {
+                    // With stateless validation chunk producer uses recording reads when validating
+                    // transactions. The storage proof must be available here.
+                    transactions_storage_proof.ok_or_else(|| {
+                        let message = "Missing storage proof for transactions validation";
+                        log_assert_fail!("{message}");
+                        Error::Other(message.to_owned())
+                    })?
+                };
+                (new_transactions, new_transactions_validation_state)
+            };
+
         let state_witness = ChunkStateWitness::new(
             chunk_producer,
             epoch_id,
@@ -78,8 +97,10 @@ impl ChainStore {
             // that defeats the purpose of this check being a debugging
             // mechanism.)
             applied_receipts_hash,
-            prev_chunk.to_transactions().to_vec(),
+            prev_chunk.transactions().to_vec(),
             implicit_transitions,
+            new_transactions,
+            new_transactions_validation_state,
         );
         Ok(CreateWitnessResult { state_witness, contract_updates, main_transition_shard_id })
     }
