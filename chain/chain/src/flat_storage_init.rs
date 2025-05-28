@@ -57,16 +57,15 @@ fn init_flat_storage_for_current_epoch(
         let shard_uid = shard_id_to_uid(epoch_manager, shard_id, &chain_head.epoch_id)?;
         let status = flat_storage_manager.get_flat_storage_status(shard_uid);
         match status {
-            FlatStorageStatus::Ready(_) => {
+            FlatStorageStatus::Ready(_) | FlatStorageStatus::Resharding(_) => {
                 flat_storage_manager.create_flat_storage_for_shard(shard_uid).unwrap();
             }
             FlatStorageStatus::Creation(_) => {
                 panic!("Flat storage creation is no longer supported");
             }
-            FlatStorageStatus::Empty | FlatStorageStatus::Disabled => {}
-            FlatStorageStatus::Resharding(_status) => {
-                panic!("Call flat storage resume resharding operation first!!");
-            }
+            FlatStorageStatus::Empty | FlatStorageStatus::Disabled => {} // FlatStorageStatus::Resharding(_status) => {
+                                                                         //     panic!("Call flat storage resume resharding operation first!!");
+                                                                         // }
         }
     }
     Ok(())
