@@ -2,7 +2,7 @@ use near_chain_primitives::Error;
 use near_epoch_manager::EpochManagerAdapter;
 use near_epoch_manager::shard_assignment::shard_id_to_uid;
 use near_primitives::block::Tip;
-use near_store::flat::{FlatStorageManager, FlatStorageStatus};
+use near_store::flat::{FlatStorageManager, FlatStorageReshardingStatus, FlatStorageStatus};
 
 use crate::types::RuntimeAdapter;
 use crate::{Chain, ChainStoreAccess};
@@ -57,7 +57,8 @@ fn init_flat_storage_for_current_epoch(
         let shard_uid = shard_id_to_uid(epoch_manager, shard_id, &chain_head.epoch_id)?;
         let status = flat_storage_manager.get_flat_storage_status(shard_uid);
         match status {
-            FlatStorageStatus::Ready(_) => {
+            FlatStorageStatus::Ready(_)
+            | FlatStorageStatus::Resharding(FlatStorageReshardingStatus::SplittingParent(_)) => {
                 flat_storage_manager.create_flat_storage_for_shard(shard_uid).unwrap();
             }
             FlatStorageStatus::Creation(_) => {
