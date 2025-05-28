@@ -203,11 +203,11 @@ impl FlatStorageResharder {
         );
         // Do not update parent flat head, to avoid overriding the resharding status.
         // In any case, at the end of resharding the parent shard will completely disappear.
-        self.runtime
-            .get_flat_storage_manager()
-            .get_flat_storage_for_shard(parent_shard)
-            .expect("flat storage of the parent shard must exist!")
-            .set_flat_head_update_mode(false);
+        // self.runtime
+        //     .get_flat_storage_manager()
+        //     .get_flat_storage_for_shard(parent_shard)
+        //     .expect("flat storage of the parent shard must exist!")
+        //     .set_flat_head_update_mode(false);
         store_update.set_flat_storage_status(
             split_params.left_child_shard,
             FlatStorageStatus::Resharding(FlatStorageReshardingStatus::CreatingChild),
