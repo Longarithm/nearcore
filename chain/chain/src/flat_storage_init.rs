@@ -11,10 +11,11 @@ pub fn init_flat_storage(
     chain_head: &Tip,
     epoch_manager: &dyn EpochManagerAdapter,
     runtime_adapter: &dyn RuntimeAdapter,
-) {
+) -> Result<(), Error> {
     let flat_storage_manager = runtime_adapter.get_flat_storage_manager();
-    init_flat_storage_for_current_epoch(chain_head, epoch_manager, &flat_storage_manager);
-    init_flat_storage_for_next_epoch(chain_head, epoch_manager, &flat_storage_manager);
+    init_flat_storage_for_current_epoch(chain_head, epoch_manager, &flat_storage_manager)?;
+    init_flat_storage_for_next_epoch(chain_head, epoch_manager, &flat_storage_manager)?;
+    Ok(())
 }
 
 impl Chain {
