@@ -4,7 +4,18 @@ use near_epoch_manager::shard_assignment::shard_id_to_uid;
 use near_primitives::block::Tip;
 use near_store::flat::{FlatStorageManager, FlatStorageStatus};
 
+use crate::types::RuntimeAdapter;
 use crate::{Chain, ChainStoreAccess};
+
+pub fn init_flat_storage(
+    chain_head: &Tip,
+    epoch_manager: &dyn EpochManagerAdapter,
+    runtime_adapter: &dyn RuntimeAdapter,
+) {
+    let flat_storage_manager = runtime_adapter.get_flat_storage_manager();
+    init_flat_storage_for_current_epoch(chain_head, epoch_manager, &flat_storage_manager);
+    init_flat_storage_for_next_epoch(chain_head, epoch_manager, &flat_storage_manager);
+}
 
 impl Chain {
     pub fn init_flat_storage(&self) -> Result<(), Error> {

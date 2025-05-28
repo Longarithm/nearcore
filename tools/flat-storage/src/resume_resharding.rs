@@ -1,4 +1,6 @@
 use crate::commands::ResumeReshardingCmd;
+use near_chain::ChainStore;
+use near_chain::flat_storage_init::init_flat_storage;
 use near_chain::resharding::flat_storage_resharder::FlatStorageResharder;
 use near_chain::resharding::trie_state_resharder::TrieStateResharder;
 use near_chain_configs::ReshardingHandle;
@@ -25,7 +27,13 @@ pub(crate) fn resume_resharding(
         &config,
         epoch_manager.clone(),
     )?;
-
+    let chain_store = ChainStore::new(
+        node_storage.get_hot_store(),
+        false,
+        config.genesis.config.transaction_validity_period,
+    );
+    let chain_head = chain_store.head()?;
+    init_flat_storage(&chain_head, epoch_manager.as_ref(), runtime_adapter.as_ref());
     let flat_storage_resharder = FlatStorageResharder::new(
         epoch_manager,
         runtime_adapter.clone(),
