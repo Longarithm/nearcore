@@ -292,7 +292,11 @@ pub enum ApplyRangeMode {
     /// Applies chunks one after another in order of increasing heights.
     ///
     /// Great for profiling.
-    Sequential,
+    Sequential {
+        /// If true, saves state transitions for state witness generation.
+        #[clap(long)]
+        save_state_transitions: bool,
+    },
     /// Applies chunks in parallel.
     ///
     /// Useful for quick correctness check of applying chunks by comparing
@@ -338,6 +342,7 @@ impl ApplyRangeCmd {
         }
         apply_range(
             self.mode,
+            self.storage,
             self.start_index,
             self.end_index,
             self.shard_id,
@@ -348,7 +353,6 @@ impl ApplyRangeCmd {
             store,
             self.save_state.map(|temperature| initialize_write_store(temperature, node_storage)),
             self.only_contracts,
-            self.storage,
         );
     }
 }

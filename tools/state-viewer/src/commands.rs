@@ -265,6 +265,7 @@ pub(crate) fn apply_chunk(
 
 pub(crate) fn apply_range(
     mode: ApplyRangeMode,
+    storage: StorageSource,
     start_index: Option<BlockHeight>,
     end_index: Option<BlockHeight>,
     shard_id: ShardId,
@@ -275,7 +276,6 @@ pub(crate) fn apply_range(
     read_store: Store,
     write_store: Option<Store>,
     only_contracts: bool,
-    storage: StorageSource,
 ) {
     let mut csv_file = csv_file.map(|filename| std::fs::File::create(filename).unwrap());
 
