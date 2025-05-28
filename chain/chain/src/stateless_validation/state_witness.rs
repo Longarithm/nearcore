@@ -7,6 +7,7 @@ use near_o11y::log_assert_fail;
 use near_primitives::hash::{CryptoHash, hash};
 use near_primitives::receipt::Receipt;
 use near_primitives::sharding::{ChunkHash, ReceiptProof, ShardChunk, ShardChunkHeader};
+use near_primitives::state::PartialState;
 use near_primitives::stateless_validation::contract_distribution::ContractUpdates;
 use near_primitives::stateless_validation::state_witness::{
     ChunkStateTransition, ChunkStateWitness,
@@ -15,6 +16,7 @@ use near_primitives::stateless_validation::stored_chunk_state_transition_data::{
     StoredChunkStateTransitionData, StoredChunkStateTransitionDataV1,
 };
 use near_primitives::types::{AccountId, EpochId, ShardId};
+use near_primitives::version::{PROTOCOL_VERSION, ProtocolFeature};
 use std::collections::HashMap;
 
 /// Result of collecting state transition data from the database to generate a state witness.
@@ -69,21 +71,11 @@ impl ChainStore {
         )?;
 
         let (new_transactions, new_transactions_validation_state) =
-            if ProtocolFeature::RelaxedChunkValidation.enabled(protocol_version) {
+            if ProtocolFeature::RelaxedChunkValidation.enabled(PROTOCOL_VERSION) {
                 (Vec::new(), PartialState::default())
             } else {
                 let new_transactions = chunk.transactions().to_vec();
-                let new_transactions_validation_state = if new_transactions.is_empty() {
-                    PartialState::default()
-                } else {
-                    // With stateless validation chunk producer uses recording reads when validating
-                    // transactions. The storage proof must be available here.
-                    transactions_storage_proof.ok_or_else(|| {
-                        let message = "Missing storage proof for transactions validation";
-                        log_assert_fail!("{message}");
-                        Error::Other(message.to_owned())
-                    })?
-                };
+                let new_transactions_validation_state = PartialState::default();
                 (new_transactions, new_transactions_validation_state)
             };
 
