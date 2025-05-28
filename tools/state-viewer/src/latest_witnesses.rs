@@ -9,7 +9,7 @@ use near_chain::stateless_validation::state_witness::CreateWitnessResult;
 use near_chain::{Chain, ChainGenesis, ChainStore, DoomslugThresholdMode};
 use near_epoch_manager::EpochManager;
 use near_epoch_manager::shard_assignment::shard_id_to_index;
-use near_epoch_manager::shard_tracker::ShardTracker;
+use near_epoch_manager::shard_tracker::{ShardTracker, TrackedConfig};
 use near_primitives::stateless_validation::state_witness::ChunkStateWitness;
 use near_primitives::types::{AccountId, BlockHeight, EpochId, ShardId};
 use near_store::Store;
@@ -160,6 +160,7 @@ impl GenerateWitnessesCmd {
                 .shadow_validate_state_witness(
                     state_witness,
                     chain.epoch_manager.as_ref(),
+                    chain.runtime_adapter.as_ref(),
                     Some(processing_done_tracker),
                 )
                 .unwrap();
