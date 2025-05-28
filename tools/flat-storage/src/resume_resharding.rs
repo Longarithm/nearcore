@@ -3,8 +3,10 @@ use near_chain::ChainStore;
 use near_chain::flat_storage_init::init_flat_storage;
 use near_chain::resharding::flat_storage_resharder::FlatStorageResharder;
 use near_chain::resharding::trie_state_resharder::TrieStateResharder;
+use near_chain::types::{RuntimeAdapter, Tip};
 use near_chain_configs::ReshardingHandle;
 use near_epoch_manager::EpochManager;
+use near_store::flat::{FlatStorageReshardingStatus, ParentSplitParameters};
 use near_store::{ShardUId, StoreOpener};
 use nearcore::{NearConfig, NightshadeRuntime, NightshadeRuntimeExt};
 use std::path::PathBuf;
@@ -32,8 +34,24 @@ pub(crate) fn resume_resharding(
         false,
         config.genesis.config.transaction_validity_period,
     );
-    let chain_head = chain_store.head()?;
-    init_flat_storage(&chain_head, epoch_manager.as_ref(), runtime_adapter.as_ref())?;
+    let shard_uid = ShardUId::new(3, cmd.shard_id); // version is fixed at 3 in resharding V3
+    let flat_storage_status =
+        runtime_adapter.get_flat_storage_manager().get_flat_storage_status(shard_uid);
+    let FlatStorageStatus::Resharding(FlatStorageReshardingStatus::SplittingParent(
+        ParentSplitParameters { flat_head, .. },
+    )) = flat_storage_status
+    else {
+        return Err(anyhow::anyhow!("Flat storage is not in resharding state"));
+    };
+    let block_header = chain_store.get_block_header(&flat_head.hash)?;
+    let tip = Tip {
+        height: flat_head.height,
+        last_block_hash: flat_head.hash,
+        prev_block_hash: flat_head.prev_hash,
+        epoch_id: *block_header.epoch_id(),
+        next_epoch_id: *block_header.next_epoch_id(),
+    };
+    init_flat_storage(&tip, epoch_manager.as_ref(), runtime_adapter.as_ref())?;
     let flat_storage_resharder = FlatStorageResharder::new(
         epoch_manager,
         runtime_adapter.clone(),
@@ -41,7 +59,6 @@ pub(crate) fn resume_resharding(
         config.client_config.resharding_config.clone(),
     );
 
-    let shard_uid = ShardUId::new(3, cmd.shard_id); // version is fixed at 3 in resharding V3
     flat_storage_resharder.resume(shard_uid)?;
 
     tracing::info!(target: "resharding", "FlatStorageResharder completed");
