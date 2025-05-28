@@ -315,6 +315,7 @@ impl FlatStorageResharder {
                 "split_shard_task_impl/batch",
                 batch_id = ?num_batches_done)
             .entered();
+            info!("split_shard_task_impl/batch");
             let mut store_update = flat_store.store_update();
             let mut processed_size = 0;
 
@@ -816,7 +817,15 @@ fn copy_kv_to_child(
     let new_shard_uid = shard_layout.account_id_to_shard_uid(&account_id);
 
     // Sanity check we are truly writing to one of the expected children shards.
-    assert!(new_shard_uid == *left_child_shard || new_shard_uid == *right_child_shard);
+    assert!(
+        new_shard_uid == *left_child_shard || new_shard_uid == *right_child_shard,
+        "key: {:?}, account_id: {:?}, new_shard_uid: {:?}, left_child_shard: {:?}, right_child_shard: {:?}",
+        key,
+        account_id,
+        new_shard_uid,
+        left_child_shard,
+        right_child_shard
+    );
 
     // Add the new flat store entry.
     store_update.set(new_shard_uid, key, value);
