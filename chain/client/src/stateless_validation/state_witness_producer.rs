@@ -359,11 +359,9 @@ impl Client {
         let prev_prev_chunk_block =
             self.chain.chain_store().get_block(prev_chunk_original_block.prev_hash())?;
         // Find the header of the chunk before `prev_chunk`
-        let prev_prev_chunk_header = Chain::get_prev_chunk_header(
-            self.epoch_manager.as_ref(),
-            &prev_prev_chunk_block,
-            prev_chunk_header.shard_id(),
-        )?;
+        let prev_prev_chunk_header = self
+            .epoch_manager
+            .get_prev_chunk_header(&prev_prev_chunk_block, prev_chunk_header.shard_id())?;
 
         // Fetch all incoming receipts for `prev_chunk`.
         // They will be between `prev_prev_chunk.height_included` (first block containing `prev_prev_chunk`)
