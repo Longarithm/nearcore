@@ -192,7 +192,9 @@ impl ParallelMemTrieLoader {
 
         // Load all the keys in this range from the FlatState column.
         let mut recon = TrieConstructor::new(arena);
+        let mut cnt = 0;
         for item in self.store.store().iter_range(DBCol::FlatState, Some(&start), Some(&end)) {
+            cnt += 1;
             let (key, value) = item.map_err(|err| {
                 FlatStorageError::StorageInternalError(format!(
                     "Error iterating over FlatState: {err}"
@@ -206,6 +208,7 @@ impl ParallelMemTrieLoader {
             })?;
             recon.add_leaf(key, value);
         }
+        println!("start: {:?}, end: {:?}, cnt: {}", start, end, cnt);
         Ok(recon.finalize().unwrap())
     }
 
