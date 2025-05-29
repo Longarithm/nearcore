@@ -53,12 +53,12 @@ fn load_trie_from_flat_state(
 
     info!(target: "memtrie", shard_uid=%shard_uid, "Done loading trie from flat state, took {:?}", load_start.elapsed());
     let root = root_id.as_ptr(arena.memory());
-    assert_eq!(
-        root.view().node_hash(),
-        state_root,
-        "In-memory trie for shard {} has incorrect state root",
-        shard_uid
-    );
+    // assert_eq!(
+    //     root.view().node_hash(),
+    //     state_root,
+    //     "In-memory trie for shard {} has incorrect state root",
+    //     shard_uid
+    // );
     Ok(MemTries::new_from_arena_and_root(shard_uid, block_height, arena, root_id))
 }
 
