@@ -36,6 +36,7 @@ fn load_trie_from_flat_state(
         return Ok(MemTries::new(shard_uid));
     }
 
+    let parallelize = if shard_uid.shard_id() == 11 { false } else { parallelize };
     let load_start = Instant::now();
     let (arena, root_id) = if parallelize {
         const NUM_PARALLEL_SUBTREES_DESIRED: usize = 256;
