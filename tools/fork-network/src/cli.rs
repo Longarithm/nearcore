@@ -447,11 +447,6 @@ impl ForkNetworkCommand {
         let runtime =
             NightshadeRuntime::from_config(home_dir, store.clone(), &near_config, epoch_manager)
                 .context("could not create the transaction runtime")?;
-        // TODO: add an option to not load them all at once. As is, this takes an insane amount of memory for mainnet state.
-        runtime
-            .get_tries()
-            .load_memtries_for_enabled_shards(&all_shard_uids, &[].into(), true)
-            .unwrap();
 
         let shard_tries = runtime.get_tries();
         let target_shard_layout2 = target_shard_layout.clone();
@@ -921,6 +916,9 @@ impl ForkNetworkCommand {
         make_storage_mutator: MakeSingleShardStorageMutatorFn,
         update_state: Vec<ShardUpdateState>,
     ) -> anyhow::Result<DelayedReceiptTracker> {
+        // Load memtries for just this shard
+        store.get_tries().load_memtries_for_enabled_shards(&[shard_uid], &[].into(), true)?;
+
         let mut storage_mutator: StorageMutator = make_storage_mutator(update_state.clone())?;
 
         // TODO: allow mutating the state with a secret, so this can be used to prepare a public test network
@@ -1090,6 +1088,10 @@ impl ForkNetworkCommand {
         }
         tracing::info!(?shard_uid, num_accounts, num_added, "Pass 2 done");
         storage_mutator.commit()?;
+
+        // Unload memtries for this shard after we're done processing it
+        store.get_tries().unload_memtries_for_shard(shard_uid)?;
+
         Ok(receipts_tracker)
     }
 
