@@ -1693,7 +1693,11 @@ impl Client {
     }
 
     /// Check if we should skip chunk production based on the chunk skipping configuration.
-    fn should_skip_chunk_production(&mut self, block_height: BlockHeight) -> bool {
+    fn should_skip_chunk_production(
+        &mut self,
+        block_height: BlockHeight,
+        validator_id: &AccountId,
+    ) -> bool {
         let config = &self.config.chunk_skipping_config;
         let window_size = config.window_size;
         let skip_length = config.skip_length;
@@ -1705,10 +1709,13 @@ impl Client {
             None => true,
         };
         if need_new {
-            // Deterministic random: hash the window_start to get a seed
+            // Deterministic random: hash the window_start and validator_id to get a seed
+            // This ensures different validators skip different chunks in the same window
             let mut seed_bytes = [0u8; 8];
             seed_bytes.copy_from_slice(&window_start.to_le_bytes());
-            let hash = near_primitives::hash::hash(&seed_bytes);
+            let mut seed_data = seed_bytes.to_vec();
+            seed_data.extend_from_slice(validator_id.as_bytes());
+            let hash = near_primitives::hash::hash(&seed_data);
             let max_offset = window_size - skip_length;
             let offset =
                 u64::from_le_bytes(hash.as_ref()[0..8].try_into().unwrap()) % (max_offset + 1);
@@ -1721,6 +1728,7 @@ impl Client {
                 window_start,
                 skip_start,
                 skip_end,
+                validator_id = %validator_id,
                 "Scheduled chunk skipping in window"
             );
         }
@@ -1731,6 +1739,7 @@ impl Client {
                 block_height,
                 skip_start = state.skip_start,
                 skip_end = state.skip_end,
+                validator_id = %validator_id,
                 "Skipping chunk production due to chunk skipping configuration"
             );
             return true;
@@ -1749,7 +1758,7 @@ impl Client {
         .entered();
 
         // Check if we should skip chunk production due to chunk skipping configuration
-        if self.should_skip_chunk_production(block.header().height()) {
+        if self.should_skip_chunk_production(block.header().height(), &validator_id) {
             return;
         }
 
