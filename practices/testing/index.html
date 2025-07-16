@@ -204,7 +204,7 @@ launching the nodes and waiting for a particular message to occur, with a
 predefined timeout.</p>
 <p>For the most basic example of using this infrastructure see <code>produce_two_blocks</code>
 in
-<a href="https://github.com/near/nearcore/blob/master/chain/client/src/tests/process_blocks.rs"><code>tests/process_blocks.rs</code></a>.</p>
+<a href="https://github.com/near/nearcore/blob/master/integration-tests/src/tests/client/process_blocks.rs"><code>tests/process_blocks.rs</code></a>.</p>
 <ol>
 <li>The callback (<code>Box::new(move |msg, _ctx, _| { ...</code>) is what is executed
 whenever the client sends a message. The return value of the callback is sent
@@ -217,7 +217,7 @@ test is set (in milliseconds).</li>
 </ol>
 <p>For an example of a test that launches multiple nodes, see
 <code>chunks_produced_and_distributed_common</code> in
-<a href="https://github.com/near/nearcore/blob/master/chain/client/src/tests/chunks_management.rs">tests/chunks_management.rs</a>.
+<a href="https://github.com/near/nearcore/blob/master/integration-tests/src/tests/client/chunks_management.rs">integration-tests/src/tests/client/chunks_management.rs | Network chunk management test</a>.
 The <code>setup_mock_all_validators</code> function is the key piece of infrastructure here.</p>
 <h2 id="runtime"><a class="header" href="#runtime">Runtime</a></h2>
 <p>Tests for Runtime are listed in
