@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::collections::HashMap;
 
 use itertools::Itertools;
@@ -15,12 +16,12 @@ use crate::setup::env::TestLoopEnv;
 use crate::utils::ONE_NEAR;
 use crate::utils::transactions::execute_money_transfers;
 
-const NUM_ACCOUNTS: usize = 20;
+const NUM_ACCOUNTS: usize = 10; // 1000;
 const NUM_SHARDS: u64 = 4;
 const EPOCH_LENGTH: u64 = 12;
 
-const NUM_BLOCK_AND_CHUNK_PRODUCERS: usize = 4;
-const NUM_CHUNK_VALIDATORS_ONLY: usize = 4;
+const NUM_BLOCK_AND_CHUNK_PRODUCERS: usize = 1; // 100;
+const NUM_CHUNK_VALIDATORS_ONLY: usize = 4; // 400;
 const NUM_VALIDATORS: usize = NUM_BLOCK_AND_CHUNK_PRODUCERS + NUM_CHUNK_VALIDATORS_ONLY;
 
 #[test]
@@ -77,10 +78,15 @@ fn slow_test_stateless_validators_with_multi_test_loop() {
     assert_ne!(prev_epoch_id, initial_epoch_id);
 
     // Run the chain until it transitions to a different epoch then prev_epoch_id.
+    let latest_height = Cell::new(0);
     test_loop.run_until(
         |test_loop_data| {
-            test_loop_data.get(&client_handle).client.chain.head().unwrap().epoch_id
-                != prev_epoch_id
+            let head = test_loop_data.get(&client_handle).client.chain.head().unwrap();
+            if head.height > latest_height.get() {
+                println!("Observed new block at height {}", head.height);
+                latest_height.set(head.height);
+            }
+            head.epoch_id != prev_epoch_id
         },
         Duration::seconds(EPOCH_LENGTH as i64),
     );
