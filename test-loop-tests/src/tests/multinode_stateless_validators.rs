@@ -16,12 +16,12 @@ use crate::setup::env::TestLoopEnv;
 use crate::utils::ONE_NEAR;
 use crate::utils::transactions::execute_money_transfers;
 
-const NUM_ACCOUNTS: usize = 10; // 1000;
+const NUM_ACCOUNTS: usize = 100;
 const NUM_SHARDS: u64 = 4;
 const EPOCH_LENGTH: u64 = 12;
 
-const NUM_BLOCK_AND_CHUNK_PRODUCERS: usize = 1; // 100;
-const NUM_CHUNK_VALIDATORS_ONLY: usize = 4; // 400;
+const NUM_BLOCK_AND_CHUNK_PRODUCERS: usize = 20;
+const NUM_CHUNK_VALIDATORS_ONLY: usize = 40;
 const NUM_VALIDATORS: usize = NUM_BLOCK_AND_CHUNK_PRODUCERS + NUM_CHUNK_VALIDATORS_ONLY;
 
 #[test]
