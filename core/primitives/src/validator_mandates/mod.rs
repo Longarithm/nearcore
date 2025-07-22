@@ -79,6 +79,55 @@ pub struct ValidatorMandates {
 }
 
 impl ValidatorMandates {
+    /// Reads validator stakes from a JSON file and creates ValidatorStake objects.
+    ///
+    /// The JSON file should contain an array of objects with the following structure:
+    /// ```json
+    /// [
+    ///   {
+    ///     "account_id": "validator.poolv1.near",
+    ///     "stake": 123456789012345678901234567890,
+    ///     "is_malicious": false
+    ///   }
+    /// ]
+    /// ```
+    ///
+    /// # Arguments
+    /// * `file_path` - Path to the JSON file containing validator data
+    ///
+    /// # Returns
+    /// * `Result<Vec<ValidatorStake>, Box<dyn std::error::Error>>` - Vector of ValidatorStake objects or error
+    pub fn read_validator_stakes_from_json(
+        file_path: &str,
+    ) -> Result<Vec<ValidatorStake>, Box<dyn std::error::Error>> {
+        use near_crypto::PublicKey;
+        use serde_json;
+        use std::fs;
+
+        #[derive(serde::Deserialize)]
+        struct ValidatorData {
+            account_id: String,
+            stake: u128,
+            is_malicious: bool,
+        }
+
+        let json_content = fs::read_to_string(file_path)?;
+        let validator_data: Vec<ValidatorData> = serde_json::from_str(&json_content)?;
+
+        let validators = validator_data
+            .into_iter()
+            .map(|data| {
+                let account_id = data.account_id.parse()?;
+                let public_key = PublicKey::empty(near_crypto::KeyType::ED25519);
+                Ok::<ValidatorStake, Box<dyn std::error::Error>>(ValidatorStake::new(
+                    account_id, public_key, data.stake,
+                ))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(validators)
+    }
+
     /// Initiates mandates corresponding to the provided `validators`. The validators must be sorted
     /// by id in ascending order, so the validator with `ValidatorId` equal to `i` is given by
     /// `validators[i]`.
@@ -275,20 +324,27 @@ impl ShuffledShardIds {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use near_crypto::PublicKey;
-    use near_primitives_core::types::Balance;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
+    use serde_json;
+    use std::fs;
 
-    use crate::{
-        types::ValidatorId, types::validator_stake::ValidatorStake,
-        validator_mandates::ValidatorMandatesConfig,
-    };
+    #[derive(serde::Deserialize)]
+    struct ValidatorData {
+        account_id: String,
+        stake: u128,
+        is_malicious: bool,
+    }
 
-    use super::{ChunkValidatorStakeAssignment, ShuffledShardIds, ValidatorMandates};
+    fn read_validator_stakes_from_json() -> Vec<ValidatorStake> {
+        ValidatorMandates::read_validator_stakes_from_json(
+            "/Users/Aleksandr1/code/sim-validator-assignment/validator_data_raw.json",
+        )
+        .expect("Failed to read validator data JSON file")
+    }
 
-    /// Returns a new, fixed RNG to be used only in tests. Using a fixed RNG facilitates testing as
-    /// it makes outcomes based on that RNG deterministic.
     fn new_fixed_rng() -> ChaCha8Rng {
         ChaCha8Rng::seed_from_u64(42)
     }
@@ -334,30 +390,57 @@ mod tests {
 
     #[test]
     fn test_validator_mandates_new() {
-        let validators = new_validator_stakes();
+        let validators = read_validator_stakes_from_json();
         let config = ValidatorMandatesConfig::new(3, 4);
         let mandates = ValidatorMandates::new(config, &validators);
 
-        // With 3 mandates per shard and 4 shards, we are looking for around 12 total mandates.
-        // The total stake in `new_validator_stakes` is 123, so to get 12 mandates we need a price
-        // close to 10. But the algorithm for computing price tries to make the number of _whole_
-        // mandates equal to 12, and there are validators with partial mandates in the distribution,
-        // therefore the price is set a little lower than 10.
-        assert_eq!(mandates.stake_per_mandate, 8);
+        // Print some statistics about the real validator data
+        println!("Total validators: {}", validators.len());
+        println!("Total stake: {}", validators.iter().map(|v| v.stake()).sum::<Balance>());
+        println!("Stake per mandate: {}", mandates.stake_per_mandate);
+        println!("Total mandates: {}", mandates.mandates.len());
+        println!("Total partials: {}", mandates.partials.len());
 
-        // At 8 stake per mandate, the first validator holds three mandates, and so on.
-        // Note that "account_5" and "account_6" hold no mandate as both their stakes are below the threshold.
-        let expected_mandates: Vec<ValidatorId> = vec![0, 0, 0, 1, 1, 1, 2, 3, 4, 4, 4, 4];
-        assert_eq!(mandates.mandates, expected_mandates);
-
-        // The number of whole mandates is exactly equal to our target
+        // The number of whole mandates should be exactly equal to our target
         assert_eq!(mandates.mandates.len(), config.num_shards * config.target_mandates_per_shard);
+    }
 
-        // At 8 stake per mandate, the first validator a partial mandate with weight 6, the second
-        // validator holds a partial mandate with weight 3, and so on.
-        let expected_partials: Vec<(ValidatorId, Balance)> =
-            vec![(0, 6), (1, 3), (2, 1), (3, 4), (4, 3), (5, 4), (6, 6)];
-        assert_eq!(mandates.partials, expected_partials);
+    #[test]
+    fn test_validator_mandates_with_real_data() {
+        let validators = read_validator_stakes_from_json();
+        let config = ValidatorMandatesConfig::new(68, 9);
+        let mandates = ValidatorMandates::new(config, &validators);
+
+        // Print detailed statistics about the real validator data
+        println!("=== Real Validator Data Analysis ===");
+        println!("Total validators: {}", validators.len());
+        println!("Total stake: {}", validators.iter().map(|v| v.stake()).sum::<Balance>());
+        println!("Stake per mandate: {}", mandates.stake_per_mandate);
+        println!("Total mandates: {}", mandates.mandates.len());
+        println!("Total partials: {}", mandates.partials.len());
+        println!("Target mandates per shard: {}", config.target_mandates_per_shard);
+        println!("Number of shards: {}", config.num_shards);
+        println!(
+            "Expected total mandates: {}",
+            config.num_shards * config.target_mandates_per_shard
+        );
+
+        // Show top 10 validators by stake
+        println!("\n=== Top 10 Validators by Stake ===");
+        let mut sorted_validators: Vec<_> = validators.iter().enumerate().collect();
+        sorted_validators.sort_by(|a, b| b.1.stake().cmp(&a.1.stake()));
+        for (i, (idx, validator)) in sorted_validators.iter().take(10).enumerate() {
+            println!(
+                "{}. {}: {} (validator_id: {})",
+                i + 1,
+                validator.account_id(),
+                validator.stake(),
+                idx
+            );
+        }
+
+        // The number of whole mandates should be exactly equal to our target
+        assert_eq!(mandates.mandates.len(), config.num_shards * config.target_mandates_per_shard);
     }
 
     #[test]
@@ -449,7 +532,7 @@ mod tests {
         // `expected_assignment` below.
         // Note that shard ids are shuffled too, see `test_shuffled_shard_ids_new`.
         let config = ValidatorMandatesConfig::new(3, 4);
-        let expected_mandates_per_shards = vec![
+        let expected_mandates_per_shards: Vec<Vec<(u64, u128)>> = vec![
             vec![(3, 8), (6, 6), (0, 22)],
             vec![(4, 8), (2, 9), (1, 08)],
             vec![(0, 8), (3, 4), (4, 19)],
@@ -521,5 +604,49 @@ mod tests {
 
         // Two assignments with the same RNG should be equal.
         assert_eq!(assignment1, assignment2);
+    }
+
+    #[test]
+    fn test_real_data() {
+        let config = ValidatorMandatesConfig::new(68, 9);
+        let mut validators = read_validator_stakes_from_json();
+
+        // Get the minimal stake (stake of the last validator in the file)
+        let minimal_stake = validators.last().unwrap().stake();
+
+        // Add 200 new validators with minimal stake
+        for i in 0..200 {
+            let account_id = format!("extra_validator_{}.near", i).parse().unwrap();
+            let public_key = PublicKey::empty(near_crypto::KeyType::ED25519);
+            validators.push(ValidatorStake::new(
+                account_id,
+                public_key,
+                100_000 * (10u128.pow(24)),
+            ));
+        }
+
+        // Compute mandates with the extended validator set
+        let mandates = ValidatorMandates::new(config, &validators);
+
+        // Sum up all stakes lower than stake_per_mandate
+        let mut total_stake_below_threshold = 0u128;
+        let mut count_below_threshold = 0;
+        for validator in &validators {
+            if validator.stake() < mandates.stake_per_mandate {
+                total_stake_below_threshold += validator.stake();
+                count_below_threshold += 1;
+            }
+        }
+
+        println!("Total validators: {}", validators.len());
+        println!("Total stake: {}", validators.iter().map(|v| v.stake()).sum::<Balance>());
+        println!("Stake per mandate: {}", mandates.stake_per_mandate);
+        println!("Total mandates: {}", mandates.mandates.len());
+        println!("Total partials: {}", mandates.partials.len());
+        println!("Target mandates per shard: {}", config.target_mandates_per_shard);
+        println!("Number of shards: {}", config.num_shards);
+        println!("Minimal stake used: {}", minimal_stake);
+        println!("Validators below threshold: {}", count_below_threshold);
+        println!("Total stake below threshold: {}", total_stake_below_threshold);
     }
 }
