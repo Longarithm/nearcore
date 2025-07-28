@@ -324,6 +324,8 @@ impl ShuffledShardIds {
 
 #[cfg(test)]
 mod tests {
+    use crate::validator_mandates::compute_price::compute_mandate_price;
+
     use super::*;
     use near_crypto::PublicKey;
     use rand::SeedableRng;
@@ -648,5 +650,21 @@ mod tests {
         println!("Minimal stake used: {}", minimal_stake);
         println!("Validators below threshold: {}", count_below_threshold);
         println!("Total stake below threshold: {}", total_stake_below_threshold);
+    }
+
+    #[test]
+    fn test_compute_mandate_price() {
+        let mut stakes = vec![1_000_000_u128; 100];
+        let num_shards = 8;
+        let target_mandates_per_shard = 68;
+        let config = ValidatorMandatesConfig::new(target_mandates_per_shard, num_shards);
+
+        let mandate_price = compute_mandate_price(config, &stakes);
+        eprintln!("Computed mandate price: {}", mandate_price);
+
+        let lower_stakes = vec![mandate_price - 1; 4000];
+        stakes.extend(lower_stakes);
+        let mandate_price = compute_mandate_price(config, &stakes);
+        eprintln!("Computed mandate price (with lower stakes): {}", mandate_price);
     }
 }
