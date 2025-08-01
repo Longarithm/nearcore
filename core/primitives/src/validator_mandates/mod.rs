@@ -640,11 +640,16 @@ mod tests {
             }
         }
 
+        let total_partial_stake = mandates.partials.iter().map(|p| p.1).sum::<Balance>();
+        let total_partial_seat_equivalents = total_partial_stake / mandates.stake_per_mandate;
+
         println!("Total validators: {}", validators.len());
         println!("Total stake: {}", validators.iter().map(|v| v.stake()).sum::<Balance>());
         println!("Stake per mandate: {}", mandates.stake_per_mandate);
         println!("Total mandates: {}", mandates.mandates.len());
         println!("Total partials: {}", mandates.partials.len());
+        println!("Total partial stake: {}", total_partial_stake);
+        println!("Total partial seat equivalents: {}", total_partial_seat_equivalents);
         println!("Target mandates per shard: {}", config.target_mandates_per_shard);
         println!("Number of shards: {}", config.num_shards);
         println!("Minimal stake used: {}", minimal_stake);
