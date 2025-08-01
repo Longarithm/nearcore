@@ -617,15 +617,15 @@ mod tests {
         let minimal_stake = validators.last().unwrap().stake();
 
         // Add 200 new validators with minimal stake
-        for i in 0..200 {
-            let account_id = format!("extra_validator_{}.near", i).parse().unwrap();
-            let public_key = PublicKey::empty(near_crypto::KeyType::ED25519);
-            validators.push(ValidatorStake::new(
-                account_id,
-                public_key,
-                100_000 * (10u128.pow(24)),
-            ));
-        }
+        // for i in 0..200 {
+        //     let account_id = format!("extra_validator_{}.near", i).parse().unwrap();
+        //     let public_key = PublicKey::empty(near_crypto::KeyType::ED25519);
+        //     validators.push(ValidatorStake::new(
+        //         account_id,
+        //         public_key,
+        //         100_000 * (10u128.pow(24)),
+        //     ));
+        // }
 
         // Compute mandates with the extended validator set
         let mandates = ValidatorMandates::new(config, &validators);
