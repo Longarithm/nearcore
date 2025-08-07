@@ -128,6 +128,36 @@ impl ValidatorMandates {
         Ok(validators)
     }
 
+    /// Writes validators with is_malicious = False to a JSON file.
+    pub fn write_validators_to_json(
+        file_path: &str,
+        validators: &[ValidatorStake],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use serde_json;
+        use std::fs;
+
+        #[derive(serde::Serialize)]
+        struct ValidatorData {
+            account_id: String,
+            stake: u128,
+            is_malicious: bool,
+        }
+
+        let validator_data: Vec<ValidatorData> = validators
+            .iter()
+            .map(|validator| ValidatorData {
+                account_id: validator.account_id().to_string(),
+                stake: validator.stake(),
+                is_malicious: false,
+            })
+            .collect();
+
+        let json_content = serde_json::to_string_pretty(&validator_data)?;
+        fs::write(file_path, json_content)?;
+
+        Ok(())
+    }
+
     /// Initiates mandates corresponding to the provided `validators`. The validators must be sorted
     /// by id in ascending order, so the validator with `ValidatorId` equal to `i` is given by
     /// `validators[i]`.
@@ -610,22 +640,29 @@ mod tests {
 
     #[test]
     fn test_real_data() {
-        let config = ValidatorMandatesConfig::new(68, 9);
+        // let config = ValidatorMandatesConfig::new(68, 9);
+        let config = ValidatorMandatesConfig::new(105, 9);
         let mut validators = read_validator_stakes_from_json();
 
         // Get the minimal stake (stake of the last validator in the file)
         let minimal_stake = validators.last().unwrap().stake();
 
         // Add 200 new validators with minimal stake
-        // for i in 0..200 {
-        //     let account_id = format!("extra_validator_{}.near", i).parse().unwrap();
-        //     let public_key = PublicKey::empty(near_crypto::KeyType::ED25519);
-        //     validators.push(ValidatorStake::new(
-        //         account_id,
-        //         public_key,
-        //         100_000 * (10u128.pow(24)),
-        //     ));
-        // }
+        for i in 0..200 {
+            let account_id = format!("extra_validator_{}.near", i).parse().unwrap();
+            let public_key = PublicKey::empty(near_crypto::KeyType::ED25519);
+            validators.push(ValidatorStake::new(
+                account_id,
+                public_key,
+                100_000 * (10u128.pow(24)),
+            ));
+        }
+
+        ValidatorMandates::write_validators_to_json(
+            "/Users/Aleksandr1/code/sim-validator-assignment/validator_data_500.json",
+            &validators,
+        )
+        .unwrap();
 
         // Compute mandates with the extended validator set
         let mandates = ValidatorMandates::new(config, &validators);
