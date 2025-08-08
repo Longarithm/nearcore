@@ -640,7 +640,6 @@ mod tests {
 
     #[test]
     fn test_real_data() {
-        // let config = ValidatorMandatesConfig::new(68, 9);
         let config = ValidatorMandatesConfig::new(105, 9);
         let mut validators = read_validator_stakes_from_json();
 
