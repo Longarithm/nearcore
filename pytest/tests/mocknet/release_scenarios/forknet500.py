@@ -14,13 +14,14 @@ class Test28(TestSetup):
 
     def __init__(self, args):
         # args.neard_binary_url = 'https://s3-us-west-1.amazonaws.com/build.nearprotocol.com/nearcore/Linux-x86_64/2.7.0_forknet/neard'
-        args.neard_binary_url = 'https://storage.googleapis.com/logunov-s/neard-0819'
+        # args.neard_binary_url = 'https://storage.googleapis.com/logunov-s/neard-0819'
+        args.neard_binary_url = 'https://storage.googleapis.com/logunov-s/neard-0825'
         super().__init__(args)
         self.start_height = 158710624
         self.args.start_height = self.start_height
         self.node_hardware_config = NodeHardware.SmallChunkValidatorsConfig(
-            num_chunk_producer_seats=20, num_chunk_validator_seats=100)
-        self.epoch_len = 200
+            num_chunk_producer_seats=100, num_chunk_validator_seats=500)
+        self.epoch_len = 400
         self.has_state_dumper = False
         self.genesis_protocol_version = 80  # 79
         self.has_archival = False
