@@ -64,7 +64,7 @@ impl RewardCalculator {
     ) -> (HashMap<AccountId, Balance>, Balance) {
         let mut res = HashMap::new();
         let num_validators = validator_block_chunk_stats.len();
-        let use_hardcoded_value = protocol_version > self.genesis_protocol_version;
+        let use_hardcoded_value = false; // protocol_version > self.genesis_protocol_version;
         let max_inflation_rate =
             if use_hardcoded_value { Rational32::new_raw(1, 20) } else { self.max_inflation_rate };
         let protocol_reward_rate = if use_hardcoded_value {
