@@ -1033,7 +1033,7 @@ class NeardRunner:
     # Configure the logs config file to control the level of rust and opentelemetry logs.
     # Default config sets level to DEBUG for "client" and "chain" logs, WARN for tokio+actix, and INFO for everything else.
     def configure_log_config(self):
-        default_log_filter = 'client=debug,chain=debug,mirror=debug,actix_web=warn,mio=warn,tokio_util=warn,actix_server=warn,actix_http=warn,info'
+        default_log_filter = 'epoch_manager=debug,chunk_validation=debug,runtime=debug,client=debug,chain=debug,mirror=debug,actix_web=warn,mio=warn,tokio_util=warn,actix_server=warn,actix_http=warn,info'
         log_config_path = self.target_near_home_path('log_config.json')
 
         logging.info("Creating log_config.json with default log filter.")
@@ -1182,7 +1182,7 @@ class NeardRunner:
     def set_shard_tracking_config(self, config):
         if self.can_validate():
             config['tracked_shards_config'] = "NoShards"
-            config['store']['load_mem_tries_for_tracked_shards'] = True
+            config['store']['load_mem_tries_for_tracked_shards'] = False
         else:
             config['tracked_shards_config'] = "AllShards"
             config['store']['load_mem_tries_for_tracked_shards'] = False
