@@ -86,7 +86,7 @@ class TestSetup:
         self.node_hardware_config = NodeHardware.SameConfig(
             num_chunk_producer_seats=0, num_chunk_validator_seats=0)
         # The base binary url to be used for the nodes.
-        self.neard_binary_url = None
+        self.neard_binary_url = getattr(args, 'neard_binary_url', '')
         # The new binary url to be used for the nodes.
         self.neard_upgrade_binary_url = getattr(args,
                                                 'neard_upgrade_binary_url', '')
@@ -163,6 +163,7 @@ class TestSetup:
         new_test_args.gcs_state_sync = self.has_state_dumper
         new_test_args.state_source = 'dump'
         new_test_args.patches_path = None
+        new_test_args.stake_distribution = 'mainnet'
 
         new_test_cmd(CommandContext(new_test_args))
 
@@ -221,14 +222,26 @@ class TestSetup:
         run_cmd_args.cmd = cmd_traffic
         run_remote_cmd(CommandContext(run_cmd_args))
 
+        jq_cmd = f"""-type f -name "80.json" -exec sh -c 'jq ".num_chunk_validator_seats = 12" $1 > $1.tmp && mv $1.tmp $1' _ {{}} \;"""
+        cmd_node = f"find ~/.near/epoch_configs/ {jq_cmd}"
+        cmd_traffic = f"find ~/.near/target/epoch_configs/ {jq_cmd}"
+        run_cmd_args = copy.deepcopy(self.args)
+        run_cmd_args.host_type = 'nodes'
+        run_cmd_args.cmd = cmd_node
+        run_remote_cmd(CommandContext(run_cmd_args))
+        run_cmd_args.host_type = 'traffic'
+        run_cmd_args.cmd = cmd_traffic
+        run_remote_cmd(CommandContext(run_cmd_args))
+
     def amend_epoch_config(self):
         if self._needs_upgrade():
             # We need to share the epoch configs before the upgrade.
             # TODO: use the binary on the host to generate the new epoch configs.
             self._share_epoch_configs()
-        self._amend_epoch_config(
-            f".num_chunk_validator_seats = {self.node_hardware_config.num_chunk_validator_seats}"
-        )
+        self._amend_epoch_config(f".num_chunk_validator_seats = 6 | "
+                                 f".block_producer_kickout_threshold = 0 | "
+                                 f".chunk_producer_kickout_threshold = 0 | "
+                                 f".chunk_validator_only_kickout_threshold = 0")
 
     def amend_configs_before_test_start(self):
         """
