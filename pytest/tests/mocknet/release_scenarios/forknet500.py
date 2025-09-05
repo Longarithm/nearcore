@@ -22,12 +22,12 @@ class Test28(TestSetup):
         self.args.start_height = self.start_height
         self.node_hardware_config = NodeHardware.SmallChunkValidatorsConfig(
             num_chunk_producer_seats=3, num_chunk_validator_seats=12)
-        self.epoch_len = 400
+        self.epoch_len = 600
         self.has_state_dumper = False
         self.genesis_protocol_version = 79
         self.has_archival = False
         self.regions = "us-east1,europe-west4,asia-east1,us-west1,asia-south1,europe-west1,asia-southeast1"
-        self.upgrade_interval_minutes = 2  # Within the first 2 epochs
+        self.upgrade_interval_minutes = 1  # Within the first 2 epochs
 
     def amend_epoch_config(self):
         super().amend_epoch_config()
@@ -54,15 +54,15 @@ class Test28(TestSetup):
                 timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
 
         now = datetime.now()
-        ref_time = [now + timedelta(minutes=i * minutes) for i in range(1, 3)]
+        ref_time = [now + timedelta(minutes=i * minutes) for i in range(1, 5)]
 
-        for i in range(1, 3):
+        for i in range(1, 5):
             upgrade_time_str = time_to_str(ref_time[i - 1])
 
             # Start node with the new binary
             start_nodes_args = copy.deepcopy(self.args)
             start_nodes_args.host_type = 'nodes'
-            start_nodes_args.select_partition = (i, 2)
+            start_nodes_args.select_partition = (i, 4)
             start_nodes_args.on = ScheduleMode(mode="calendar",
                                                value=upgrade_time_str)
             start_nodes_args.schedule_id = f"up-start-{i}"
@@ -72,8 +72,9 @@ class Test28(TestSetup):
             # Send stake transaction to RPC node using node key
             stake_cmd_args = copy.deepcopy(self.args)
             stake_cmd_args.host_filter = '-cv-'
-            stake_cmd_args.select_partition = (i, 2)
-            stake_cmd_args.on = ScheduleMode(mode="calendar", value=f"*:{i}/9")
+            stake_cmd_args.select_partition = (i, 4)
+            stake_cmd_args.on = ScheduleMode(mode="calendar",
+                                             value=f"*:{3*i}/15")
             stake_cmd_args.schedule_id = f"up-stake-{i}"
             stake_cmd_args.cmd = "if pgrep -f neard1 > /dev/null; then bash ~/.near/neard-runner/send-stake-proposal.sh; fi"
             run_remote_cmd(CommandContext(stake_cmd_args))
