@@ -1,6 +1,7 @@
 use borsh::BorshDeserialize;
 use core::ops::Range;
 use itertools::Itertools;
+use near_chain::stateless_validation::chunk_endorsement::validate_chunk_endorsements_in_block;
 use near_chain::{ChainStore, ChainStoreAccess, Error};
 use near_epoch_manager::{EpochManagerAdapter, EpochManagerHandle};
 use near_primitives::account::id::AccountId;
@@ -127,6 +128,20 @@ fn display_block_and_chunk_producers(
                 }
             })
             .collect();
+
+        // Validate chunk endorsements for this block
+        if let Ok(block_hash) = chain_store.get_block_hash_by_height(block_height) {
+            if let Ok(block) = chain_store.get_block(&block_hash) {
+                if let Err(validation_error) =
+                    validate_chunk_endorsements_in_block(epoch_manager, &block)
+                {
+                    panic!(
+                        "Invalid chunk endorsement at block height {}: {:?}",
+                        block_height, validation_error
+                    );
+                }
+            }
+        }
 
         println!("{block_height}: BP=\"{bp}\" CP={cps:?} CV={chunk_validators_per_shard:?}");
     }
