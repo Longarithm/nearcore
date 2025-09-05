@@ -105,7 +105,30 @@ fn display_block_and_chunk_producers(
                 cp.as_str().to_string()
             })
             .collect();
-        println!("{block_height}: BP=\"{bp}\" CP={cps:?}");
+
+        // Get chunk validators for each shard at this block height
+        let chunk_validators_per_shard: Vec<Vec<String>> = shard_ids
+            .iter()
+            .map(|&shard_id| {
+                match epoch_manager.get_chunk_validator_assignments(
+                    epoch_id,
+                    shard_id,
+                    block_height,
+                ) {
+                    Ok(chunk_validator_assignments) => chunk_validator_assignments
+                        .ordered_chunk_validators()
+                        .iter()
+                        .map(|account_id| account_id.as_str().to_string())
+                        .collect(),
+                    Err(_) => {
+                        // If we can't get chunk validator assignments, return empty vector
+                        vec![]
+                    }
+                }
+            })
+            .collect();
+
+        println!("{block_height}: BP=\"{bp}\" CP={cps:?} CV={chunk_validators_per_shard:?}");
     }
     Ok(())
 }
